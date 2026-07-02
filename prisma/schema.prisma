@@ -1,0 +1,492 @@
+// Beca Tech Scholars Progress Dashboard — Prisma schema
+// Normalized model for the ver+ Beca Tech program. The canonical program key is
+// `ID_becario`, stored here as `scholarId`. See README + /context for source mapping.
+//
+// Migrations: every change goes through `prisma migrate dev` — never hand-edit the DB.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  // Prisma 7: connection URLs live in prisma.config.ts (for Migrate) and are passed to the
+  // runtime PrismaClient via a driver adapter (see src/lib/db.ts). Not declared here.
+}
+
+// ------------------------------------------------------------------
+// Enums (brief §7.1 + SelectionStage for the transition helper §12)
+// ------------------------------------------------------------------
+
+enum Country {
+  COLOMBIA
+  PERU
+}
+
+enum ProgramStatus {
+  ACTIVE
+  WITHDRAWN
+  GRADUATED
+  PAUSED
+}
+
+enum RiskLevel {
+  SIN_RIESGO // 0
+  RIESGO_BAJO // 1
+  RIESGO_MEDIO // 2
+  RIESGO_ALTO // 3
+  CRITICO // 4
+}
+
+enum RiskChangeLabel {
+  STRONG_IMPROVEMENT
+  IMPROVED
+  STABLE
+  WORSENED
+  SIGNIFICANT_DETERIORATION
+}
+
+enum AlertType {
+  ACADEMIC
+  PSYCHOSOCIAL
+  PARTICIPATION
+  PERMANENCE
+  COMBINED
+  NONE
+}
+
+enum ReviewStatus {
+  PENDING
+  REVIEWED
+  IN_PROGRESS
+  RESOLVED
+}
+
+enum RequestStatus {
+  SUBMITTED
+  IN_REVIEW
+  RESOLVED
+  REJECTED
+  PENDING
+}
+
+enum ActivityType {
+  INDIVIDUAL_TUTORING
+  GROUP_TUTORING
+  INDIVIDUAL_MENTORING
+  GROUP_MENTORING
+  WORKSHOP
+  PSYCHOSOCIAL_SUPPORT
+  INDIVIDUAL_SESSION
+  OTHER
+}
+
+enum AcademicProgressStatus {
+  ON_TRACK
+  SLIGHTLY_BEHIND
+  BEHIND
+  CRITICAL_DELAY
+}
+
+enum UserRole {
+  EXECUTIVE
+  PROGRAM_MANAGER
+  MENTOR
+  ANALYST_ADMIN
+  FINANCE
+  SELECTION_TEAM
+}
+
+enum ProcessingStatus {
+  PENDING
+  PROCESSED
+  FAILED
+  IGNORED
+}
+
+// Selection pipeline stages (brief §12). Terminal: SELECTED, REJECTED, WITHDRAWN.
+enum SelectionStage {
+  APPLICATION_RECEIVED
+  ELIGIBILITY_REVIEW
+  ASSESSMENT
+  INTERVIEW
+  FINAL_COMMITTEE
+  SELECTED
+  REJECTED
+  WITHDRAWN
+}
+
+// ------------------------------------------------------------------
+// Core
+// ------------------------------------------------------------------
+
+model Scholar {
+  scholarId           String        @id // maps to ID_becario
+  fullName            String
+  country             Country
+  cohort              String
+  university          String
+  academicProgram     String
+  gender              String // free text (source data is "M o F" and more)
+  ethnicGroup         String?
+  departmentOrigin    String?
+  municipalityOrigin  String?
+  currentDepartment   String?
+  currentMunicipality String?
+  programStatus       ProgramStatus @default(ACTIVE)
+  currentSemester     Int?
+  currentMentor       String?
+  startDate           DateTime?
+  expectedEndDate     DateTime?
+  driveFolderUrl      String?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  academicTerms      AcademicTerm[]
+  checkins           MonthlyCheckin[]
+  mentorReports      MentorReport[]
+  supportActivities  SupportActivity[]
+  requests           ScholarRequest[]
+  riskAssessments    RiskAssessment[]
+  financialInputs    FinancialInput[]
+  userAccess         UserScholarAccess[]
+  selectionCandidate SelectionCandidate?
+
+  @@index([country])
+  @@index([cohort])
+  @@index([university])
+  @@index([programStatus])
+}
+
+model AcademicTerm {
+  id                     String                  @id @default(cuid())
+  scholarId              String
+  term                   String // 2024-1 … 2026-2
+  enrollmentStatus       String?
+  creditsEnrolled        Int?
+  creditsCompleted       Int?
+  accumulatedCredits     Int?
+  totalProgramCredits    Int?
+  progressPercentage     Float?
+  gpa                    Float?
+  accumulatedGpa         Float?
+  failedSubjectsCount    Int?
+  failedSubjectsDetail   String?
+  delayedSubjects        String?
+  levelingAlternative    String?
+  isLeveling             Boolean                 @default(false)
+  maxDeadline            DateTime?
+  receivedSupport        Boolean                 @default(false)
+  expectedProgressStatus AcademicProgressStatus?
+  academicStatus         String?
+  source                 String?
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+
+  scholar Scholar @relation(fields: [scholarId], references: [scholarId], onDelete: Cascade)
+
+  @@unique([scholarId, term])
+  @@index([term])
+}
+
+model MonthlyCheckin {
+  id                   String    @id @default(cuid())
+  scholarId            String
+  country              Country?
+  cohort               String?
+  university           String?
+  reportingMonth       String // 2026-01 …
+  submissionDate       DateTime?
+  scholarName          String?
+  academicSelfReport   String?
+  academicLevel        String?
+  emotionalSelfReport  String?
+  psychosocialLevel    String?
+  externalFactorReport String?
+  externalFactorLevel  String?
+  finalStatus          String?
+  submissionId         String    @unique
+  sourceForm           String?
+  rawSubmissionId      String?
+  createdAt            DateTime  @default(now())
+
+  scholar       Scholar               @relation(fields: [scholarId], references: [scholarId], onDelete: Cascade)
+  rawSubmission RawJotformSubmission? @relation(fields: [rawSubmissionId], references: [id])
+
+  @@index([scholarId, reportingMonth])
+}
+
+model MentorReport {
+  id                    String    @id @default(cuid())
+  scholarId             String
+  scholarName           String?
+  mentorName            String?
+  country               Country?
+  cohort                String?
+  university            String?
+  reportingMonth        String?
+  registrationDate      DateTime?
+  sessionDate           DateTime?
+  sessionType           String?
+  sessionSummary        String?
+  modality              String?
+  permanenceRisk        String?
+  academicStatus        String?
+  academicAlertType     String?
+  approvedCoursesCount  Int?
+  atRiskCoursesCount    Int?
+  difficultSubjects     String?
+  psychosocialStatus    String?
+  psychosocialAlertType String?
+  accompanimentPlan     String?
+  estimatedSupportTime  String?
+  individualTutoring    Int       @default(0)
+  groupTutoring         Int       @default(0)
+  individualMentoring   Int       @default(0)
+  groupMentoring        Int       @default(0)
+  workshops             Int       @default(0)
+  highlights            String?
+  academicProgressNotes String?
+  nextSteps             String?
+  submissionId          String    @unique
+  rawSubmissionId       String?
+  createdAt             DateTime  @default(now())
+
+  scholar       Scholar               @relation(fields: [scholarId], references: [scholarId], onDelete: Cascade)
+  rawSubmission RawJotformSubmission? @relation(fields: [rawSubmissionId], references: [id])
+
+  @@index([scholarId, reportingMonth])
+}
+
+model SupportActivity {
+  id                String       @id @default(cuid())
+  scholarId         String
+  period            String
+  country           Country?
+  cohort            String?
+  university        String?
+  activityType      ActivityType
+  activityCount     Int          @default(0)
+  attendanceStatus  String?
+  participationRate Float?
+  source            String       @default("seed") // non-null so the composite unique behaves
+  notes             String?
+  createdAt         DateTime     @default(now())
+
+  scholar Scholar @relation(fields: [scholarId], references: [scholarId], onDelete: Cascade)
+
+  @@unique([scholarId, period, activityType, source])
+  @@index([period])
+  @@index([activityType])
+}
+
+model ScholarRequest {
+  id                         String        @id @default(cuid())
+  scholarId                  String
+  submissionDate             DateTime?
+  country                    Country?
+  cohort                     String?
+  university                 String?
+  firstName                  String?
+  lastName                   String?
+  requestType                String
+  requestDescription         String?
+  exchangeUniversitySemester String?
+  homologationSubjects       String?
+  tuitionLivingCosts         String?
+  certificateReason          String?
+  difficultSubject           String?
+  context                    String?
+  attachmentUrl              String?
+  submissionId               String        @unique
+  status                     RequestStatus @default(SUBMITTED)
+  responseChannel            String?
+  observations               String?
+  owner                      String?
+  resolvedDate               DateTime?
+  createdAt                  DateTime      @default(now())
+  updatedAt                  DateTime      @updatedAt
+
+  scholar Scholar @relation(fields: [scholarId], references: [scholarId], onDelete: Cascade)
+
+  @@index([scholarId])
+  @@index([status])
+}
+
+model RiskAssessment {
+  id                      String           @id @default(cuid())
+  scholarId               String
+  period                  String
+  country                 Country?
+  cohort                  String?
+  university              String?
+  academicRiskLevel       RiskLevel
+  academicRiskValue       Int // 0–4
+  psychosocialRiskLevel   RiskLevel
+  psychosocialRiskValue   Int
+  participationRiskLevel  RiskLevel
+  participationRiskValue  Int
+  globalRiskLevel         RiskLevel
+  globalRiskValue         Int
+  previousGlobalRiskValue Int?
+  riskChange              Int?
+  riskChangeLabel         RiskChangeLabel?
+  alertType               AlertType        @default(NONE)
+  riskReason              String?
+  recommendedAction       String?
+  reviewStatus            ReviewStatus     @default(PENDING)
+  reviewedBy              String?
+  reviewedAt              DateTime?
+  source                  String?
+  createdAt               DateTime         @default(now())
+  updatedAt               DateTime         @updatedAt
+
+  scholar Scholar @relation(fields: [scholarId], references: [scholarId], onDelete: Cascade)
+
+  @@unique([scholarId, period])
+  @@index([globalRiskLevel])
+  @@index([period])
+}
+
+model FinancialInput {
+  id            String   @id @default(cuid())
+  scholarId     String? // nullable: program-level costs
+  period        String
+  country       Country?
+  cohort        String?
+  university    String?
+  costCategory  String
+  costAmount    Decimal  @db.Decimal(14, 2)
+  currency      String // COP | PEN | USD
+  fundingSource String?
+  isDirectCost  Boolean  @default(true)
+  notes         String?
+  createdAt     DateTime @default(now())
+
+  scholar Scholar? @relation(fields: [scholarId], references: [scholarId], onDelete: SetNull)
+
+  @@index([scholarId])
+  @@index([costCategory])
+  @@index([period])
+}
+
+// ------------------------------------------------------------------
+// Selection pipeline
+// ------------------------------------------------------------------
+
+model SelectionCandidate {
+  candidateId     String         @id @default(cuid())
+  scholarId       String?        @unique
+  fullName        String
+  country         Country
+  cohort          String?
+  university      String?
+  applicationDate DateTime?
+  currentStage    SelectionStage @default(APPLICATION_RECEIVED)
+  stageStatus     String?
+  selectionScore  Float?
+  evaluationNotes String?
+  decisionDate    DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  scholar      Scholar?                @relation(fields: [scholarId], references: [scholarId])
+  stageHistory SelectionStageHistory[]
+
+  @@index([currentStage])
+}
+
+model SelectionStageHistory {
+  id             String         @id @default(cuid())
+  candidateId    String
+  stageName      SelectionStage
+  stageStatus    String?
+  stageStartDate DateTime?
+  stageEndDate   DateTime?
+  score          Float?
+  notes          String?
+  createdAt      DateTime       @default(now())
+
+  candidate SelectionCandidate @relation(fields: [candidateId], references: [candidateId], onDelete: Cascade)
+
+  @@index([candidateId])
+}
+
+// ------------------------------------------------------------------
+// Ingestion / governance
+// ------------------------------------------------------------------
+
+model RawJotformSubmission {
+  id               String           @id @default(cuid())
+  formId           String
+  formName         String?
+  submissionId     String           @unique
+  submittedAt      DateTime?
+  payloadJson      Json
+  processingStatus ProcessingStatus @default(PENDING)
+  processingError  String?
+  processedAt      DateTime?
+  createdAt        DateTime         @default(now())
+
+  checkins      MonthlyCheckin[]
+  mentorReports MentorReport[]
+
+  @@index([processingStatus])
+  @@index([formId])
+}
+
+model DataQualityIssue {
+  id               String    @id @default(cuid())
+  issueType        String
+  sourceName       String?
+  recordId         String?
+  scholarId        String?
+  issueDescription String
+  severity         String?
+  owner            String?
+  status           String    @default("OPEN")
+  resolvedAt       DateTime?
+  createdAt        DateTime  @default(now())
+
+  @@index([issueType])
+  @@index([status])
+}
+
+model ControlValue {
+  id        String   @id @default(cuid())
+  category  String
+  value     String
+  label     String
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@unique([category, value])
+}
+
+model AppUser {
+  id        String   @id @default(cuid())
+  fullName  String
+  email     String   @unique
+  role      UserRole
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  scholarAccess UserScholarAccess[]
+}
+
+model UserScholarAccess {
+  id         String   @id @default(cuid())
+  userId     String
+  scholarId  String
+  accessType String   @default("VIEW")
+  createdAt  DateTime @default(now())
+
+  user    AppUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scholar Scholar @relation(fields: [scholarId], references: [scholarId], onDelete: Cascade)
+
+  @@unique([userId, scholarId, accessType])
+  @@index([scholarId])
+}

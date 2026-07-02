@@ -1,0 +1,27 @@
+# Local PostgreSQL for the Beca Tech dashboard.
+# Start with:  docker compose up -d
+# Stop with:   docker compose down        (add -v to also delete the data volume)
+#
+# Mapped to host port 5433 (not 5432) to avoid colliding with a local Postgres install.
+# If 5433 is also taken, change the host side below and update DATABASE_URL / DIRECT_URL to match.
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: becatech-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: becatech
+      POSTGRES_PASSWORD: becatech
+      POSTGRES_DB: beca_tech_dashboard
+    ports:
+      - "5433:5432"
+    volumes:
+      - becatech_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U becatech -d beca_tech_dashboard"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  becatech_pgdata:
