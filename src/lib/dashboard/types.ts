@@ -8,6 +8,7 @@ import type {
   ReviewStatus,
   RiskChangeLabel,
   RiskLevel,
+  SelectionStage,
 } from "../../generated/prisma/enums";
 
 /**
@@ -137,6 +138,52 @@ export interface SupportParticipationResult {
   byRiskLevel: ParticipationByRisk[];
   lowParticipationScholars: LowParticipationRow[];
   highRiskSupport: { scholarCount: number; totalActivities: number };
+}
+
+export interface FilterOptions {
+  cohorts: string[];
+  universities: string[];
+  periods: string[];
+}
+
+export interface ScholarDirectoryRow {
+  scholarId: string;
+  fullName: string;
+  country: Country;
+  cohort: string;
+  university: string;
+  academicProgram: string;
+  programStatus: ProgramStatus;
+  currentMentor: string | null;
+  currentRiskLevel: RiskLevel | null;
+  latestGpa: number | null;
+}
+
+export interface StageCount {
+  stage: SelectionStage;
+  count: number;
+}
+export interface SelectionCandidateRow {
+  candidateId: string;
+  fullName: string;
+  country: Country;
+  cohort: string | null;
+  university: string | null;
+  currentStage: SelectionStage;
+  stageStatus: string | null;
+  selectionScore: number | null;
+  applicationDate: Date | null;
+}
+export interface SelectionPipelineResult {
+  total: number;
+  selected: number;
+  rejected: number;
+  withdrawn: number;
+  inProgress: number;
+  conversionRate: number;
+  byStage: StageCount[];
+  byCountry: { country: Country; count: number }[];
+  recent: SelectionCandidateRow[];
 }
 
 export interface CostGroup {

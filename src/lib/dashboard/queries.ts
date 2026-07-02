@@ -9,17 +9,22 @@ import {
   ActivityType,
   ProgramStatus,
   RiskLevel,
+  SelectionStage,
 } from "../../generated/prisma/enums";
 import type {
   AcademicProgressResult,
   CostGroup,
   DashboardFilters,
   ExecutiveOverview,
+  FilterOptions,
   GpaGroupStat,
   ProgressDistribution,
   RiskAlertRow,
   RiskAlertsResult,
   RiskDistribution,
+  ScholarDirectoryRow,
+  SelectionPipelineResult,
+  StageCount,
   SupportParticipationResult,
   UnitEconomicsResult,
 } from "./types";
@@ -85,6 +90,23 @@ function financialWhere(filters: DashboardFilters): Prisma.FinancialInputWhereIn
 async function getCurrentPeriod(): Promise<string> {
   const latest = await prisma.riskAssessment.aggregate({ _max: { period: true } });
   return latest._max.period ?? "2026-06";
+}
+
+/** Distinct values that populate the dashboard filter dropdowns. */
+export async function getFilterOptions(): Promise<FilterOptions> {
+  const [scholars, periods] = await Promise.all([
+    prisma.scholar.findMany({ select: { cohort: true, university: true } }),
+    prisma.riskAssessment.findMany({
+      select: { period: true },
+      distinct: ["period"],
+      orderBy: { period: "asc" },
+    }),
+  ]);
+  return {
+    cohorts: [...new Set(scholars.map((s) => s.cohort))].sort(),
+    universities: [...new Set(scholars.map((s) => s.university))].sort(),
+    periods: periods.map((p) => p.period),
+  };
 }
 
 /** Each scholar's current risk = latest assessment with period <= currentPeriod. */
@@ -280,6 +302,33 @@ export async function getRiskAlerts(filters: DashboardFilters = {}): Promise<Ris
     (a, b) => b.globalRiskValue - a.globalRiskValue || (b.riskChange ?? 0) - (a.riskChange ?? 0),
   );
   return { currentPeriod, distribution, attentionList };
+}
+
+/** Scholar list for the directory/search page (current risk + latest GPA). */
+export async function getScholarDirectory(
+  filters: DashboardFilters = {},
+  search?: string,
+): Promise<ScholarDirectoryRow[]> {
+  const { scholars, riskMap } = await loadScope(filters);
+  const q = search?.trim().toLowerCase();
+  const list = q
+    ? scholars.filter(
+        (s) => s.fullName.toLowerCase().includes(q) || s.scholarId.toLowerCase().includes(q),
+      )
+    : scholars;
+  const gpaMap = await latestTermByScholar(list.map((s) => s.scholarId));
+  return list.map((s) => ({
+    scholarId: s.scholarId,
+    fullName: s.fullName,
+    country: s.country,
+    cohort: s.cohort,
+    university: s.university,
+    academicProgram: s.academicProgram,
+    programStatus: s.programStatus,
+    currentMentor: s.currentMentor,
+    currentRiskLevel: riskMap.get(s.scholarId)?.globalRiskLevel ?? null,
+    latestGpa: gpaMap.get(s.scholarId)?.accumulatedGpa ?? null,
+  }));
 }
 
 // ------------------------------------------------------------------
@@ -523,5 +572,53 @@ export async function getUnitEconomics(
     byCohort: toCostGroups(byCohort),
     byCountry: toCostGroups(byCountry),
     byUniversity: toCostGroups(byUniversity),
+  };
+}
+
+// ------------------------------------------------------------------
+// Selection pipeline (brief §10 / future selection layer)
+// ------------------------------------------------------------------
+export async function getSelectionPipeline(): Promise<SelectionPipelineResult> {
+  const [byStageGroups, byCountryGroups, total, recent] = await Promise.all([
+    prisma.selectionCandidate.groupBy({ by: ["currentStage"], _count: { _all: true } }),
+    prisma.selectionCandidate.groupBy({ by: ["country"], _count: { _all: true } }),
+    prisma.selectionCandidate.count(),
+    prisma.selectionCandidate.findMany({
+      orderBy: [{ applicationDate: "desc" }, { candidateId: "asc" }],
+      take: 20,
+      select: {
+        candidateId: true,
+        fullName: true,
+        country: true,
+        cohort: true,
+        university: true,
+        currentStage: true,
+        stageStatus: true,
+        selectionScore: true,
+        applicationDate: true,
+      },
+    }),
+  ]);
+
+  const stageCount = (stage: SelectionStage) =>
+    byStageGroups.find((g) => g.currentStage === stage)?._count._all ?? 0;
+  const selected = stageCount(SelectionStage.SELECTED);
+  const rejected = stageCount(SelectionStage.REJECTED);
+  const withdrawn = stageCount(SelectionStage.WITHDRAWN);
+
+  const byStage: StageCount[] = byStageGroups
+    .map((g) => ({ stage: g.currentStage, count: g._count._all }))
+    .sort((a, b) => b.count - a.count);
+
+  return {
+    total,
+    selected,
+    rejected,
+    withdrawn,
+    inProgress: total - selected - rejected - withdrawn,
+    conversionRate: total ? selected / total : 0,
+    byStage,
+    byCountry: byCountryGroups.map((g) => ({ country: g.country, count: g._count._all })),
+    recent,
   };
 }

@@ -1,0 +1,112 @@
+"use client";
+
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import {
+  COUNTRY_LABEL,
+  PROGRAM_STATUS_LABEL,
+  RISK_LEVEL_LABEL,
+  RISK_LEVEL_ORDER,
+} from "@/lib/labels";
+
+export interface FilterOptions {
+  cohorts: string[];
+  universities: string[];
+  periods: string[];
+}
+
+const FILTER_KEYS = ["country", "cohort", "university", "status", "risk", "period"];
+
+export function TopFilters({ options }: { options: FilterOptions }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const val = (key: string) => searchParams.get(key) ?? "";
+  const anyActive = FILTER_KEYS.some((k) => searchParams.get(k));
+
+  function setParam(key: string, value: string) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (value) params.set(key, value);
+    else params.delete(key);
+    router.push(params.toString() ? `${pathname}?${params.toString()}` : pathname);
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <Select
+        value={val("country")}
+        onChange={(v) => setParam("country", v)}
+        placeholder="País"
+        options={[
+          { value: "COLOMBIA", label: COUNTRY_LABEL.COLOMBIA },
+          { value: "PERU", label: COUNTRY_LABEL.PERU },
+        ]}
+      />
+      <Select
+        value={val("cohort")}
+        onChange={(v) => setParam("cohort", v)}
+        placeholder="Cohorte"
+        options={options.cohorts.map((c) => ({ value: c, label: c }))}
+      />
+      <Select
+        value={val("university")}
+        onChange={(v) => setParam("university", v)}
+        placeholder="Universidad"
+        options={options.universities.map((u) => ({ value: u, label: u }))}
+      />
+      <Select
+        value={val("status")}
+        onChange={(v) => setParam("status", v)}
+        placeholder="Estado"
+        options={Object.entries(PROGRAM_STATUS_LABEL).map(([value, label]) => ({ value, label }))}
+      />
+      <Select
+        value={val("risk")}
+        onChange={(v) => setParam("risk", v)}
+        placeholder="Riesgo"
+        options={RISK_LEVEL_ORDER.map((r) => ({ value: r, label: RISK_LEVEL_LABEL[r] }))}
+      />
+      <Select
+        value={val("period")}
+        onChange={(v) => setParam("period", v)}
+        placeholder="Periodo"
+        options={options.periods.map((p) => ({ value: p, label: p }))}
+      />
+      {anyActive ? (
+        <button
+          onClick={() => router.push(pathname)}
+          className="text-xs font-medium text-slate-500 underline hover:text-slate-800"
+        >
+          Limpiar
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function Select({
+  value,
+  onChange,
+  placeholder,
+  options,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+  options: { value: string; label: string }[];
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="max-w-[12rem] rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 shadow-sm focus:border-slate-400 focus:outline-none"
+    >
+      <option value="">{placeholder}: todos</option>
+      {options.map((o) => (
+        <option key={o.value} value={o.value}>
+          {o.label}
+        </option>
+      ))}
+    </select>
+  );
+}
