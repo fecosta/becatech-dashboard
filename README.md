@@ -43,7 +43,7 @@ npm run db:generate
 # 5. Apply migrations
 npm run db:migrate
 
-# 6. Seed demo data  (full ~100-scholar dataset lands in Sprint 2)
+# 6. Seed demo data (~100 scholars + related records)
 npm run db:seed
 
 # 7. Run the app
@@ -96,6 +96,41 @@ Every schema change goes through a migration (`npm run db:migrate`) — never ha
 - Credentials (dev only): user `becatech`, password `becatech`, database `beca_tech_dashboard`.
 - `docker compose down -v` removes the data volume for a clean slate.
 
+## Demo data
+
+`npm run db:seed` clears and repopulates the database (idempotent, fixed RNG seed — reproducible).
+All data is synthetic; no real personal data. It creates ~100 scholars and their related records:
+
+- **Scholars**: 100 — Colombia 60 / Peru 40; cohorts 2024–2026; status Active 82 / Withdrawn 8 /
+  Paused 5 / Graduated 5.
+- **Academic terms** (~305), **monthly check-ins** (~346), **mentor reports** (~340),
+  **support activities** (~1,968), **monthly risk assessments** (~448),
+  **scholar requests** (~39), **financial inputs** (~433),
+  **selection candidates** (140 = 100 selected + 40 others) with **stage history** (~751),
+  **control values** (44), **demo users** (12), **mentor→scholar access** (100).
+- **Risk distribution** matches the taxonomy targets (≈45% sin riesgo, 25% bajo, 18% medio,
+  9% alto, 3% crítico), with alerts spread across academic / psychosocial / participation /
+  permanence / combined.
+- **Deliberate testing seams**: ~7 active scholars with no check-ins and ~20 missing the latest
+  month (for data-quality and "missing report" flags); ~11 low-participation scholars; ~7
+  high-cost scholars (for unit-economics outliers); ~30 scholars with requests, the rest without.
+
+### Demo users
+
+Mock auth (MVP) acts as the user in `DEMO_USER_EMAIL`. Seeded users:
+
+| Email                              | Role            | Name            |
+| ---------------------------------- | --------------- | --------------- |
+| `executive@becatech.test`          | EXECUTIVE       | Ana Restrepo    |
+| `program.manager@becatech.test`    | PROGRAM_MANAGER | Carlos Méndez   |
+| `program.manager2@becatech.test`   | PROGRAM_MANAGER | Lucía Fernández |
+| `mentor1@becatech.test` … `mentor6@becatech.test` | MENTOR | (6 mentors)     |
+| `analyst@becatech.test`            | ANALYST_ADMIN   | Diego Ramírez   |
+| `finance@becatech.test`            | FINANCE         | Sofía Torres    |
+| `selection@becatech.test`          | SELECTION_TEAM  | Mateo Gómez     |
+
+Each mentor is granted access only to the scholars assigned to them (`currentMentor`).
+
 ## Deployment (Vercel + Neon / Vercel Postgres)
 
 Provision a Postgres database (Neon or Vercel Postgres), then set on Vercel:
@@ -108,11 +143,13 @@ _Full deploy walkthrough is finalized in Sprint 7._
 
 ## Project status
 
-Built sprint by sprint (see the implementation plan). **Sprint 1 (database & app foundation)** is
-complete: Next.js app scaffolded, full Prisma schema + initial migration, Docker Postgres, env
-templates, Prisma client singleton, and a seed scaffold.
+Built sprint by sprint (see the implementation plan).
 
-Coming next: full demo seed (Sprint 2), dashboard query layer (Sprint 3), dashboard UI + routes
-(Sprint 4), authorization + selection stage logic with tests (Sprint 5), JotForm placeholder +
-data-quality checks (Sprint 6), and documentation polish including demo users and route reference
-(Sprint 7).
+- **Sprint 1 — database & app foundation** ✅ Next.js app, full Prisma schema + initial migration,
+  Docker Postgres, env templates, Prisma client singleton.
+- **Sprint 2 — realistic demo seed** ✅ ~100 scholars + related records, shared risk/progress
+  helpers, reproducible idempotent seed.
+
+Coming next: dashboard query layer (Sprint 3), dashboard UI + routes (Sprint 4), authorization +
+selection stage logic with tests (Sprint 5), JotForm placeholder + data-quality checks (Sprint 6),
+and documentation polish (Sprint 7).
