@@ -12,6 +12,7 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:reset": "prisma migrate reset",
     "db:studio": "prisma studio",
+    "dashboard:check": "tsx src/scripts/dashboard-check.ts",
     "data-quality:scan": "tsx src/scripts/data-quality-scan.ts",
     "test": "vitest run"
   },

@@ -1,0 +1,156 @@
+// Typed inputs and results for the dashboard query layer (src/lib/dashboard/queries.ts).
+import type {
+  AcademicProgressStatus,
+  ActivityType,
+  AlertType,
+  Country,
+  ProgramStatus,
+  ReviewStatus,
+  RiskChangeLabel,
+  RiskLevel,
+} from "../../generated/prisma/enums";
+
+/**
+ * Filters shared across dashboard views. Scholar-level fields filter scholars directly;
+ * `riskLevel` filters by each scholar's CURRENT risk; `period` chooses which month counts
+ * as "current" (defaults to the latest month with data).
+ */
+export interface DashboardFilters {
+  country?: Country;
+  cohort?: string;
+  university?: string;
+  gender?: string;
+  department?: string; // matches Scholar.currentDepartment
+  programStatus?: ProgramStatus;
+  riskLevel?: RiskLevel;
+  period?: string;
+}
+
+export type RiskDistribution = Record<RiskLevel, number>;
+export type ProgressDistribution = Record<AcademicProgressStatus, number>;
+
+export interface ExecutiveOverview {
+  currentPeriod: string;
+  totalScholars: number;
+  activeScholars: number;
+  withdrawnScholars: number;
+  graduatedScholars: number;
+  pausedScholars: number;
+  /** retained (active + paused + graduated) / total */
+  retentionRate: number;
+  averageGpa: number;
+  /** share of active scholars actively participating (> 3 support activities in scope) */
+  participationRate: number;
+  scholarsNeedingAttention: number;
+  riskDistribution: RiskDistribution;
+  totalDirectCostUsd: number;
+  costPerActiveScholarUsd: number;
+  costPerRetainedScholarUsd: number;
+}
+
+export interface RiskAlertRow {
+  scholarId: string;
+  fullName: string;
+  country: Country;
+  cohort: string;
+  university: string;
+  programStatus: ProgramStatus;
+  currentMentor: string | null;
+  period: string;
+  globalRiskLevel: RiskLevel;
+  globalRiskValue: number;
+  academicRiskLevel: RiskLevel;
+  psychosocialRiskLevel: RiskLevel;
+  participationRiskLevel: RiskLevel;
+  riskChange: number | null;
+  riskChangeLabel: RiskChangeLabel | null;
+  alertType: AlertType;
+  riskReason: string | null;
+  recommendedAction: string | null;
+  reviewStatus: ReviewStatus;
+  missingCheckin: boolean;
+  missingMentorReport: boolean;
+}
+
+export interface RiskAlertsResult {
+  currentPeriod: string;
+  distribution: RiskDistribution;
+  /** scholars at medium risk or above, or with a missing current-month report */
+  attentionList: RiskAlertRow[];
+}
+
+export interface GpaGroupStat {
+  key: string;
+  scholarCount: number;
+  averageGpa: number;
+}
+
+export interface BehindRow {
+  scholarId: string;
+  fullName: string;
+  cohort: string;
+  country: Country;
+  university: string;
+  latestTerm: string | null;
+  progressPercentage: number | null;
+  expectedProgressStatus: AcademicProgressStatus | null;
+  failedSubjectsCount: number | null;
+}
+
+export interface AcademicProgressResult {
+  averageGpa: number;
+  gpaByCohort: GpaGroupStat[];
+  gpaByCountry: GpaGroupStat[];
+  gpaByUniversity: GpaGroupStat[];
+  progressStatusDistribution: ProgressDistribution;
+  academicRiskDistribution: RiskDistribution;
+  scholarsBehind: BehindRow[];
+  scholarsWithFailedSubjects: number;
+}
+
+export interface ActivityTypeStat {
+  activityType: ActivityType;
+  totalActivities: number;
+}
+export interface MonthActivityStat {
+  period: string;
+  totalActivities: number;
+}
+export interface ParticipationByRisk {
+  riskLevel: RiskLevel;
+  scholarCount: number;
+  averageActivitiesPerScholar: number;
+}
+export interface LowParticipationRow {
+  scholarId: string;
+  fullName: string;
+  cohort: string;
+  country: Country;
+  university: string;
+  totalActivities: number;
+}
+
+export interface SupportParticipationResult {
+  participationRate: number;
+  byActivityType: ActivityTypeStat[];
+  byMonth: MonthActivityStat[];
+  byRiskLevel: ParticipationByRisk[];
+  lowParticipationScholars: LowParticipationRow[];
+  highRiskSupport: { scholarCount: number; totalActivities: number };
+}
+
+export interface CostGroup {
+  key: string;
+  totalUsd: number;
+}
+export interface UnitEconomicsResult {
+  totalDirectCostUsd: number;
+  totalScholarshipUsd: number;
+  activeScholars: number;
+  retainedScholars: number;
+  costPerActiveScholarUsd: number;
+  costPerRetainedScholarUsd: number;
+  byCohort: CostGroup[];
+  byCountry: CostGroup[];
+  byUniversity: CostGroup[];
+}
