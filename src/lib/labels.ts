@@ -118,3 +118,43 @@ export const SELECTION_STAGE_LABEL: Record<SelectionStage, string> = {
   REJECTED: "Rechazado",
   WITHDRAWN: "Retirado",
 };
+
+export const IMPORT_ENTITY_LABEL: Record<string, string> = {
+  SCHOLAR: "Becarios",
+  ACADEMIC_TERM: "Términos académicos",
+  MONTHLY_CHECKIN: "Check-ins",
+  MENTOR_REPORT: "Reportes de mentoría",
+  SUPPORT_ACTIVITY: "Actividades de apoyo",
+  SCHOLAR_REQUEST: "Solicitudes",
+  FINANCIAL_INPUT: "Costos",
+};
+
+export const IMPORT_SOURCE_LABEL: Record<string, string> = {
+  TEMPLATE: "Plantilla",
+  LEGACY_WIDE_EXCEL: "Excel histórico",
+};
+
+export const IMPORT_STATUS_LABEL: Record<string, string> = {
+  PENDING: "Pendiente",
+  VALIDATED: "Validada",
+  COMMITTED: "Confirmada",
+  FAILED: "Fallida",
+};
+
+export const IMPORT_STATUS_TONE: Record<string, "slate" | "blue" | "green" | "red"> = {
+  PENDING: "slate",
+  VALIDATED: "blue",
+  COMMITTED: "green",
+  FAILED: "red",
+};
+
+/** Entities available in the import wizard, in a sensible order. */
+export const IMPORT_ENTITIES = [
+  "SCHOLAR",
+  "ACADEMIC_TERM",
+  "MONTHLY_CHECKIN",
+  "MENTOR_REPORT",
+  "SUPPORT_ACTIVITY",
+  "SCHOLAR_REQUEST",
+  "FINANCIAL_INPUT",
+] as const;

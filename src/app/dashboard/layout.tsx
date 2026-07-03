@@ -16,6 +16,7 @@ const NAV: (NavItem & { permission: Permission })[] = [
   { href: "/dashboard/support-participation", label: "Participación", permission: Permission.VIEW_SCHOLAR_TRACKING },
   { href: "/dashboard/unit-economics", label: "Costos", permission: Permission.VIEW_UNIT_ECONOMICS },
   { href: "/dashboard/selection-pipeline", label: "Pipeline de selección", permission: Permission.VIEW_SELECTION_PIPELINE },
+  { href: "/dashboard/admin/imports", label: "Importaciones", permission: Permission.MANAGE_IMPORTS },
 ];
 
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
