@@ -21,6 +21,8 @@ export const Permission = {
   VIEW_UNIT_ECONOMICS: "VIEW_UNIT_ECONOMICS",
   VIEW_SELECTION_PIPELINE: "VIEW_SELECTION_PIPELINE",
   MANAGE_DATA: "MANAGE_DATA",
+  VIEW_IMPORTS: "VIEW_IMPORTS",
+  MANAGE_IMPORTS: "MANAGE_IMPORTS",
 } as const;
 export type Permission = (typeof Permission)[keyof typeof Permission];
 
@@ -35,6 +37,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     P.VIEW_SENSITIVE_NOTES,
     P.VIEW_UNIT_ECONOMICS,
     P.VIEW_SELECTION_PIPELINE,
+    P.VIEW_IMPORTS, // read-only access to import history
   ],
   MENTOR: [P.VIEW_DASHBOARD, P.VIEW_SCHOLAR_TRACKING, P.VIEW_SENSITIVE_NOTES],
   ANALYST_ADMIN: [
@@ -44,6 +47,8 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     P.VIEW_UNIT_ECONOMICS,
     P.VIEW_SELECTION_PIPELINE,
     P.MANAGE_DATA,
+    P.VIEW_IMPORTS,
+    P.MANAGE_IMPORTS,
   ],
   FINANCE: [P.VIEW_DASHBOARD, P.VIEW_UNIT_ECONOMICS],
   SELECTION_TEAM: [P.VIEW_DASHBOARD, P.VIEW_SELECTION_PIPELINE],
@@ -67,3 +72,5 @@ export const canViewSensitiveNotes = (user: CurrentUser) => can(user, P.VIEW_SEN
 export const canViewUnitEconomics = (user: CurrentUser) => can(user, P.VIEW_UNIT_ECONOMICS);
 export const canViewSelectionPipeline = (user: CurrentUser) => can(user, P.VIEW_SELECTION_PIPELINE);
 export const canManageData = (user: CurrentUser) => can(user, P.MANAGE_DATA);
+export const canViewImports = (user: CurrentUser) => can(user, P.VIEW_IMPORTS);
+export const canManageImports = (user: CurrentUser) => can(user, P.MANAGE_IMPORTS);

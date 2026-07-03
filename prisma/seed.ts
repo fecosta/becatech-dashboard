@@ -790,6 +790,14 @@ async function main() {
     ["EXECUTIVE", "Directivo"], ["PROGRAM_MANAGER", "Gestor de programa"], ["MENTOR", "Mentor"],
     ["ANALYST_ADMIN", "Analista / Admin"], ["FINANCE", "Finanzas"], ["SELECTION_TEAM", "Equipo de selección"],
   ]);
+  // Controlled list for FinancialInput.costCategory (values match the seeded cost categories).
+  addControls("cost_category", [
+    ["Scholarship amount", "Monto de beca"], ["Tuition", "Matrícula"],
+    ["Maintenance / stipend", "Manutención / estipendio"], ["English support", "Apoyo de inglés"],
+    ["Tutoring", "Tutoría"], ["Mentoring", "Mentoría"], ["Psychosocial support", "Apoyo psicosocial"],
+    ["Program staff allocation", "Asignación de personal"], ["Administrative allocation", "Asignación administrativa"],
+    ["Other direct support", "Otro apoyo directo"],
+  ]);
 
   // ---- Demo users ----
   const users: Prisma.AppUserCreateManyInput[] = [

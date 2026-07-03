@@ -117,6 +117,29 @@ enum SelectionStage {
   WITHDRAWN
 }
 
+// Data-import admin panel.
+enum DataImportSourceType {
+  TEMPLATE
+  LEGACY_WIDE_EXCEL
+}
+
+enum DataImportEntity {
+  SCHOLAR
+  ACADEMIC_TERM
+  MONTHLY_CHECKIN
+  MENTOR_REPORT
+  SUPPORT_ACTIVITY
+  SCHOLAR_REQUEST
+  FINANCIAL_INPUT
+}
+
+enum DataImportStatus {
+  PENDING
+  VALIDATED
+  COMMITTED
+  FAILED
+}
+
 // ------------------------------------------------------------------
 // Core
 // ------------------------------------------------------------------
@@ -140,6 +163,7 @@ model Scholar {
   startDate           DateTime?
   expectedEndDate     DateTime?
   driveFolderUrl      String?
+  importBatchId       String? // last data-import batch that wrote this row (audit + rollback)
   createdAt           DateTime      @default(now())
   updatedAt           DateTime      @updatedAt
 
@@ -157,6 +181,7 @@ model Scholar {
   @@index([cohort])
   @@index([university])
   @@index([programStatus])
+  @@index([importBatchId])
 }
 
 model AcademicTerm {
@@ -181,6 +206,7 @@ model AcademicTerm {
   expectedProgressStatus AcademicProgressStatus?
   academicStatus         String?
   source                 String?
+  importBatchId          String?
   createdAt              DateTime                @default(now())
   updatedAt              DateTime                @updatedAt
 
@@ -188,6 +214,7 @@ model AcademicTerm {
 
   @@unique([scholarId, term])
   @@index([term])
+  @@index([importBatchId])
 }
 
 model MonthlyCheckin {
@@ -209,12 +236,14 @@ model MonthlyCheckin {
   submissionId         String    @unique
   sourceForm           String?
   rawSubmissionId      String?
+  importBatchId        String?
   createdAt            DateTime  @default(now())
 
   scholar       Scholar               @relation(fields: [scholarId], references: [scholarId], onDelete: Cascade)
   rawSubmission RawJotformSubmission? @relation(fields: [rawSubmissionId], references: [id])
 
   @@index([scholarId, reportingMonth])
+  @@index([importBatchId])
 }
 
 model MentorReport {
@@ -251,12 +280,14 @@ model MentorReport {
   nextSteps             String?
   submissionId          String    @unique
   rawSubmissionId       String?
+  importBatchId         String?
   createdAt             DateTime  @default(now())
 
   scholar       Scholar               @relation(fields: [scholarId], references: [scholarId], onDelete: Cascade)
   rawSubmission RawJotformSubmission? @relation(fields: [rawSubmissionId], references: [id])
 
   @@index([scholarId, reportingMonth])
+  @@index([importBatchId])
 }
 
 model SupportActivity {
@@ -272,6 +303,7 @@ model SupportActivity {
   participationRate Float?
   source            String       @default("seed") // non-null so the composite unique behaves
   notes             String?
+  importBatchId     String?
   createdAt         DateTime     @default(now())
 
   scholar Scholar @relation(fields: [scholarId], references: [scholarId], onDelete: Cascade)
@@ -279,6 +311,7 @@ model SupportActivity {
   @@unique([scholarId, period, activityType, source])
   @@index([period])
   @@index([activityType])
+  @@index([importBatchId])
 }
 
 model ScholarRequest {
@@ -305,6 +338,7 @@ model ScholarRequest {
   observations               String?
   owner                      String?
   resolvedDate               DateTime?
+  importBatchId              String?
   createdAt                  DateTime      @default(now())
   updatedAt                  DateTime      @updatedAt
 
@@ -312,6 +346,7 @@ model ScholarRequest {
 
   @@index([scholarId])
   @@index([status])
+  @@index([importBatchId])
 }
 
 model RiskAssessment {
@@ -362,6 +397,7 @@ model FinancialInput {
   fundingSource String?
   isDirectCost  Boolean  @default(true)
   notes         String?
+  importBatchId String?
   createdAt     DateTime @default(now())
 
   scholar Scholar? @relation(fields: [scholarId], references: [scholarId], onDelete: SetNull)
@@ -369,6 +405,7 @@ model FinancialInput {
   @@index([scholarId])
   @@index([costCategory])
   @@index([period])
+  @@index([importBatchId])
 }
 
 // ------------------------------------------------------------------
@@ -475,6 +512,7 @@ model AppUser {
   updatedAt DateTime @updatedAt
 
   scholarAccess UserScholarAccess[]
+  imports       DataImportBatch[]
 }
 
 model UserScholarAccess {
@@ -489,4 +527,27 @@ model UserScholarAccess {
 
   @@unique([userId, scholarId, accessType])
   @@index([scholarId])
+}
+
+// Data-import admin panel: one batch per uploaded file.
+model DataImportBatch {
+  id                     String               @id @default(cuid())
+  sourceType             DataImportSourceType
+  entities               DataImportEntity[]
+  filename               String
+  uploadedById           String
+  uploadedBy             AppUser              @relation(fields: [uploadedById], references: [id])
+  uploadedAt             DateTime             @default(now())
+  status                 DataImportStatus     @default(PENDING)
+  totalRows              Int                  @default(0)
+  successRows            Int                  @default(0)
+  errorRows              Int                  @default(0)
+  parsedRows             Json? // validated canonical rows, consumed at commit (retention = parsed rows)
+  errorReport            Json? // [{ entity, rowNumber, field, message }]
+  insertedRefs           Json? // { "<table>": ["id", ...] } created rows, for insert-only rollback
+  triggeredRiskRecompute Boolean              @default(false)
+  createdAt              DateTime             @default(now())
+
+  @@index([uploadedById])
+  @@index([status])
 }
