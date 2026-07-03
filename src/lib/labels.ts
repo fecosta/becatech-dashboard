@@ -118,14 +118,3 @@ export const SELECTION_STAGE_LABEL: Record<SelectionStage, string> = {
   REJECTED: "Rechazado",
   WITHDRAWN: "Retirado",
 };
-
-export const SELECTION_STAGE_ORDER: SelectionStage[] = [
-  "APPLICATION_RECEIVED",
-  "ELIGIBILITY_REVIEW",
-  "ASSESSMENT",
-  "INTERVIEW",
-  "FINAL_COMMITTEE",
-  "SELECTED",
-  "REJECTED",
-  "WITHDRAWN",
-];
