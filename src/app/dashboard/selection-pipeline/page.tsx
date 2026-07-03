@@ -1,12 +1,24 @@
 import { BarCard } from "@/components/charts";
 import { Column, DataTable } from "@/components/DataTable";
-import { Badge, KpiCard, PageHeader } from "@/components/ui";
+import { AccessDenied, Badge, KpiCard, PageHeader } from "@/components/ui";
+import { Permission } from "@/lib/auth/authorization";
+import { requirePermission } from "@/lib/auth/guard";
 import { getSelectionPipeline } from "@/lib/dashboard/queries";
 import type { SelectionCandidateRow } from "@/lib/dashboard/types";
 import { fmtDate, fmtInt, fmtPct } from "@/lib/format";
 import { COUNTRY_LABEL, SELECTION_STAGE_LABEL } from "@/lib/labels";
 
 export default async function SelectionPipelinePage() {
+  const { allowed } = await requirePermission(Permission.VIEW_SELECTION_PIPELINE);
+  if (!allowed) {
+    return (
+      <div>
+        <PageHeader title="Pipeline de selección" />
+        <AccessDenied />
+      </div>
+    );
+  }
+
   const p = await getSelectionPipeline();
 
   const byStage = p.byStage.map((s) => ({ name: SELECTION_STAGE_LABEL[s.stage], value: s.count }));

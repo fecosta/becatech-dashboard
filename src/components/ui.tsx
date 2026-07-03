@@ -68,6 +68,21 @@ const TONE_CLASS: Record<Tone, string> = {
   blue: "bg-blue-100 text-blue-800 ring-blue-600/20",
 };
 
+export function AccessDenied({
+  message = "Tu rol no tiene acceso a esta sección.",
+}: {
+  message?: string;
+}) {
+  return (
+    <Card className="text-center">
+      <div className="py-8">
+        <div className="text-lg font-semibold text-slate-700">Acceso restringido</div>
+        <p className="mt-1 text-sm text-slate-500">{message}</p>
+      </div>
+    </Card>
+  );
+}
+
 export function Badge({ children, tone = "slate" }: { children: ReactNode; tone?: Tone }) {
   return (
     <span

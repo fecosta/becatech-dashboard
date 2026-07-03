@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { BarCard, PieCard } from "@/components/charts";
 import { Column, DataTable } from "@/components/DataTable";
-import { KpiCard, PageHeader } from "@/components/ui";
+import { AccessDenied, KpiCard, PageHeader } from "@/components/ui";
 import type { Country } from "@/generated/prisma/enums";
+import { Permission } from "@/lib/auth/authorization";
+import { requirePermission } from "@/lib/auth/guard";
 import { parseFilters, type SearchParams } from "@/lib/dashboard/filters";
 import { getAcademicProgress } from "@/lib/dashboard/queries";
 import type { BehindRow } from "@/lib/dashboard/types";
@@ -22,6 +24,16 @@ export default async function AcademicProgressPage({
 }: {
   searchParams: Promise<SearchParams>;
 }) {
+  const { allowed } = await requirePermission(Permission.VIEW_SCHOLAR_TRACKING);
+  if (!allowed) {
+    return (
+      <div>
+        <PageHeader title="Avance académico" />
+        <AccessDenied />
+      </div>
+    );
+  }
+
   const filters = parseFilters(await searchParams);
   const a = await getAcademicProgress(filters);
 

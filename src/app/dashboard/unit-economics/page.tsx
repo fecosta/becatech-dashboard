@@ -1,6 +1,8 @@
 import { BarCard } from "@/components/charts";
-import { KpiCard, PageHeader } from "@/components/ui";
+import { AccessDenied, KpiCard, PageHeader } from "@/components/ui";
 import type { Country } from "@/generated/prisma/enums";
+import { Permission } from "@/lib/auth/authorization";
+import { requirePermission } from "@/lib/auth/guard";
 import { parseFilters, type SearchParams } from "@/lib/dashboard/filters";
 import { getUnitEconomics } from "@/lib/dashboard/queries";
 import { fmtInt, fmtUsd } from "@/lib/format";
@@ -11,6 +13,16 @@ export default async function UnitEconomicsPage({
 }: {
   searchParams: Promise<SearchParams>;
 }) {
+  const { allowed } = await requirePermission(Permission.VIEW_UNIT_ECONOMICS);
+  if (!allowed) {
+    return (
+      <div>
+        <PageHeader title="Costos (unit economics)" />
+        <AccessDenied />
+      </div>
+    );
+  }
+
   const filters = parseFilters(await searchParams);
   const e = await getUnitEconomics(filters);
 

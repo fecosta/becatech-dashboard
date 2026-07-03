@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { BarCard } from "@/components/charts";
 import { Column, DataTable } from "@/components/DataTable";
-import { KpiCard, PageHeader } from "@/components/ui";
+import { AccessDenied, KpiCard, PageHeader } from "@/components/ui";
+import { Permission } from "@/lib/auth/authorization";
+import { requirePermission } from "@/lib/auth/guard";
 import { parseFilters, type SearchParams } from "@/lib/dashboard/filters";
 import { getSupportParticipation } from "@/lib/dashboard/queries";
 import type { LowParticipationRow } from "@/lib/dashboard/types";
@@ -13,6 +15,16 @@ export default async function SupportParticipationPage({
 }: {
   searchParams: Promise<SearchParams>;
 }) {
+  const { allowed } = await requirePermission(Permission.VIEW_SCHOLAR_TRACKING);
+  if (!allowed) {
+    return (
+      <div>
+        <PageHeader title="Participación en apoyo" />
+        <AccessDenied />
+      </div>
+    );
+  }
+
   const filters = parseFilters(await searchParams);
   const s = await getSupportParticipation(filters);
 

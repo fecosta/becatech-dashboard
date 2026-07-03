@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { Column, DataTable } from "@/components/DataTable";
 import { ScholarSearch } from "@/components/ScholarSearch";
-import { Badge, PageHeader, RiskBadge } from "@/components/ui";
+import { AccessDenied, Badge, PageHeader, RiskBadge } from "@/components/ui";
+import { Permission } from "@/lib/auth/authorization";
+import { requirePermission } from "@/lib/auth/guard";
 import { parseFilters, type SearchParams } from "@/lib/dashboard/filters";
 import { getScholarDirectory } from "@/lib/dashboard/queries";
 import type { ScholarDirectoryRow } from "@/lib/dashboard/types";
@@ -21,6 +23,16 @@ export default async function ScholarsPage({
 }: {
   searchParams: Promise<SearchParams>;
 }) {
+  const { allowed } = await requirePermission(Permission.VIEW_SCHOLAR_TRACKING);
+  if (!allowed) {
+    return (
+      <div>
+        <PageHeader title="Becarios" />
+        <AccessDenied />
+      </div>
+    );
+  }
+
   const sp = await searchParams;
   const filters = parseFilters(sp);
   const q = Array.isArray(sp.q) ? sp.q[0] : sp.q;

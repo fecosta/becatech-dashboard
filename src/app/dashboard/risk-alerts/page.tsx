@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { PieCard } from "@/components/charts";
 import { Column, DataTable } from "@/components/DataTable";
-import { Badge, KpiCard, PageHeader, RiskBadge } from "@/components/ui";
+import { AccessDenied, Badge, KpiCard, PageHeader, RiskBadge } from "@/components/ui";
+import { Permission } from "@/lib/auth/authorization";
+import { requirePermission } from "@/lib/auth/guard";
 import { parseFilters, type SearchParams } from "@/lib/dashboard/filters";
 import { getRiskAlerts } from "@/lib/dashboard/queries";
 import type { RiskAlertRow } from "@/lib/dashboard/types";
@@ -19,6 +21,16 @@ export default async function RiskAlertsPage({
 }: {
   searchParams: Promise<SearchParams>;
 }) {
+  const { allowed } = await requirePermission(Permission.VIEW_SCHOLAR_TRACKING);
+  if (!allowed) {
+    return (
+      <div>
+        <PageHeader title="Riesgo y alertas" />
+        <AccessDenied />
+      </div>
+    );
+  }
+
   const filters = parseFilters(await searchParams);
   const { currentPeriod, distribution, attentionList } = await getRiskAlerts(filters);
 

@@ -2,7 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { LineCard } from "@/components/charts";
 import { Column, DataTable } from "@/components/DataTable";
-import { Badge, Card, KpiCard, PageHeader, RiskBadge, SectionTitle } from "@/components/ui";
+import { AccessDenied, Badge, Card, KpiCard, PageHeader, RiskBadge, SectionTitle } from "@/components/ui";
+import { requireScholarAccess } from "@/lib/auth/guard";
 import type {
   AcademicTerm,
   FinancialInput,
@@ -36,6 +37,16 @@ export default async function ScholarProfilePage({
   params: Promise<{ scholarId: string }>;
 }) {
   const { scholarId } = await params;
+  const { allowed } = await requireScholarAccess(scholarId);
+  if (!allowed) {
+    return (
+      <div>
+        <PageHeader title="Perfil del becario" />
+        <AccessDenied message="No tienes acceso a este becario." />
+      </div>
+    );
+  }
+
   const p = await getScholarProfile(scholarId);
   if (!p) notFound();
 

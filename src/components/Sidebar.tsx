@@ -3,17 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-const NAV = [
-  { href: "/dashboard", label: "Resumen ejecutivo", exact: true },
-  { href: "/dashboard/risk-alerts", label: "Riesgo y alertas" },
-  { href: "/dashboard/scholars", label: "Becarios" },
-  { href: "/dashboard/academic-progress", label: "Avance académico" },
-  { href: "/dashboard/support-participation", label: "Participación" },
-  { href: "/dashboard/unit-economics", label: "Costos" },
-  { href: "/dashboard/selection-pipeline", label: "Pipeline de selección" },
-];
+export interface NavItem {
+  href: string;
+  label: string;
+  exact?: boolean;
+}
 
-export function Sidebar() {
+export function Sidebar({ items }: { items: NavItem[] }) {
   const pathname = usePathname();
 
   return (
@@ -23,10 +19,10 @@ export function Sidebar() {
         <div className="text-lg font-semibold text-white">Beca Tech</div>
       </div>
       <nav className="flex-1 space-y-1 px-3">
-        {NAV.map((item) => {
+        {items.map((item) => {
           const active = item.exact
             ? pathname === item.href
-            : pathname === item.href || pathname.startsWith(`${item.href}/`) || pathname.startsWith(item.href);
+            : pathname === item.href || pathname.startsWith(`${item.href}/`);
           return (
             <Link
               key={item.href}
