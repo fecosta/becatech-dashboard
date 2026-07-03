@@ -5,6 +5,7 @@ import type { DataImportSourceType } from "../../generated/prisma/enums";
 import { runDataQualityScan } from "../data-quality/checks";
 import { prisma } from "../db";
 import { recomputeRiskForScholars } from "../risk/recompute";
+import { legacyAdapter } from "./adapters/legacy";
 import { templateAdapter } from "./adapters/template";
 import { type CommitResult, commitValidated } from "./commit";
 import { parseWorkbook } from "./parse";
@@ -57,7 +58,7 @@ export async function createImportBatch(
     if (!input.entity) throw new Error("An entity is required for TEMPLATE imports.");
     canonical = templateAdapter(input.entity, sheets[0]?.records ?? []);
   } else {
-    throw new Error("Legacy wide-Excel import is not available yet.");
+    canonical = legacyAdapter(sheets);
   }
 
   const ctx = await loadValidationContext();
