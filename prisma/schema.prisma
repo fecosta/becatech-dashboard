@@ -546,6 +546,7 @@ model DataImportBatch {
   errorReport            Json? // [{ entity, rowNumber, field, message }]
   insertedRefs           Json? // { "<table>": ["id", ...] } created rows, for insert-only rollback
   triggeredRiskRecompute Boolean              @default(false)
+  rolledBackAt           DateTime?
   createdAt              DateTime             @default(now())
 
   @@index([uploadedById])

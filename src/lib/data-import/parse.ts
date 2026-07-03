@@ -10,7 +10,11 @@ export interface ParsedSheet {
 
 export function parseWorkbook(data: ArrayBuffer | Uint8Array): ParsedSheet[] {
   const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
-  const wb = XLSX.read(bytes, { type: "array", cellDates: true });
+  // Only enable date coercion for real .xlsx (zip: "PK"). For CSV it would wrongly turn
+  // period/term strings like "2026-07" or "2026-1" into Dates; keep those as text and let
+  // per-field coercion (coerce.ts) parse genuine date columns from ISO strings.
+  const isXlsx = bytes[0] === 0x50 && bytes[1] === 0x4b;
+  const wb = XLSX.read(bytes, { type: "array", cellDates: isXlsx, raw: true });
   return wb.SheetNames.map((sheetName) => ({
     sheetName,
     records: XLSX.utils.sheet_to_json<RawRecord>(wb.Sheets[sheetName], {

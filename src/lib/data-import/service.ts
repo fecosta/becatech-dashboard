@@ -134,3 +134,63 @@ export async function commitImportBatch(batchId: string): Promise<CommitOutcome>
     throw error;
   }
 }
+
+export function listImportBatches() {
+  return prisma.dataImportBatch.findMany({
+    orderBy: { uploadedAt: "desc" },
+    take: 100,
+    select: {
+      id: true,
+      filename: true,
+      sourceType: true,
+      entities: true,
+      status: true,
+      totalRows: true,
+      successRows: true,
+      errorRows: true,
+      triggeredRiskRecompute: true,
+      rolledBackAt: true,
+      uploadedAt: true,
+      uploadedBy: { select: { fullName: true, email: true } },
+    },
+  });
+}
+
+export function getImportBatchDetail(id: string) {
+  return prisma.dataImportBatch.findUnique({
+    where: { id },
+    include: { uploadedBy: { select: { fullName: true, email: true } } },
+  });
+}
+
+/** Insert-only rollback: delete the rows this batch created (updates are not reverted). */
+export async function rollbackImportBatch(id: string): Promise<{ deleted: number }> {
+  const batch = await prisma.dataImportBatch.findUnique({ where: { id } });
+  if (!batch) throw new Error("Import batch not found.");
+  if (batch.status !== "COMMITTED") throw new Error("Only committed batches can be rolled back.");
+  if (batch.rolledBackAt) throw new Error("This batch has already been rolled back.");
+
+  const refs = (batch.insertedRefs as Record<string, string[]> | null) ?? {};
+  let deleted = 0;
+
+  await prisma.$transaction(
+    async (tx) => {
+      const del = async (ids: string[] | undefined, fn: (ids: string[]) => Promise<{ count: number }>) => {
+        if (ids && ids.length > 0) deleted += (await fn(ids)).count;
+      };
+      // Child → parent order; deleting a created Scholar cascades to any of its rows.
+      await del(refs.FinancialInput, (ids) => tx.financialInput.deleteMany({ where: { id: { in: ids } } }));
+      await del(refs.ScholarRequest, (ids) => tx.scholarRequest.deleteMany({ where: { id: { in: ids } } }));
+      await del(refs.SupportActivity, (ids) => tx.supportActivity.deleteMany({ where: { id: { in: ids } } }));
+      await del(refs.MentorReport, (ids) => tx.mentorReport.deleteMany({ where: { id: { in: ids } } }));
+      await del(refs.MonthlyCheckin, (ids) => tx.monthlyCheckin.deleteMany({ where: { id: { in: ids } } }));
+      await del(refs.AcademicTerm, (ids) => tx.academicTerm.deleteMany({ where: { id: { in: ids } } }));
+      await del(refs.Scholar, (ids) => tx.scholar.deleteMany({ where: { scholarId: { in: ids } } }));
+    },
+    { timeout: 60_000 },
+  );
+
+  await prisma.dataImportBatch.update({ where: { id }, data: { rolledBackAt: new Date() } });
+  await runDataQualityScan({ persist: true });
+  return { deleted };
+}

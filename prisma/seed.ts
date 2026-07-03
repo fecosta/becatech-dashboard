@@ -204,6 +204,7 @@ async function clearAll() {
   await prisma.monthlyCheckin.deleteMany();
   await prisma.academicTerm.deleteMany();
   await prisma.rawJotformSubmission.deleteMany();
+  await prisma.dataImportBatch.deleteMany(); // references AppUser — clear before users
   await prisma.controlValue.deleteMany();
   await prisma.appUser.deleteMany();
   await prisma.scholar.deleteMany();
