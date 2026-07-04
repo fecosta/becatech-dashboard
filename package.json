@@ -14,7 +14,8 @@
     "db:studio": "prisma studio",
     "dashboard:check": "tsx src/scripts/dashboard-check.ts",
     "data-quality:scan": "tsx src/scripts/data-quality-scan.ts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:integration": "vitest run --config vitest.integration.config.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.8.0",
