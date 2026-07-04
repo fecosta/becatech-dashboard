@@ -54,6 +54,7 @@ See [`.env.example`](./.env.example).
 | `DEMO_USER_EMAIL`        | Mock auth: which seeded demo user the app acts as during the MVP.           |
 | `JOTFORM_API_KEY`        | Placeholder — the MVP does not call the live JotForm API.                   |
 | `JOTFORM_WEBHOOK_SECRET` | Optional shared secret for the webhook endpoint (skipped when unset).       |
+| `TEST_DATABASE_URL`      | Separate database for `npm run test:integration` (created + migrated by the vitest global setup). |
 
 > **Prisma 7 note:** connection URLs are **not** in `schema.prisma`. Prisma Migrate reads the URL
 > from [`prisma.config.ts`](./prisma.config.ts) (which loads `.env` via `dotenv`), and the runtime
@@ -66,7 +67,8 @@ See [`.env.example`](./.env.example).
 | `npm run dev`                | Start the Next.js dev server.                          |
 | `npm run build` / `start`    | Production build / start.                              |
 | `npm run lint`               | ESLint.                                                |
-| `npm run test`               | Run Vitest.                                            |
+| `npm run test`               | Run unit tests (Vitest, no DB).                        |
+| `npm run test:integration`   | DB-backed import pipeline tests (needs Docker Postgres). |
 | `npm run db:generate`        | Generate the Prisma client.                            |
 | `npm run db:migrate`         | Create + apply a dev migration (`prisma migrate dev`). |
 | `npm run db:seed`            | Seed demo data (`tsx prisma/seed.ts`).                 |
@@ -158,6 +160,15 @@ the URL. Data comes from the typed query layer in
 | Method / Path                 | Purpose                                                                 |
 | ----------------------------- | ----------------------------------------------------------------------- |
 | `POST /api/jotform/webhook`   | Placeholder ingestion. Accepts a submission, stores the raw payload, maps it to a table, dedups by `submissionId`, returns `PROCESSED` / `FAILED` / `IGNORED`. |
+| `POST /api/admin/imports`     | Data import: parse + validate an uploaded file, return a preview (batch id + counts + row errors). Multipart: `file`, `sourceType`, `entity`. |
+| `GET /api/admin/imports`      | List import batches. |
+| `GET /api/admin/imports/:id`  | Batch detail + error report. |
+| `POST /api/admin/imports/:id/commit`   | Commit a validated batch (upsert → data-quality scan → risk recompute). |
+| `POST /api/admin/imports/:id/rollback` | Insert-only rollback of a committed batch. |
+| `GET /api/admin/imports/template/:entity` | Download a blank `.xlsx` template for an entity. |
+
+Import routes are role-gated: `MANAGE_IMPORTS` (ANALYST_ADMIN) for writes, `VIEW_IMPORTS`
+(ANALYST_ADMIN + PROGRAM_MANAGER read-only) for reads. See the Data import section below.
 
 ```bash
 curl -X POST http://localhost:3000/api/jotform/webhook -H "Content-Type: application/json" \
@@ -209,6 +220,36 @@ data is synthetic; no real personal data.
 | `finance@becatech.test`                           | FINANCE         | Sofía Torres    |
 | `selection@becatech.test`                         | SELECTION_TEAM  | Mateo Gómez     |
 
+## Data import (admin)
+
+An admin panel at **`/dashboard/admin/imports`** (ANALYST_ADMIN in the nav; PROGRAM_MANAGER
+read-only) uploads files to create/update scholars and their longitudinal records through one
+shared pipeline: **parse → adapter → validate → preview → commit → data-quality scan + risk
+recompute**.
+
+- **Two formats** feed the same validate/commit path:
+  - **Template** — one entity per file; headers are the Prisma field names (download blank
+    `.xlsx` templates from the panel). Supported entities: scholars, academic terms, monthly
+    check-ins, mentor reports, support activities, scholar requests, financial inputs.
+  - **Legacy wide Excel** — the "SCHOLAR GENERAL INFO" tab; repeating per-term columns
+    (`GPA 2024-1`, `CRÉDITOS 2024-1`, …) are detected by regex and normalized into academic-term
+    rows (new semesters are picked up automatically).
+- **Validation** checks required fields, types, GPA range, controlled values (against
+  `ControlValue`), and that each `scholarId` exists (or is created earlier in the same batch).
+  Invalid rows are reported per row/field; valid rows still commit (commit-valid).
+- **Idempotent**: rows upsert by natural key (`scholarId`, `scholarId+term`, `submissionId`,
+  `scholarId+period+activityType+source`), so re-uploading the same file does not duplicate.
+  Check-ins/mentor reports/requests without a `submissionId` get a deterministic synthetic one.
+- **Risk is never uploaded.** After a batch touches academic terms / check-ins / mentor reports /
+  support activities, the risk engine **recomputes** `RiskAssessment` for the affected
+  scholars/months (`src/lib/risk/derive.ts` — a documented, tunable heuristic).
+- **Rollback** is insert-only: it deletes the rows the batch *created* (tracked via
+  `importBatchId` / `insertedRefs`); updates are not reverted.
+
+Integration tests exercise the full pipeline (happy path, legacy `.xlsx`, partial failure,
+idempotent re-upload, risk-trigger, rollback): `npm run test:integration` (needs Docker Postgres;
+it creates + migrates `TEST_DATABASE_URL`).
+
 ## Data quality
 
 [`npm run data-quality:scan`](./src/lib/data-quality/checks.ts) scans the database for the catalogued
@@ -242,3 +283,10 @@ schema makes impossible (missing/duplicate scholar id, unknown country) are inte
 - The scholar **list**/risk/academic pages are not yet scoped to a mentor's assigned scholars
   (individual profiles are). Pass allowed ids into the query layer to scope them.
 - Live JotForm API sync, advanced analytics, and a full intervention workflow are out of MVP scope.
+- **Data import:** the risk-derivation heuristic in `src/lib/risk/derive.ts` is a documented
+  default meant to be tuned with the program team; insert-only rollback does not revert row
+  *updates* nor recomputed risk; the legacy adapter covers the "SCHOLAR GENERAL INFO" tab (other
+  wide tabs go through the template path); program-level (no-scholar) financials are not importable.
+- **`xlsx` dependency:** the npm-published SheetJS build (0.18.5) carries known advisories; imports
+  are restricted to authenticated ANALYST_ADMIN users and every row is validated, but consider
+  swapping to `exceljs` if that risk profile is unacceptable.
