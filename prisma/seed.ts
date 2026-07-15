@@ -809,6 +809,8 @@ async function main() {
     { id: "user-analyst", fullName: "Diego Ramírez", email: "analyst@becatech.test", role: UserRole.ANALYST_ADMIN },
     { id: "user-finance", fullName: "Sofía Torres", email: "finance@becatech.test", role: UserRole.FINANCE },
     { id: "user-selection", fullName: "Mateo Gómez", email: "selection@becatech.test", role: UserRole.SELECTION_TEAM },
+    // Real account (not synthetic demo data) for Google sign-in QA — see auth section of README.
+    { id: "user-felipe-admin", fullName: "Felipe Costa", email: "felipe@velezreyesmas.com", role: UserRole.ANALYST_ADMIN },
   ];
 
   // ---- Insert (FK-safe order) ----

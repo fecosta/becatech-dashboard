@@ -1,8 +1,10 @@
+import { redirect } from "next/navigation";
 import { type ReactNode, Suspense } from "react";
 import { type NavItem, Sidebar } from "@/components/Sidebar";
+import { SignOutButton } from "@/components/SignOutButton";
 import { TopFilters } from "@/components/TopFilters";
 import { can, Permission } from "@/lib/auth/authorization";
-import { getCurrentUser } from "@/lib/auth/current-user";
+import { getCurrentUserResult } from "@/lib/auth/current-user";
 import { getFilterOptions } from "@/lib/dashboard/queries";
 
 // Live data dashboards — always render at request time (also avoids build-time DB access).
@@ -20,10 +22,18 @@ const NAV: (NavItem & { permission: Permission })[] = [
 ];
 
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
-  const [options, user] = await Promise.all([getFilterOptions(), getCurrentUser()]);
+  const [options, result] = await Promise.all([getFilterOptions(), getCurrentUserResult()]);
 
-  // Show all items when no demo user is configured; otherwise filter by role.
-  const items: NavItem[] = NAV.filter((n) => !user || can(user, n.permission)).map(
+  if (result.status !== "ok") {
+    // Fast-path UX redirect only — proxy.ts already keeps signed-out requests from
+    // reaching here at all; guard.ts's per-page checks remain the real enforcement
+    // boundary, since Layouts don't re-render on client-side navigation between
+    // sibling routes they wrap.
+    redirect(result.status === "unauthenticated" ? "/login" : "/not-authorized");
+  }
+  const user = result.user;
+
+  const items: NavItem[] = NAV.filter((n) => can(user, n.permission)).map(
     ({ href, label, exact }) => ({ href, label, exact }),
   );
 
@@ -35,9 +45,12 @@ export default async function DashboardLayout({ children }: { children: ReactNod
           <Suspense fallback={<div className="h-7" />}>
             <TopFilters options={options} />
           </Suspense>
-          <div className="text-right text-xs leading-tight">
-            <div className="font-medium text-slate-700">{user?.fullName ?? "Invitado"}</div>
-            <div className="text-slate-400">{user ? user.role.replace(/_/g, " ") : "Sin rol"}</div>
+          <div className="flex items-center gap-3">
+            <div className="text-right text-xs leading-tight">
+              <div className="font-medium text-slate-700">{user.fullName}</div>
+              <div className="text-slate-400">{user.role.replace(/_/g, " ")}</div>
+            </div>
+            <SignOutButton />
           </div>
         </header>
         <main className="flex-1 p-6">{children}</main>

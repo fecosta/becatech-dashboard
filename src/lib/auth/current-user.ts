@@ -1,12 +1,18 @@
-// Mock auth for the MVP: the "current user" is whoever DEMO_USER_EMAIL points at.
-// Google Workspace SSO replaces this later (brief §11/§15).
+// Real auth: the "current user" is whoever is signed in via Supabase Auth (Google),
+// matched to a seeded AppUser by email. DEMO_USER_EMAIL remains as a local-dev-only
+// fallback (see demo-mode.ts) for working without Google OAuth configured.
 import type { CurrentUser } from "./authorization";
+import { isDemoModeActive } from "./demo-mode";
 import { prisma } from "../db";
+import { createClient } from "../supabase/server";
+import { isSupabaseConfigured } from "../supabase/config";
 
-export async function getCurrentUser(): Promise<CurrentUser | null> {
-  const email = process.env.DEMO_USER_EMAIL;
-  if (!email) return null;
+export type CurrentUserResult =
+  | { status: "unauthenticated" }
+  | { status: "unprovisioned" }
+  | { status: "ok"; user: CurrentUser };
 
+async function loadAppUser(email: string): Promise<CurrentUser | null> {
   const user = await prisma.appUser.findUnique({
     where: { email },
     include: { scholarAccess: { select: { scholarId: true } } },
@@ -20,4 +26,31 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     fullName: user.fullName,
     assignedScholarIds: user.scholarAccess.map((a) => a.scholarId),
   };
+}
+
+export async function getCurrentUserResult(): Promise<CurrentUserResult> {
+  let email: string | undefined;
+
+  if (isSupabaseConfigured()) {
+    const supabase = await createClient();
+    const {
+      data: { user: supabaseUser },
+    } = await supabase.auth.getUser();
+    email = supabaseUser?.email;
+  }
+
+  if (!email) {
+    if (!isDemoModeActive()) return { status: "unauthenticated" };
+    email = process.env.DEMO_USER_EMAIL;
+  }
+
+  const user = await loadAppUser(email!);
+  return user ? { status: "ok", user } : { status: "unprovisioned" };
+}
+
+// Back-compat surface for guard.ts and every existing call site — none of them need to
+// distinguish "no session" from "session, no matching AppUser row"; both mean "no user."
+export async function getCurrentUser(): Promise<CurrentUser | null> {
+  const result = await getCurrentUserResult();
+  return result.status === "ok" ? result.user : null;
 }
