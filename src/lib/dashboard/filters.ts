@@ -24,3 +24,18 @@ export function parseFilters(sp: SearchParams): DashboardFilters {
     period: period && /^\d{4}-\d{2}$/.test(period) ? period : undefined,
   };
 }
+
+/**
+ * Build a query string that preserves the current search params (so filters survive a
+ * redirect or tab switch) with the given overrides applied on top. Used by the
+ * deprecated-route redirect stubs. Pure/testable.
+ */
+export function preserveParams(sp: SearchParams, overrides: Record<string, string> = {}): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(sp)) {
+    const v = first(value);
+    if (v) params.set(key, v);
+  }
+  for (const [key, value] of Object.entries(overrides)) params.set(key, value);
+  return params.toString();
+}
