@@ -43,8 +43,9 @@ const NAV: NavConfigSection[] = [
     heading: "Administración",
     items: [
       // Nav gate aligned to VIEW_IMPORTS (what the pages already allow), so PROGRAM_MANAGER
-      // sees the link it can actually open. Calidad de datos is added in sprint A4.
+      // sees the links it can actually open.
       { href: "/dashboard/admin/imports", label: "Importaciones", permission: Permission.VIEW_IMPORTS },
+      { href: "/dashboard/admin/data-quality", label: "Calidad de datos", permission: Permission.VIEW_IMPORTS },
     ],
   },
 ];

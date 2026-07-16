@@ -158,3 +158,36 @@ export const IMPORT_ENTITIES = [
   "SCHOLAR_REQUEST",
   "FINANCIAL_INPUT",
 ] as const;
+
+// Data quality (DataQualityIssue). issueType/severity/status are free-text strings the
+// scanner writes; unknown values fall back to the raw string / a neutral tone in the UI.
+export const DATA_QUALITY_ISSUE_LABEL: Record<string, string> = {
+  MISSING_COHORT: "Cohorte faltante",
+  UNKNOWN_UNIVERSITY: "Universidad desconocida",
+  CHECKIN_WITHOUT_SCHOLAR: "Check-in sin becario",
+  MENTOR_REPORT_WITHOUT_SCHOLAR: "Reporte de mentoría sin becario",
+  MISSING_REPORTING_MONTH: "Mes de reporte faltante",
+  INVALID_GPA: "GPA inválido",
+  INVALID_RISK_VALUE: "Valor de riesgo inválido",
+  RISK_WITHOUT_SOURCE_OR_REASON: "Riesgo sin fuente o motivo",
+  MISSING_CHECKIN_ACTIVE: "Check-in faltante (becario activo)",
+  MISSING_MENTOR_REPORT_ACTIVE: "Reporte de mentoría faltante (becario activo)",
+  DUPLICATE_SUBMISSION_ID: "ID de envío duplicado",
+};
+
+export const DATA_QUALITY_SEVERITY_LABEL: Record<string, string> = {
+  low: "Baja",
+  medium: "Media",
+  high: "Alta",
+};
+export const DATA_QUALITY_SEVERITY_TONE: Record<string, "slate" | "amber" | "red"> = {
+  low: "slate",
+  medium: "amber",
+  high: "red",
+};
+
+export const DATA_QUALITY_STATUS_LABEL: Record<string, string> = {
+  OPEN: "Abierta",
+  RESOLVED: "Resuelta",
+  IGNORED: "Ignorada",
+};
