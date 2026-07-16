@@ -30,6 +30,17 @@ export interface DashboardFilters {
 export type RiskDistribution = Record<RiskLevel, number>;
 export type ProgressDistribution = Record<AcademicProgressStatus, number>;
 
+/** New program-narrative aggregates for Home, composed alongside ExecutiveOverview. */
+export interface HomeOverview {
+  scholarsByCountry: { colombia: number; peru: number };
+  /** Share of women among active scholars with a recognized gender; null if none classifiable. */
+  womenPercentage: number | null;
+  /** The active cohort filter if set, otherwise the latest cohort present. */
+  cohortSpotlight: { cohort: string | null; count: number };
+  /** Distinct non-empty universities among active in-scope scholars (approximation). */
+  activeUniversityCount: number;
+}
+
 export interface ExecutiveOverview {
   currentPeriod: string;
   totalScholars: number;

@@ -7,6 +7,7 @@ import type { AcademicTerm, Prisma, RiskAssessment, Scholar } from "../../genera
 import {
   AcademicProgressStatus,
   ActivityType,
+  Country,
   ProgramStatus,
   RiskLevel,
   SelectionStage,
@@ -18,6 +19,7 @@ import type {
   ExecutiveOverview,
   FilterOptions,
   GpaGroupStat,
+  HomeOverview,
   ProgressDistribution,
   RiskAlertRow,
   RiskAlertsResult,
@@ -28,6 +30,8 @@ import type {
   SupportParticipationResult,
   UnitEconomicsResult,
 } from "./types";
+import { latestCohort } from "./cohort";
+import { normalizeGender } from "./gender";
 
 // ------------------------------------------------------------------
 // Currency: normalize to USD for comparable "basic" unit economics.
@@ -250,6 +254,44 @@ export async function getExecutiveOverview(
     totalDirectCostUsd,
     costPerActiveScholarUsd: counts.ACTIVE ? round2(totalDirectCostUsd / counts.ACTIVE) : 0,
     costPerRetainedScholarUsd: retained ? round2(totalDirectCostUsd / retained) : 0,
+  };
+}
+
+// ------------------------------------------------------------------
+// 9.1b Home narrative extras (program-composition aggregates)
+// Composed alongside getExecutiveOverview (which supplies KPIs, risk, status, attention);
+// this covers only the new country/gender/cohort/university fields.
+// ------------------------------------------------------------------
+export async function getHomeOverview(filters: DashboardFilters = {}): Promise<HomeOverview> {
+  const { scholars } = await loadScope(filters);
+  const active = scholars.filter((s) => s.programStatus === ProgramStatus.ACTIVE);
+
+  const scholarsByCountry = {
+    colombia: active.filter((s) => s.country === Country.COLOMBIA).length,
+    peru: active.filter((s) => s.country === Country.PERU).length,
+  };
+
+  // Women % among active scholars with a recognized gender (unknown excluded from denominator).
+  const classified = active
+    .map((s) => normalizeGender(s.gender))
+    .filter((g) => g !== "unknown");
+  const womenPercentage = classified.length
+    ? round2(classified.filter((g) => g === "female").length / classified.length)
+    : null;
+
+  // "Selected or latest cohort": honor an active cohort filter, else the latest present.
+  const cohort = filters.cohort ?? latestCohort(active.map((s) => s.cohort));
+  const cohortCount = cohort ? active.filter((s) => s.cohort === cohort).length : 0;
+
+  const activeUniversityCount = new Set(
+    active.map((s) => s.university?.trim()).filter((u): u is string => !!u),
+  ).size;
+
+  return {
+    scholarsByCountry,
+    womenPercentage,
+    cohortSpotlight: { cohort, count: cohortCount },
+    activeUniversityCount,
   };
 }
 
