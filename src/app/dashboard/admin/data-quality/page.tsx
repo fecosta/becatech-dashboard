@@ -29,19 +29,19 @@ const SEVERITY_RANK: Record<string, number> = { high: 0, medium: 1, low: 2 };
 
 const columns: Column<IssueRow>[] = [
   {
-    header: "Problema",
+    header: "Issue",
     cell: (r) => (
       <div>
-        <div className="font-medium text-slate-700">
+        <div className="font-medium text-ink">
           {DATA_QUALITY_ISSUE_LABEL[r.issueType] ?? r.issueType}
         </div>
         <div className="text-xs text-slate-400">{r.issueDescription}</div>
       </div>
     ),
   },
-  { header: "Fuente", cell: (r) => r.sourceName ?? <span className="text-slate-300">—</span> },
+  { header: "Source", cell: (r) => r.sourceName ?? <span className="text-slate-300">—</span> },
   {
-    header: "Severidad",
+    header: "Severity",
     cell: (r) =>
       r.severity ? (
         <Badge tone={DATA_QUALITY_SEVERITY_TONE[r.severity] ?? "slate"}>
@@ -51,9 +51,9 @@ const columns: Column<IssueRow>[] = [
         <span className="text-slate-300">—</span>
       ),
   },
-  { header: "Responsable", cell: (r) => r.owner ?? <span className="text-slate-300">—</span> },
-  { header: "Estado", cell: (r) => DATA_QUALITY_STATUS_LABEL[r.status] ?? r.status },
-  { header: "Resolución", cell: (r) => (r.resolvedAt ? fmtDate(r.resolvedAt) : <span className="text-slate-300">—</span>) },
+  { header: "Owner", cell: (r) => r.owner ?? <span className="text-slate-300">—</span> },
+  { header: "Status", cell: (r) => DATA_QUALITY_STATUS_LABEL[r.status] ?? r.status },
+  { header: "Resolved", cell: (r) => (r.resolvedAt ? fmtDate(r.resolvedAt) : <span className="text-slate-300">—</span>) },
 ];
 
 export default async function DataQualityPage() {
@@ -61,8 +61,8 @@ export default async function DataQualityPage() {
   if (!allowed) {
     return (
       <div>
-        <PageHeader title="Calidad de datos" />
-        <AccessDenied message="Solo el rol Analista / Admin (y Gestor de programa, solo lectura) puede ver la calidad de datos." />
+        <PageHeader title="Data Quality" />
+        <AccessDenied message="Only the Analyst / Admin role (and Program Manager, read-only) can view data quality." />
       </div>
     );
   }
@@ -91,13 +91,13 @@ export default async function DataQualityPage() {
   return (
     <div>
       <PageHeader
-        title="Calidad de datos"
-        subtitle={`${rows.length} problema(s) detectado(s) · ${open} abierto(s)`}
+        title="Data Quality"
+        subtitle={`${rows.length} issue(s) detected · ${open} open`}
       />
       <DataTable
         columns={columns}
         rows={rows}
-        empty="No se han detectado problemas de calidad de datos. Ejecuta una importación o el escaneo para actualizar."
+        empty="No data quality issues detected. Run an import or the scan to refresh."
       />
     </div>
   );

@@ -13,7 +13,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ entity: string
 
   const { entity } = await ctx.params;
   if (!Object.values(DataImportEntity).includes(entity as DataImportEntity)) {
-    return NextResponse.json({ error: "entity inválido" }, { status: 404 });
+    return NextResponse.json({ error: "Invalid entity" }, { status: 404 });
   }
 
   const buffer = generateTemplate(entity as ImportEntity);

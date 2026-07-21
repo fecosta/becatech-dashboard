@@ -22,28 +22,28 @@ export async function POST(req: Request) {
   try {
     form = await req.formData();
   } catch {
-    return NextResponse.json({ error: "Se esperaba multipart/form-data" }, { status: 400 });
+    return NextResponse.json({ error: "Expected multipart/form-data" }, { status: 400 });
   }
 
   const file = form.get("file");
   if (!(file instanceof File)) {
-    return NextResponse.json({ error: "Archivo requerido" }, { status: 400 });
+    return NextResponse.json({ error: "File required" }, { status: 400 });
   }
 
   const sourceType = String(form.get("sourceType") ?? "");
   if (!Object.values(DataImportSourceType).includes(sourceType as DataImportSourceType)) {
-    return NextResponse.json({ error: "sourceType inválido" }, { status: 400 });
+    return NextResponse.json({ error: "Invalid sourceType" }, { status: 400 });
   }
   const entityRaw = form.get("entity") ? String(form.get("entity")) : undefined;
   if (entityRaw && !Object.values(DataImportEntity).includes(entityRaw as DataImportEntity)) {
-    return NextResponse.json({ error: "entity inválido" }, { status: 400 });
+    return NextResponse.json({ error: "Invalid entity" }, { status: 400 });
   }
 
   const uploadedById =
     user?.id ??
     (await prisma.appUser.findFirst({ where: { role: "ANALYST_ADMIN" }, select: { id: true } }))?.id;
   if (!uploadedById) {
-    return NextResponse.json({ error: "No hay usuario para atribuir la carga" }, { status: 400 });
+    return NextResponse.json({ error: "No user to attribute the upload to" }, { status: 400 });
   }
 
   try {

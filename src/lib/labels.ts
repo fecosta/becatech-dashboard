@@ -1,4 +1,4 @@
-// Human-readable (Spanish) labels and colors for enum values, used by the UI.
+// Human-readable (English) labels and colors for enum values, used by the UI.
 import type {
   AcademicProgressStatus,
   ActivityType,
@@ -14,22 +14,22 @@ import type {
 
 export const COUNTRY_LABEL: Record<Country, string> = {
   COLOMBIA: "Colombia",
-  PERU: "Perú",
+  PERU: "Peru",
 };
 
 export const PROGRAM_STATUS_LABEL: Record<ProgramStatus, string> = {
-  ACTIVE: "Activo",
-  WITHDRAWN: "Retirado",
-  GRADUATED: "Graduado",
-  PAUSED: "En pausa",
+  ACTIVE: "Active",
+  WITHDRAWN: "Withdrawn",
+  GRADUATED: "Graduated",
+  PAUSED: "Paused",
 };
 
 export const RISK_LEVEL_LABEL: Record<RiskLevel, string> = {
-  SIN_RIESGO: "Sin riesgo",
-  RIESGO_BAJO: "Riesgo bajo",
-  RIESGO_MEDIO: "Riesgo medio",
-  RIESGO_ALTO: "Riesgo alto",
-  CRITICO: "Crítico",
+  SIN_RIESGO: "No risk",
+  RIESGO_BAJO: "Low risk",
+  RIESGO_MEDIO: "Medium risk",
+  RIESGO_ALTO: "High risk",
+  CRITICO: "Critical",
 };
 
 export const RISK_LEVEL_ORDER: RiskLevel[] = [
@@ -59,86 +59,86 @@ export const RISK_LEVEL_HEX: Record<RiskLevel, string> = {
 };
 
 export const ALERT_TYPE_LABEL: Record<AlertType, string> = {
-  ACADEMIC: "Académica",
-  PSYCHOSOCIAL: "Psicosocial",
-  PARTICIPATION: "Participación",
-  PERMANENCE: "Permanencia",
-  COMBINED: "Combinada",
-  NONE: "Sin alerta",
+  ACADEMIC: "Academic",
+  PSYCHOSOCIAL: "Psychosocial",
+  PARTICIPATION: "Participation",
+  PERMANENCE: "Permanence",
+  COMBINED: "Combined",
+  NONE: "No alert",
 };
 
 export const PROGRESS_STATUS_LABEL: Record<AcademicProgressStatus, string> = {
-  ON_TRACK: "Al día",
-  SLIGHTLY_BEHIND: "Ligeramente atrasado",
-  BEHIND: "Atrasado",
-  CRITICAL_DELAY: "Atraso crítico",
+  ON_TRACK: "On track",
+  SLIGHTLY_BEHIND: "Slightly behind",
+  BEHIND: "Behind",
+  CRITICAL_DELAY: "Critical delay",
 };
 
 export const REVIEW_STATUS_LABEL: Record<ReviewStatus, string> = {
-  PENDING: "Pendiente",
-  REVIEWED: "Revisado",
-  IN_PROGRESS: "En progreso",
-  RESOLVED: "Resuelto",
+  PENDING: "Pending",
+  REVIEWED: "Reviewed",
+  IN_PROGRESS: "In progress",
+  RESOLVED: "Resolved",
 };
 
 export const REQUEST_STATUS_LABEL: Record<RequestStatus, string> = {
-  SUBMITTED: "Enviada",
-  IN_REVIEW: "En revisión",
-  RESOLVED: "Resuelta",
-  REJECTED: "Rechazada",
-  PENDING: "Pendiente",
+  SUBMITTED: "Submitted",
+  IN_REVIEW: "In review",
+  RESOLVED: "Resolved",
+  REJECTED: "Rejected",
+  PENDING: "Pending",
 };
 
 export const ACTIVITY_TYPE_LABEL: Record<ActivityType, string> = {
-  INDIVIDUAL_TUTORING: "Tutoría individual",
-  GROUP_TUTORING: "Tutoría grupal",
-  INDIVIDUAL_MENTORING: "Mentoría individual",
-  GROUP_MENTORING: "Mentoría grupal",
-  WORKSHOP: "Taller",
-  PSYCHOSOCIAL_SUPPORT: "Apoyo psicosocial",
-  INDIVIDUAL_SESSION: "Sesión individual",
-  OTHER: "Otro",
+  INDIVIDUAL_TUTORING: "Individual tutoring",
+  GROUP_TUTORING: "Group tutoring",
+  INDIVIDUAL_MENTORING: "Individual mentoring",
+  GROUP_MENTORING: "Group mentoring",
+  WORKSHOP: "Workshop",
+  PSYCHOSOCIAL_SUPPORT: "Psychosocial support",
+  INDIVIDUAL_SESSION: "Individual session",
+  OTHER: "Other",
 };
 
 export const RISK_CHANGE_LABEL: Record<RiskChangeLabel, string> = {
-  STRONG_IMPROVEMENT: "Mejora fuerte",
-  IMPROVED: "Mejoró",
-  STABLE: "Estable",
-  WORSENED: "Empeoró",
-  SIGNIFICANT_DETERIORATION: "Deterioro significativo",
+  STRONG_IMPROVEMENT: "Strong improvement",
+  IMPROVED: "Improved",
+  STABLE: "Stable",
+  WORSENED: "Worsened",
+  SIGNIFICANT_DETERIORATION: "Significant deterioration",
 };
 
 export const SELECTION_STAGE_LABEL: Record<SelectionStage, string> = {
-  APPLICATION_RECEIVED: "Postulación recibida",
-  ELIGIBILITY_REVIEW: "Revisión de elegibilidad",
-  ASSESSMENT: "Evaluación",
-  INTERVIEW: "Entrevista",
-  FINAL_COMMITTEE: "Comité final",
-  SELECTED: "Seleccionado",
-  REJECTED: "Rechazado",
-  WITHDRAWN: "Retirado",
+  APPLICATION_RECEIVED: "Application received",
+  ELIGIBILITY_REVIEW: "Eligibility review",
+  ASSESSMENT: "Assessment",
+  INTERVIEW: "Interview",
+  FINAL_COMMITTEE: "Final committee",
+  SELECTED: "Selected",
+  REJECTED: "Rejected",
+  WITHDRAWN: "Withdrawn",
 };
 
 export const IMPORT_ENTITY_LABEL: Record<string, string> = {
-  SCHOLAR: "Becarios",
-  ACADEMIC_TERM: "Términos académicos",
+  SCHOLAR: "Scholars",
+  ACADEMIC_TERM: "Academic terms",
   MONTHLY_CHECKIN: "Check-ins",
-  MENTOR_REPORT: "Reportes de mentoría",
-  SUPPORT_ACTIVITY: "Actividades de apoyo",
-  SCHOLAR_REQUEST: "Solicitudes",
-  FINANCIAL_INPUT: "Costos",
+  MENTOR_REPORT: "Mentor reports",
+  SUPPORT_ACTIVITY: "Support activities",
+  SCHOLAR_REQUEST: "Requests",
+  FINANCIAL_INPUT: "Costs",
 };
 
 export const IMPORT_SOURCE_LABEL: Record<string, string> = {
-  TEMPLATE: "Plantilla",
-  LEGACY_WIDE_EXCEL: "Excel histórico",
+  TEMPLATE: "Template",
+  LEGACY_WIDE_EXCEL: "Legacy Excel",
 };
 
 export const IMPORT_STATUS_LABEL: Record<string, string> = {
-  PENDING: "Pendiente",
-  VALIDATED: "Validada",
-  COMMITTED: "Confirmada",
-  FAILED: "Fallida",
+  PENDING: "Pending",
+  VALIDATED: "Validated",
+  COMMITTED: "Committed",
+  FAILED: "Failed",
 };
 
 export const IMPORT_STATUS_TONE: Record<string, "slate" | "blue" | "green" | "red"> = {
@@ -162,23 +162,23 @@ export const IMPORT_ENTITIES = [
 // Data quality (DataQualityIssue). issueType/severity/status are free-text strings the
 // scanner writes; unknown values fall back to the raw string / a neutral tone in the UI.
 export const DATA_QUALITY_ISSUE_LABEL: Record<string, string> = {
-  MISSING_COHORT: "Cohorte faltante",
-  UNKNOWN_UNIVERSITY: "Universidad desconocida",
-  CHECKIN_WITHOUT_SCHOLAR: "Check-in sin becario",
-  MENTOR_REPORT_WITHOUT_SCHOLAR: "Reporte de mentoría sin becario",
-  MISSING_REPORTING_MONTH: "Mes de reporte faltante",
-  INVALID_GPA: "GPA inválido",
-  INVALID_RISK_VALUE: "Valor de riesgo inválido",
-  RISK_WITHOUT_SOURCE_OR_REASON: "Riesgo sin fuente o motivo",
-  MISSING_CHECKIN_ACTIVE: "Check-in faltante (becario activo)",
-  MISSING_MENTOR_REPORT_ACTIVE: "Reporte de mentoría faltante (becario activo)",
-  DUPLICATE_SUBMISSION_ID: "ID de envío duplicado",
+  MISSING_COHORT: "Missing cohort",
+  UNKNOWN_UNIVERSITY: "Unknown university",
+  CHECKIN_WITHOUT_SCHOLAR: "Check-in without scholar",
+  MENTOR_REPORT_WITHOUT_SCHOLAR: "Mentor report without scholar",
+  MISSING_REPORTING_MONTH: "Missing reporting month",
+  INVALID_GPA: "Invalid GPA",
+  INVALID_RISK_VALUE: "Invalid risk value",
+  RISK_WITHOUT_SOURCE_OR_REASON: "Risk without source or reason",
+  MISSING_CHECKIN_ACTIVE: "Missing check-in (active scholar)",
+  MISSING_MENTOR_REPORT_ACTIVE: "Missing mentor report (active scholar)",
+  DUPLICATE_SUBMISSION_ID: "Duplicate submission ID",
 };
 
 export const DATA_QUALITY_SEVERITY_LABEL: Record<string, string> = {
-  low: "Baja",
-  medium: "Media",
-  high: "Alta",
+  low: "Low",
+  medium: "Medium",
+  high: "High",
 };
 export const DATA_QUALITY_SEVERITY_TONE: Record<string, "slate" | "amber" | "red"> = {
   low: "slate",
@@ -187,7 +187,7 @@ export const DATA_QUALITY_SEVERITY_TONE: Record<string, "slate" | "amber" | "red
 };
 
 export const DATA_QUALITY_STATUS_LABEL: Record<string, string> = {
-  OPEN: "Abierta",
-  RESOLVED: "Resuelta",
-  IGNORED: "Ignorada",
+  OPEN: "Open",
+  RESOLVED: "Resolved",
+  IGNORED: "Ignored",
 };

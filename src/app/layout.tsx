@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Beca Tech Scholars Dashboard",
-  description: "Decision-support dashboard for the ver+ Beca Tech program.",
+  title: "Beca Tech+ Scholars Dashboard",
+  description: "Decision-support dashboard for the ver+ Beca Tech+ program.",
 };
 
 export default function RootLayout({

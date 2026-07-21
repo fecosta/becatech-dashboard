@@ -17,7 +17,7 @@ export default async function UnitEconomicsPage({
   if (!allowed) {
     return (
       <div>
-        <PageHeader title="Costos (unit economics)" />
+        <PageHeader title="Unit Economics" />
         <AccessDenied />
       </div>
     );
@@ -35,21 +35,21 @@ export default async function UnitEconomicsPage({
 
   return (
     <div>
-      <PageHeader title="Costos (unit economics)" subtitle="Montos normalizados a USD con tasas de cambio de demostración." />
+      <PageHeader title="Unit Economics" subtitle="Amounts normalized to USD using demo exchange rates." />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <KpiCard label="Costo directo total" value={fmtUsd(e.totalDirectCostUsd)} sub="USD (aprox.)" />
-        <KpiCard label="Beca total" value={fmtUsd(e.totalScholarshipUsd)} sub="USD (aprox.)" />
-        <KpiCard label="Costo / activo" value={fmtUsd(e.costPerActiveScholarUsd)} sub={`${fmtInt(e.activeScholars)} activos`} />
-        <KpiCard label="Costo / retenido" value={fmtUsd(e.costPerRetainedScholarUsd)} sub={`${fmtInt(e.retainedScholars)} retenidos`} />
+        <KpiCard label="Total direct cost" value={fmtUsd(e.totalDirectCostUsd)} sub="USD (approx.)" />
+        <KpiCard label="Total scholarship" value={fmtUsd(e.totalScholarshipUsd)} sub="USD (approx.)" />
+        <KpiCard label="Cost / active" value={fmtUsd(e.costPerActiveScholarUsd)} sub={`${fmtInt(e.activeScholars)} active`} />
+        <KpiCard label="Cost / retained" value={fmtUsd(e.costPerRetainedScholarUsd)} sub={`${fmtInt(e.retainedScholars)} retained`} />
       </div>
 
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
-        <BarCard title="Costo directo por cohorte" data={byCohort} color="#6366f1" />
-        <BarCard title="Costo directo por país" data={byCountry} color="#0ea5e9" />
+        <BarCard title="Direct cost by cohort" data={byCohort} color="#6366f1" />
+        <BarCard title="Direct cost by country" data={byCountry} color="#0ea5e9" />
       </div>
       <div className="mt-4">
-        <BarCard title="Costo directo por universidad" data={byUniversity} color="#8b5cf6" horizontal />
+        <BarCard title="Direct cost by university" data={byUniversity} color="#8b5cf6" horizontal />
       </div>
     </div>
   );
