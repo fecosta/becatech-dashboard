@@ -13,42 +13,68 @@ export const dynamic = "force-dynamic";
 type NavConfigItem = NavItem & { permission: Permission };
 type NavConfigSection = { heading?: string; items: NavConfigItem[] };
 
-// Narrative IA: Inicio → Seguimiento → Actores as primary; secondary tools under "Más";
-// data tools under "Administración". Labels are Spanish to match the rest of the app.
+// Beca Tech+ narrative IA: Home → Early Support → Career Readiness → Scholars →
+// Program Ecosystem as the primary flow; secondary tools under "More"; data tools under
+// "Admin". Permissions are unchanged from the prior IA so no role loses access.
 const NAV: NavConfigSection[] = [
   {
     items: [
-      { href: "/dashboard", label: "Inicio", exact: true, permission: Permission.VIEW_DASHBOARD },
+      { href: "/dashboard", label: "Home", exact: true, permission: Permission.VIEW_DASHBOARD },
       {
-        href: "/dashboard/tracking?tab=summary",
-        label: "Seguimiento",
-        activePrefixes: ["/dashboard/tracking", "/dashboard/scholars"],
+        href: "/dashboard/early-support",
+        label: "Early Support",
         permission: Permission.VIEW_SCHOLAR_TRACKING,
       },
-      { href: "/dashboard/actors", label: "Actores", permission: Permission.VIEW_SCHOLAR_TRACKING },
+      {
+        href: "/dashboard/career-readiness",
+        label: "Career Readiness",
+        permission: Permission.VIEW_SCHOLAR_TRACKING,
+      },
+      { href: "/dashboard/scholars", label: "Scholars", permission: Permission.VIEW_SCHOLAR_TRACKING },
+      {
+        href: "/dashboard/actors",
+        label: "Program Ecosystem",
+        permission: Permission.VIEW_SCHOLAR_TRACKING,
+      },
     ],
   },
   {
-    heading: "Más",
+    heading: "More",
     items: [
-      { href: "/dashboard/unit-economics", label: "Costos", permission: Permission.VIEW_UNIT_ECONOMICS },
+      {
+        href: "/dashboard/unit-economics",
+        label: "Unit Economics",
+        permission: Permission.VIEW_UNIT_ECONOMICS,
+      },
       {
         href: "/dashboard/selection-pipeline",
-        label: "Pipeline de selección",
+        label: "Selection Pipeline",
         permission: Permission.VIEW_SELECTION_PIPELINE,
       },
     ],
   },
   {
-    heading: "Administración",
+    heading: "Admin",
     items: [
       // Nav gate aligned to VIEW_IMPORTS (what the pages already allow), so PROGRAM_MANAGER
       // sees the links it can actually open.
-      { href: "/dashboard/admin/imports", label: "Importaciones", permission: Permission.VIEW_IMPORTS },
-      { href: "/dashboard/admin/data-quality", label: "Calidad de datos", permission: Permission.VIEW_IMPORTS },
+      { href: "/dashboard/admin/imports", label: "Data Imports", permission: Permission.VIEW_IMPORTS },
+      {
+        href: "/dashboard/admin/data-quality",
+        label: "Data Quality",
+        permission: Permission.VIEW_IMPORTS,
+      },
     ],
   },
 ];
+
+/** "PROGRAM_MANAGER" -> "Program Manager" for the sidebar profile block. */
+function titleCaseRole(role: string): string {
+  return role
+    .toLowerCase()
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
   const [options, result] = await Promise.all([getFilterOptions(), getCurrentUserResult()]);
@@ -71,19 +97,16 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 
   return (
     <div className="flex min-h-screen">
-      <Sidebar sections={sections} />
+      <Sidebar
+        sections={sections}
+        profile={{ name: user.fullName ?? user.email, role: titleCaseRole(user.role) }}
+      />
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white/90 px-6 py-3 backdrop-blur">
+        <header className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 border-b border-border bg-cream/80 px-6 py-3 backdrop-blur">
           <Suspense fallback={<div className="h-7" />}>
             <TopFilters options={options} />
           </Suspense>
-          <div className="flex items-center gap-3">
-            <div className="text-right text-xs leading-tight">
-              <div className="font-medium text-slate-700">{user.fullName}</div>
-              <div className="text-slate-400">{user.role.replace(/_/g, " ")}</div>
-            </div>
-            <SignOutButton />
-          </div>
+          <SignOutButton />
         </header>
         <main className="flex-1 p-6">{children}</main>
       </div>

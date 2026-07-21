@@ -1,6 +1,5 @@
-// Reusable scholar directory (search + table), shared by /dashboard/scholars and the
-// Seguimiento "Progreso del becario" tab. Rows link to the unchanged scholar profile at
-// /dashboard/scholars/[scholarId]. The caller owns the page header.
+// Reusable scholar directory (search + table) for /dashboard/scholars. Rows link to the
+// scholar profile at /dashboard/scholars/[scholarId]. The caller owns the page header.
 import Link from "next/link";
 import { type Column, DataTable } from "@/components/DataTable";
 import { ScholarSearch } from "@/components/ScholarSearch";
@@ -20,29 +19,29 @@ const STATUS_TONE: Record<ProgramStatus, "green" | "red" | "amber" | "blue"> = {
 
 const columns: Column<ScholarDirectoryRow>[] = [
   {
-    header: "Becario",
+    header: "Scholar",
     cell: (r) => (
       <Link
         href={`/dashboard/scholars/${r.scholarId}`}
-        className="font-medium text-blue-700 hover:underline"
+        className="font-medium text-purple hover:underline"
       >
         {r.fullName}
-        <span className="ml-1 text-xs text-slate-400">{r.scholarId}</span>
+        <span className="ml-1 text-xs text-muted">{r.scholarId}</span>
       </Link>
     ),
   },
-  { header: "País", cell: (r) => COUNTRY_LABEL[r.country] },
-  { header: "Cohorte", cell: (r) => r.cohort },
-  { header: "Universidad", cell: (r) => r.university },
-  { header: "Programa", cell: (r) => r.academicProgram },
+  { header: "Country", cell: (r) => COUNTRY_LABEL[r.country] },
+  { header: "Cohort", cell: (r) => r.cohort },
+  { header: "University", cell: (r) => r.university },
+  { header: "Program", cell: (r) => r.academicProgram },
   {
-    header: "Estado",
+    header: "Status",
     cell: (r) => <Badge tone={STATUS_TONE[r.programStatus]}>{PROGRAM_STATUS_LABEL[r.programStatus]}</Badge>,
   },
   {
-    header: "Riesgo",
+    header: "Risk",
     cell: (r) =>
-      r.currentRiskLevel ? <RiskBadge level={r.currentRiskLevel} /> : <span className="text-slate-300">—</span>,
+      r.currentRiskLevel ? <RiskBadge level={r.currentRiskLevel} /> : <span className="text-muted">—</span>,
   },
   { header: "GPA", cell: (r) => fmtGpa(r.latestGpa) },
 ];
@@ -59,9 +58,9 @@ export async function ScholarDirectory({
     <div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <ScholarSearch />
-        <span className="text-xs text-slate-400">{rows.length} becario(s)</span>
+        <span className="text-xs text-muted">{rows.length} scholar(s)</span>
       </div>
-      <DataTable columns={columns} rows={rows} empty="No se encontraron becarios" />
+      <DataTable columns={columns} rows={rows} empty="No scholars found" />
     </div>
   );
 }

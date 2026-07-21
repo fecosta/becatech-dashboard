@@ -13,7 +13,7 @@ export default async function ScholarsPage({
   if (!allowed) {
     return (
       <div>
-        <PageHeader title="Becarios" />
+        <PageHeader title="Scholars" />
         <AccessDenied />
       </div>
     );
@@ -25,7 +25,7 @@ export default async function ScholarsPage({
 
   return (
     <div>
-      <PageHeader title="Becarios" />
+      <PageHeader title="Scholars" subtitle="Search any scholar to open their full record." />
       <ScholarDirectory filters={filters} q={q} />
     </div>
   );

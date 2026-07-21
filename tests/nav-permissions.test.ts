@@ -2,88 +2,87 @@ import { describe, expect, it } from "vitest";
 import type { UserRole } from "@/generated/prisma/enums";
 import { can, type CurrentUser, Permission } from "@/lib/auth/authorization";
 
-// Permission gating each nav item after the PES Phase A restructure. Kept in lockstep
+// Permission gating each nav item after the Beca Tech+ IA restructure. Kept in lockstep
 // with the NAV config in src/app/dashboard/layout.tsx — a regression here means a role
-// gained or lost a nav entry. The Tracking gate (VIEW_SCHOLAR_TRACKING) is also the guard
-// the deprecated-route redirects land on, so it doubles as the "redirect doesn't bypass
-// the target guard" check.
+// gained or lost a nav entry. VIEW_SCHOLAR_TRACKING is also the guard the deprecated-route
+// redirects land on, so it doubles as the "redirect doesn't bypass the target guard" check.
 const NAV_PERMISSION = {
-  inicio: Permission.VIEW_DASHBOARD,
-  seguimiento: Permission.VIEW_SCHOLAR_TRACKING,
-  actores: Permission.VIEW_SCHOLAR_TRACKING,
-  costos: Permission.VIEW_UNIT_ECONOMICS,
-  pipeline: Permission.VIEW_SELECTION_PIPELINE,
-  importaciones: Permission.VIEW_IMPORTS,
-  calidadDatos: Permission.VIEW_IMPORTS,
+  home: Permission.VIEW_DASHBOARD,
+  earlySupport: Permission.VIEW_SCHOLAR_TRACKING,
+  careerReadiness: Permission.VIEW_SCHOLAR_TRACKING,
+  scholars: Permission.VIEW_SCHOLAR_TRACKING,
+  programEcosystem: Permission.VIEW_SCHOLAR_TRACKING,
+  unitEconomics: Permission.VIEW_UNIT_ECONOMICS,
+  selectionPipeline: Permission.VIEW_SELECTION_PIPELINE,
+  dataImports: Permission.VIEW_IMPORTS,
+  dataQuality: Permission.VIEW_IMPORTS,
+} as const;
+
+type NavKey = keyof typeof NAV_PERMISSION;
+const ALL_FALSE: Record<NavKey, boolean> = {
+  home: false,
+  earlySupport: false,
+  careerReadiness: false,
+  scholars: false,
+  programEcosystem: false,
+  unitEconomics: false,
+  selectionPipeline: false,
+  dataImports: false,
+  dataQuality: false,
+};
+// The four primary tracking destinations that share VIEW_SCHOLAR_TRACKING.
+const TRACKING = {
+  earlySupport: true,
+  careerReadiness: true,
+  scholars: true,
+  programEcosystem: true,
 } as const;
 
 const u = (role: UserRole): CurrentUser => ({ id: "x", email: "x", role, assignedScholarIds: [] });
 
-function visibleNav(role: UserRole): Record<keyof typeof NAV_PERMISSION, boolean> {
+function visibleNav(role: UserRole): Record<NavKey, boolean> {
   const user = u(role);
   return Object.fromEntries(
     Object.entries(NAV_PERMISSION).map(([k, p]) => [k, can(user, p)]),
-  ) as Record<keyof typeof NAV_PERMISSION, boolean>;
+  ) as Record<NavKey, boolean>;
 }
 
-describe("nav visibility per role (PES Phase A)", () => {
-  it("Finance: Inicio + Costos only — no Tracking/Actores/Pipeline/Administración", () => {
-    expect(visibleNav("FINANCE")).toEqual({
-      inicio: true,
-      seguimiento: false,
-      actores: false,
-      costos: true,
-      pipeline: false,
-      importaciones: false,
-      calidadDatos: false,
-    });
+describe("nav visibility per role (Beca Tech+ IA)", () => {
+  it("Finance: Home + Unit Economics only", () => {
+    expect(visibleNav("FINANCE")).toEqual({ ...ALL_FALSE, home: true, unitEconomics: true });
   });
 
-  it("Selection Team: Inicio + Pipeline only — no Tracking/Actores", () => {
+  it("Selection Team: Home + Selection Pipeline only", () => {
     expect(visibleNav("SELECTION_TEAM")).toEqual({
-      inicio: true,
-      seguimiento: false,
-      actores: false,
-      costos: false,
-      pipeline: true,
-      importaciones: false,
-      calidadDatos: false,
+      ...ALL_FALSE,
+      home: true,
+      selectionPipeline: true,
     });
   });
 
-  it("Mentor: Inicio + Seguimiento + Actores — no economics/pipeline/administración", () => {
-    expect(visibleNav("MENTOR")).toEqual({
-      inicio: true,
-      seguimiento: true,
-      actores: true,
-      costos: false,
-      pipeline: false,
-      importaciones: false,
-      calidadDatos: false,
-    });
+  it("Mentor: Home + all tracking pages — no economics/pipeline/admin", () => {
+    expect(visibleNav("MENTOR")).toEqual({ ...ALL_FALSE, home: true, ...TRACKING });
   });
 
-  it("Program Manager: Tracking + secondary tools + read-only Administración", () => {
+  it("Program Manager: tracking + secondary tools + read-only admin", () => {
     expect(visibleNav("PROGRAM_MANAGER")).toEqual({
-      inicio: true,
-      seguimiento: true,
-      actores: true,
-      costos: true,
-      pipeline: true,
-      importaciones: true,
-      calidadDatos: true,
+      ...ALL_FALSE,
+      home: true,
+      ...TRACKING,
+      unitEconomics: true,
+      selectionPipeline: true,
+      dataImports: true,
+      dataQuality: true,
     });
   });
 
-  it("Executive: Tracking + economics + pipeline, but not Administración", () => {
+  it("Executive: tracking + economics + pipeline, but not admin", () => {
     expect(visibleNav("EXECUTIVE")).toEqual({
-      inicio: true,
-      seguimiento: true,
-      actores: true,
-      costos: true,
-      pipeline: true,
-      importaciones: false,
-      calidadDatos: false,
+      ...ALL_FALSE,
+      home: true,
+      ...TRACKING,
+      unitEconomics: true,
+      selectionPipeline: true,
     });
   });
 
