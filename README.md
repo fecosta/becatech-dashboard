@@ -1,4 +1,4 @@
-# Beca Tech Scholars Progress Dashboard
+# Beca Tech+ Scholars Progress Dashboard
 
 Decision-support dashboard for the **ver+ Beca Tech** program. It centralizes scholar tracking,
 risk monitoring, academic progress, support participation, requests, unit economics, and a
@@ -148,33 +148,66 @@ Implemented in [`src/lib/risk/risk.ts`](./src/lib/risk/risk.ts):
 Expected academic progress ([`src/lib/academic/progress.ts`](./src/lib/academic/progress.ts)),
 by actual÷expected ratio: `≥0.90` ON_TRACK · `≥0.75` SLIGHTLY_BEHIND · `≥0.50` BEHIND · else CRITICAL_DELAY.
 
+## Design system
+
+Visual identity follows the **Beca Tech+** prototype
+([`design-reference/BecaTech_Plus_Prototype.html`](./design-reference/BecaTech_Plus_Prototype.html)).
+Design tokens are centralized in [`src/app/globals.css`](./src/app/globals.css) — raw hex under
+`:root`, mapped onto Tailwind v4's `--color-*` namespace via `@theme inline`, so they're usable as
+utilities (`bg-cream`, `text-ink`, `text-purple`, `bg-surface-dark`, …). Do **not** hardcode hex in
+components; add or reuse a token.
+
+| Token | Hex | Use |
+| --- | --- | --- |
+| `cream` | `#F3F1E7` | page background |
+| `purple` | `#A62BFF` | primary brand accent |
+| `yellow` | `#F3FF00` | active nav + dark-callout values |
+| `green` | `#27CF77` | positive deltas, "on track" |
+| `surface-dark` | `#0A0A0A` | sidebar + dark callout |
+| `ink` / `muted` | `#33312B` / `#6F6C62` | primary / secondary text |
+| `card` / `border` | `#FFFFFF` / `#E4E0D2` | card surface / hairline |
+| `lavender` / `mint` / `chip-cream` | `#F5EAFF` / `#EAFBF2` / `#F8F6EF` | PROXY & activity chips / status badge / stat chips |
+| `risk-none…risk-critical` | green → `#8FE0B4` → purple → `#3A0A5C` → black | segmented **RiskBar** only |
+
+Reusable primitives live in [`src/components/ui.tsx`](./src/components/ui.tsx) (`Card`, `KpiCard`
+with optional PROXY badge + delta, `DarkCallout`, `StatChip`, `ActivityChip`, `StatusBadge`,
+`ProxyBadge`, `Badge`, `RiskBadge`), plus [`RiskBar`](./src/components/RiskBar.tsx) (5-segment bar +
+legend) and [`ProfileCard`](./src/components/ProfileCard.tsx). Notes:
+
+- **RiskBar vs. RiskBadge colors differ by design.** The segmented RiskBar uses the prototype's
+  brand-hued scale (`--risk-*`); the semantic RiskBadge pills keep a green→amber→red scale for
+  legibility in dense tables.
+- **`StoryCard` is deferred to Phase 3** — its only consumer (the Program Ecosystem "Featured Story")
+  is not built yet, so the component is intentionally not shipped rather than left as dead code.
+
 ## Dashboard routes
 
-Navigation follows the program narrative (Inicio → Seguimiento → Actores), with secondary tools
-under **Más** and data tools under **Administración**. Labels are Spanish.
+Navigation follows the Beca Tech+ narrative IA — **Home → Early Support → Career Readiness →
+Scholars → Program Ecosystem** as the primary flow — with secondary tools under **More** and data
+tools under **Admin**. The UI is in **English**.
 
 | Route                                | Nav item / View                                                 |
 | ------------------------------------ | --------------------------------------------------------------- |
-| `/dashboard`                         | **Inicio** — program health: KPI rows, Salud del programa (risk + progress), Atención ejecutiva. |
-| `/dashboard/tracking?tab=summary`    | **Seguimiento › Resumen** — compact operational KPIs for the selected group. |
-| `/dashboard/tracking?tab=years-1-2`  | **Seguimiento › Años 1–2** — placeholder (academic/psychosocial support; pending the program-stage rule). |
-| `/dashboard/tracking?tab=years-3-5`  | **Seguimiento › Años 3–5** — placeholder (professional development; pending KPI definitions). |
-| `/dashboard/tracking?tab=scholars`   | **Seguimiento › Progreso del becario** — scholar directory (reused `ScholarDirectory`). |
-| `/dashboard/scholars`                | Scholar directory (still valid; also surfaced via Progreso del becario). |
-| `/dashboard/scholars/[scholarId]`    | Scholar profile — GPA/risk trends + full history tables (mentor-scoped). |
-| `/dashboard/actors`                  | **Actores** — placeholder (universities + operators; no fake data). |
-| `/dashboard/unit-economics`          | **Más › Costos** — cost per active/retained scholar, by cohort/country/uni. |
-| `/dashboard/selection-pipeline`      | **Más › Pipeline de selección** — candidates by stage, conversion. |
-| `/dashboard/admin/imports`           | **Administración › Importaciones** — import history + wizard.   |
-| `/dashboard/admin/data-quality`      | **Administración › Calidad de datos** — detected `DataQualityIssue`s (issue, source, severity, owner, status, resolution). |
+| `/dashboard`                         | **Home** — program health: KPI rows (Satisfaction shown as a `PROXY`/pending KPI), Program Health (risk + pace), Executive Attention. |
+| `/dashboard/early-support`           | **Early Support (Years 1–2)** — risk bar + legend, Critical+High dark callout, participation, monthly risk change, alert-type split, pace chips. Filtered to the Years 1–2 band. |
+| `/dashboard/career-readiness`        | **Career Readiness (Years 3–5)** — pace chips; Professional-Skills KPIs shown as explicit **pending** placeholders (no data source yet). Filtered to the Years 3–5 band. |
+| `/dashboard/scholars`                | **Scholars** — scholar directory (search + table). |
+| `/dashboard/scholars/[scholarId]`    | Scholar profile — `ProfileCard` + GPA/risk trends + full history tables (mentor-scoped). No "Age" field (none exists in the schema). |
+| `/dashboard/actors`                  | **Program Ecosystem** — placeholder (universities + operators; no fake data). Phase 3. |
+| `/dashboard/unit-economics`          | **More › Unit Economics** — cost per active/retained scholar, by cohort/country/uni. |
+| `/dashboard/selection-pipeline`      | **More › Selection Pipeline** — candidates by stage, conversion. |
+| `/dashboard/admin/imports`           | **Admin › Data Imports** — import history + wizard.   |
+| `/dashboard/admin/data-quality`      | **Admin › Data Quality** — detected `DataQualityIssue`s (issue, source, severity, owner, status, resolution). |
 
 Deprecated routes redirect (preserving filters), landing on their guarded targets:
-`/dashboard/risk-alerts` → `?tab=years-1-2`; `/dashboard/academic-progress` and
-`/dashboard/support-participation` → `?tab=summary`.
+`/dashboard/risk-alerts` → `/dashboard/early-support`; `/dashboard/academic-progress` and
+`/dashboard/support-participation` → `/dashboard`. The former `/dashboard/tracking?tab=…` workspace
+also redirects: `summary`/`scholars` → Home/Scholars, `years-1-2`/`years-3-5` → the two stage pages.
 
 All views share a top filter bar (country · cohort · university · status · risk · period) held in
-the URL; the Tracking tabs preserve filters and are shareable links. Data comes from the typed query
-layer in [`src/lib/dashboard/queries.ts`](./src/lib/dashboard/queries.ts).
+the URL. The Early Support / Career Readiness pages additionally inject a program-stage filter (see
+below). Data comes from the typed query layer in
+[`src/lib/dashboard/queries.ts`](./src/lib/dashboard/queries.ts).
 
 ## API routes
 
@@ -339,6 +372,35 @@ read-gated by `VIEW_IMPORTS`).
    rely on `.env`/`.env.local`, which won't override already-set process env vars), then run
    `npm run db:seed` against the provisioned database.
 7. Deploy. Dashboard routes are server-rendered on demand (no build-time DB access).
+
+## Program-stage split (Early Support vs. Career Readiness)
+
+The Early Support (Years 1–2) and Career Readiness (Years 3–5) pages split scholars by a **documented,
+tunable default**: [`src/lib/academic/program-stage.ts`](./src/lib/academic/program-stage.ts) derives
+the stage from `Scholar.currentSemester` assuming ~2 semesters/year — semesters **1–4 = Years 1–2**,
+**5+ = Years 3–5** (`YEARS_1_2_MAX_SEMESTER = 4`). It is injected as an optional `programStage` filter
+on `DashboardFilters` and applied as a `currentSemester` range in `scholarWhere` (no schema change).
+
+- **Needs program-team sign-off** before being treated as final; adjust the threshold if a cohort's
+  semester system doesn't map cleanly.
+- **Caveat:** scholars with a null `currentSemester` fall outside **both** bands (surfaced as a data
+  gap, not guessed into a band).
+
+## Open decisions (flagged, not silently resolved)
+
+1. **Program-stage threshold** (`currentSemester ≤ 4`) + null-semester exclusion — needs program-team
+   sign-off (above).
+2. **Satisfaction** — no approved proxy formula exists; the Home KPI renders as `PROXY`/pending, never
+   an invented number.
+3. **Professional-Skills KPIs** (Employability Score, Internship/Placement Rate, Workshops Completed) —
+   no data source; Career Readiness renders them as explicit **pending** placeholders. Definitions are
+   owned by the professional-development team.
+4. **Program Ecosystem** (universities + operators + featured story) — needs new `University`/`Operator`
+   models and an ownership decision; **Phase 3**, shipped here as an honest placeholder.
+5. **"Data as of …"** in the Home header is derived from the latest data month (`getCurrentPeriod`),
+   not a real last-sync timestamp — decide whether to wire a true sync time or drop it.
+6. **UI language** switched Spanish → **English**. The Spanish column-name mappings for legacy-Excel /
+   JotForm ingestion are data keys and were intentionally left untouched.
 
 ## Assumptions & known limitations
 
