@@ -20,15 +20,15 @@ export function FeaturePlaceholder({
     <Card>
       <div className="mx-auto max-w-2xl py-8">
         <div className="text-center">
-          <div className="text-lg font-semibold text-slate-700">{title}</div>
-          <p className="mt-2 text-sm text-slate-500">{description}</p>
+          <div className="text-lg font-semibold text-ink">{title}</div>
+          <p className="mt-2 text-sm text-muted">{description}</p>
         </div>
         {pendingOn.length > 0 ? (
           <div className="mt-6">
-            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Pendiente de
+            <div className="text-xs font-semibold uppercase tracking-wide text-purple">
+              Pending on
             </div>
-            <ul className="mt-1 list-disc pl-5 text-sm text-slate-600">
+            <ul className="mt-1 list-disc pl-5 text-sm text-ink">
               {pendingOn.map((p) => (
                 <li key={p}>{p}</li>
               ))}
@@ -37,10 +37,10 @@ export function FeaturePlaceholder({
         ) : null}
         {futureIncludes && futureIncludes.length > 0 ? (
           <div className="mt-4">
-            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Incluirá en el futuro
+            <div className="text-xs font-semibold uppercase tracking-wide text-purple">
+              Will include
             </div>
-            <ul className="mt-1 list-disc pl-5 text-sm text-slate-600">
+            <ul className="mt-1 list-disc pl-5 text-sm text-ink">
               {futureIncludes.map((f) => (
                 <li key={f}>{f}</li>
               ))}
