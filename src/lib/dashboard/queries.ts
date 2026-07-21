@@ -2,11 +2,13 @@
 // Aggregation is done in JS over Prisma results: the dataset is small (~100 scholars) and
 // this keeps the logic readable and testable. Optimize with SQL only if data volume grows.
 import { deriveExpectedProgressStatus } from "../academic/progress";
+import { YEARS_1_2_MAX_SEMESTER } from "../academic/program-stage";
 import { prisma } from "../db";
 import type { AcademicTerm, Prisma, RiskAssessment, Scholar } from "../../generated/prisma/client";
 import {
   AcademicProgressStatus,
   ActivityType,
+  AlertType,
   Country,
   ProgramStatus,
   RiskLevel,
@@ -24,6 +26,7 @@ import type {
   RiskAlertRow,
   RiskAlertsResult,
   RiskDistribution,
+  RiskStageSummary,
   ScholarDirectoryRow,
   SelectionPipelineResult,
   StageCount,
@@ -71,7 +74,19 @@ function scholarWhere(filters: DashboardFilters): Prisma.ScholarWhereInput {
   return {
     ...geoScholarWhere(filters),
     ...(filters.programStatus ? { programStatus: filters.programStatus } : {}),
+    ...programStageWhere(filters.programStage),
   };
+}
+
+/**
+ * Translate a program stage into a `currentSemester` range (no schema change — this is
+ * a real column). YEARS_1_2 = semesters ≤ YEARS_1_2_MAX_SEMESTER, YEARS_3_5 = above it.
+ * Scholars with a null currentSemester match neither (Prisma range excludes nulls).
+ */
+function programStageWhere(stage: DashboardFilters["programStage"]): Prisma.ScholarWhereInput {
+  if (stage === "YEARS_1_2") return { currentSemester: { lte: YEARS_1_2_MAX_SEMESTER } };
+  if (stage === "YEARS_3_5") return { currentSemester: { gt: YEARS_1_2_MAX_SEMESTER } };
+  return {};
 }
 /** Scholar where-clause excluding status/risk/period (geography + demographics only). */
 function geoScholarWhere(filters: DashboardFilters): Prisma.ScholarWhereInput {
@@ -344,6 +359,54 @@ export async function getRiskAlerts(filters: DashboardFilters = {}): Promise<Ris
     (a, b) => b.globalRiskValue - a.globalRiskValue || (b.riskChange ?? 0) - (a.riskChange ?? 0),
   );
   return { currentPeriod, distribution, attentionList };
+}
+
+function emptyAlertTypeCounts(): Record<AlertType, number> {
+  return {
+    [AlertType.ACADEMIC]: 0,
+    [AlertType.PSYCHOSOCIAL]: 0,
+    [AlertType.PARTICIPATION]: 0,
+    [AlertType.PERMANENCE]: 0,
+    [AlertType.COMBINED]: 0,
+    [AlertType.NONE]: 0,
+  };
+}
+
+/**
+ * Compact risk summary for a stage page (Early Support): the 5-level distribution, the
+ * High+Critical count, month-over-month improved/worsened counts, and the alert-type
+ * split among at-risk scholars. Reuses the shared scope so the programStage/geo filters
+ * apply uniformly. Pure aggregation over existing data — no schema change.
+ */
+export async function getRiskStageSummary(
+  filters: DashboardFilters = {},
+): Promise<RiskStageSummary> {
+  const { currentPeriod, scholars, riskMap } = await loadScope(filters);
+
+  const distribution = emptyRiskDistribution();
+  const alertTypeCounts = emptyAlertTypeCounts();
+  let improved = 0;
+  let worsened = 0;
+
+  for (const s of scholars) {
+    const cur = riskMap.get(s.scholarId);
+    if (!cur) continue;
+    distribution[cur.globalRiskLevel] += 1;
+    if (cur.riskChange != null) {
+      if (cur.riskChange < 0) improved += 1;
+      else if (cur.riskChange > 0) worsened += 1;
+    }
+    if (cur.globalRiskValue >= 2) alertTypeCounts[cur.alertType] += 1;
+  }
+
+  return {
+    currentPeriod,
+    distribution,
+    criticalHighCount: distribution.RIESGO_ALTO + distribution.CRITICO,
+    improved,
+    worsened,
+    alertTypeCounts,
+  };
 }
 
 /** Scholar list for the directory/search page (current risk + latest GPA). */
