@@ -1,8 +1,10 @@
 // Dashboard query layer — reusable, typed server-side reads for every dashboard view.
 // Aggregation is done in JS over Prisma results: the dataset is small (~100 scholars) and
 // this keeps the logic readable and testable. Optimize with SQL only if data volume grows.
+import { bucketGpa } from "../academic/gpa-bucket";
 import { deriveExpectedProgressStatus } from "../academic/progress";
 import { YEARS_1_2_MAX_SEMESTER } from "../academic/program-stage";
+import { programYearFromSemester } from "../academic/program-year";
 import { prisma } from "../db";
 import type { AcademicTerm, Prisma, RiskAssessment } from "../../generated/prisma/client";
 import {
@@ -22,6 +24,8 @@ import type {
   FilterOptions,
   GpaGroupStat,
   HomeOverview,
+  MonthlyRiskTrendPoint,
+  ProgramEcosystemResult,
   ProgressDistribution,
   RiskAlertRow,
   RiskAlertsResult,
@@ -32,9 +36,10 @@ import type {
   StageCount,
   SupportParticipationResult,
   UnitEconomicsResult,
+  UniversityRiskRow,
 } from "./types";
 import { latestCohort } from "./cohort";
-import { normalizeGender } from "./gender";
+import { normalizeGender, type NormalizedGender } from "./gender";
 
 // ------------------------------------------------------------------
 // Currency: normalize to USD for comparable "basic" unit economics.
@@ -114,7 +119,7 @@ async function getCurrentPeriod(): Promise<string> {
 /** Distinct values that populate the dashboard filter dropdowns. */
 export async function getFilterOptions(): Promise<FilterOptions> {
   const [scholars, universities, periods] = await Promise.all([
-    prisma.scholar.findMany({ select: { cohort: true } }),
+    prisma.scholar.findMany({ select: { cohort: true, currentDepartment: true } }),
     prisma.university.findMany({ select: { name: true }, orderBy: { name: "asc" } }),
     prisma.riskAssessment.findMany({
       select: { period: true },
@@ -126,6 +131,7 @@ export async function getFilterOptions(): Promise<FilterOptions> {
     cohorts: [...new Set(scholars.map((s) => s.cohort))].sort(),
     universities: universities.map((u) => u.name),
     periods: periods.map((p) => p.period),
+    departments: [...new Set(scholars.map((s) => s.currentDepartment).filter((d): d is string => !!d))].sort(),
   };
 }
 
@@ -292,9 +298,8 @@ export async function getHomeOverview(filters: DashboardFilters = {}): Promise<H
   const classified = active
     .map((s) => normalizeGender(s.gender))
     .filter((g) => g !== "unknown");
-  const womenPercentage = classified.length
-    ? round2(classified.filter((g) => g === "female").length / classified.length)
-    : null;
+  const womenCount = classified.filter((g) => g === "female").length;
+  const womenPercentage = classified.length ? round2(womenCount / classified.length) : null;
 
   // "Selected or latest cohort": honor an active cohort filter, else the latest present.
   const cohort = filters.cohort ?? latestCohort(active.map((s) => s.cohort));
@@ -302,11 +307,63 @@ export async function getHomeOverview(filters: DashboardFilters = {}): Promise<H
 
   const activeUniversityCount = new Set(active.map((s) => s.university.name)).size;
 
+  // Gender breakdown among active scholars (all 4 buckets, including "unknown").
+  const genderBreakdown: Record<NormalizedGender, number> = {
+    female: 0,
+    male: 0,
+    other: 0,
+    unknown: 0,
+  };
+  for (const s of active) genderBreakdown[normalizeGender(s.gender)] += 1;
+
+  // Department-of-residence breakdown among active scholars; null/blank -> "Not reported".
+  const deptCounts = new Map<string, number>();
+  for (const s of active) {
+    const dept = s.currentDepartment?.trim() || "Not reported";
+    deptCounts.set(dept, (deptCounts.get(dept) ?? 0) + 1);
+  }
+  const departmentBreakdown = [...deptCounts.entries()]
+    .map(([department, count]) => ({ department, count }))
+    .sort((a, b) => b.count - a.count);
+
+  // Scholars by program year among active scholars (see lib/academic/program-year.ts).
+  const scholarsByYear = { year1: 0, year2: 0, year3: 0, unknown: 0 };
+  for (const s of active) {
+    const year = programYearFromSemester(s.currentSemester);
+    if (year === "YEAR_1") scholarsByYear.year1 += 1;
+    else if (year === "YEAR_2") scholarsByYear.year2 += 1;
+    else if (year === "YEAR_3") scholarsByYear.year3 += 1;
+    else scholarsByYear.unknown += 1;
+  }
+
+  // Retention rate per program year: (not WITHDRAWN) / total who started that year, among
+  // in-scope scholars of every status (so the denominator includes withdrawals).
+  const retentionByYear: HomeOverview["retentionByYear"] = ([1, 2, 3] as const).map((year) => {
+    const yearKey = year === 1 ? "YEAR_1" : year === 2 ? "YEAR_2" : "YEAR_3";
+    const cohortScholars = scholars.filter(
+      (s) => programYearFromSemester(s.currentSemester) === yearKey,
+    );
+    const retained = cohortScholars.filter(
+      (s) => s.programStatus !== ProgramStatus.WITHDRAWN,
+    ).length;
+    return { year, rate: cohortScholars.length ? round2(retained / cohortScholars.length) : 0 };
+  });
+
+  const deliveryPartnerCount = new Set(
+    active.map((s) => s.operator?.name).filter((n): n is string => !!n),
+  ).size;
+
   return {
     scholarsByCountry,
     womenPercentage,
+    womenCount,
     cohortSpotlight: { cohort, count: cohortCount },
     activeUniversityCount,
+    genderBreakdown,
+    departmentBreakdown,
+    scholarsByYear,
+    retentionByYear,
+    deliveryPartnerCount,
   };
 }
 
@@ -409,6 +466,87 @@ export async function getRiskStageSummary(
   };
 }
 
+/** Early Support's "Scholars Status per University" — risk mix per in-scope university. */
+export async function getUniversityRiskBreakdown(
+  filters: DashboardFilters = {},
+): Promise<UniversityRiskRow[]> {
+  const { scholars, riskMap } = await loadScope(filters);
+
+  const byUniversity = new Map<
+    string,
+    {
+      universityId: string;
+      universityName: string;
+      country: Country;
+      scholarCount: number;
+      riskDistribution: RiskDistribution;
+    }
+  >();
+  for (const s of scholars) {
+    let entry = byUniversity.get(s.universityId);
+    if (!entry) {
+      entry = {
+        universityId: s.universityId,
+        universityName: s.university.name,
+        country: s.university.country,
+        scholarCount: 0,
+        riskDistribution: emptyRiskDistribution(),
+      };
+      byUniversity.set(s.universityId, entry);
+    }
+    entry.scholarCount += 1;
+    const level = riskMap.get(s.scholarId)?.globalRiskLevel;
+    if (level) entry.riskDistribution[level] += 1;
+  }
+
+  return [...byUniversity.values()]
+    .map((entry) => ({
+      ...entry,
+      lowRiskPercentage: entry.scholarCount
+        ? round2(
+            (entry.riskDistribution.SIN_RIESGO + entry.riskDistribution.RIESGO_BAJO) /
+              entry.scholarCount,
+          )
+        : 0,
+    }))
+    .sort(
+      (a, b) => a.country.localeCompare(b.country) || a.universityName.localeCompare(b.universityName),
+    );
+}
+
+/**
+ * Early Support's "Monthly Change in Risk Level" line chart — the % of in-scope scholars
+ * at Medium+ risk per month, across every period on record (not just the latest one).
+ */
+export async function getMonthlyRiskTrend(
+  filters: DashboardFilters = {},
+): Promise<MonthlyRiskTrendPoint[]> {
+  const { scholars } = await loadScope(filters);
+  const scholarIds = scholars.map((s) => s.scholarId);
+  if (scholarIds.length === 0) return [];
+
+  const rows = await prisma.riskAssessment.findMany({
+    where: { scholarId: { in: scholarIds } },
+    select: { period: true, globalRiskValue: true },
+  });
+
+  const totalByPeriod = new Map<string, number>();
+  const mediumPlusByPeriod = new Map<string, number>();
+  for (const r of rows) {
+    totalByPeriod.set(r.period, (totalByPeriod.get(r.period) ?? 0) + 1);
+    if (r.globalRiskValue >= 2) {
+      mediumPlusByPeriod.set(r.period, (mediumPlusByPeriod.get(r.period) ?? 0) + 1);
+    }
+  }
+
+  return [...totalByPeriod.entries()]
+    .map(([period, total]) => ({
+      period,
+      mediumPlusPct: total ? round2((mediumPlusByPeriod.get(period) ?? 0) / total) : 0,
+    }))
+    .sort((a, b) => a.period.localeCompare(b.period));
+}
+
 /** Scholar list for the directory/search page (current risk + latest GPA). */
 export async function getScholarDirectory(
   filters: DashboardFilters = {},
@@ -418,7 +556,10 @@ export async function getScholarDirectory(
   const q = search?.trim().toLowerCase();
   const list = q
     ? scholars.filter(
-        (s) => s.fullName.toLowerCase().includes(q) || s.scholarId.toLowerCase().includes(q),
+        (s) =>
+          s.fullName.toLowerCase().includes(q) ||
+          s.scholarId.toLowerCase().includes(q) ||
+          s.university.name.toLowerCase().includes(q),
       )
     : scholars;
   const gpaMap = await latestTermByScholar(list.map((s) => s.scholarId));
@@ -483,6 +624,7 @@ export async function getAcademicProgress(
   const academicRiskDistribution = emptyRiskDistribution();
   const scholarsBehind: AcademicProgressResult["scholarsBehind"] = [];
   const allGpas: number[] = [];
+  const gpaDistribution = { below3_5: 0, from3_5To3_9: 0, from4_0To5_0: 0 };
   let scholarsWithFailedSubjects = 0;
 
   for (const s of scholars) {
@@ -493,6 +635,10 @@ export async function getAcademicProgress(
       pushTo(gpaByCohort, s.cohort, g);
       pushTo(gpaByCountry, s.country, g);
       pushTo(gpaByUniversity, s.university.name, g);
+      const bucket = bucketGpa(g);
+      if (bucket === "BELOW_3_5") gpaDistribution.below3_5 += 1;
+      else if (bucket === "GPA_3_5_TO_3_9") gpaDistribution.from3_5To3_9 += 1;
+      else if (bucket === "GPA_4_0_TO_5_0") gpaDistribution.from4_0To5_0 += 1;
     }
 
     const status =
@@ -538,6 +684,7 @@ export async function getAcademicProgress(
     academicRiskDistribution,
     scholarsBehind,
     scholarsWithFailedSubjects,
+    gpaDistribution,
   };
 }
 
@@ -549,6 +696,9 @@ export async function getSupportParticipation(
 ): Promise<SupportParticipationResult> {
   const { scholars, riskMap } = await loadScope(filters);
   const ids = scholars.map((s) => s.scholarId);
+  const activeIds = scholars
+    .filter((s) => s.programStatus === ProgramStatus.ACTIVE)
+    .map((s) => s.scholarId);
 
   const activities = ids.length
     ? await prisma.supportActivity.findMany({ where: { scholarId: { in: ids } } })
@@ -558,21 +708,33 @@ export async function getSupportParticipation(
     Object.values(ActivityType).map((t) => [t, 0]),
   );
   const byMonth = new Map<string, number>();
+  const scholarsByMonth = new Map<string, Set<string>>();
   const totalByScholar = new Map<string, number>();
   for (const a of activities) {
     byType.set(a.activityType, (byType.get(a.activityType) ?? 0) + a.activityCount);
     byMonth.set(a.period, (byMonth.get(a.period) ?? 0) + a.activityCount);
     totalByScholar.set(a.scholarId, (totalByScholar.get(a.scholarId) ?? 0) + a.activityCount);
+    if (a.activityCount > 0) {
+      let set = scholarsByMonth.get(a.period);
+      if (!set) {
+        set = new Set<string>();
+        scholarsByMonth.set(a.period, set);
+      }
+      set.add(a.scholarId);
+    }
   }
 
   // Participation by current risk level.
   const perLevelTotals = emptyRiskDistribution();
   const perLevelCounts = emptyRiskDistribution();
+  const perLevelParticipated = emptyRiskDistribution();
   for (const s of scholars) {
     const level = riskMap.get(s.scholarId)?.globalRiskLevel;
     if (!level) continue;
     perLevelCounts[level] += 1;
-    perLevelTotals[level] += totalByScholar.get(s.scholarId) ?? 0;
+    const total = totalByScholar.get(s.scholarId) ?? 0;
+    perLevelTotals[level] += total;
+    if (total > 0) perLevelParticipated[level] += 1;
   }
 
   // Low-participation active scholars (<= 3 total activities across the period).
@@ -601,9 +763,6 @@ export async function getSupportParticipation(
     }
   }
 
-  const activeIds = scholars
-    .filter((s) => s.programStatus === ProgramStatus.ACTIVE)
-    .map((s) => s.scholarId);
   const participatingActive = activeIds.filter((id) => (totalByScholar.get(id) ?? 0) > 3).length;
 
   return {
@@ -612,11 +771,20 @@ export async function getSupportParticipation(
       .map(([activityType, totalActivities]) => ({ activityType, totalActivities }))
       .sort((a, b) => b.totalActivities - a.totalActivities),
     byMonth: [...byMonth.entries()]
-      .map(([period, totalActivities]) => ({ period, totalActivities }))
+      .map(([period, totalActivities]) => ({
+        period,
+        totalActivities,
+        participationRatePct: activeIds.length
+          ? round2((scholarsByMonth.get(period)?.size ?? 0) / activeIds.length)
+          : 0,
+      }))
       .sort((a, b) => a.period.localeCompare(b.period)),
     byRiskLevel: Object.values(RiskLevel).map((riskLevel) => ({
       riskLevel,
       scholarCount: perLevelCounts[riskLevel],
+      participatedPct: perLevelCounts[riskLevel]
+        ? round2(perLevelParticipated[riskLevel] / perLevelCounts[riskLevel])
+        : 0,
       averageActivitiesPerScholar: perLevelCounts[riskLevel]
         ? round2(perLevelTotals[riskLevel] / perLevelCounts[riskLevel])
         : 0,
@@ -728,4 +896,93 @@ export async function getSelectionPipeline(): Promise<SelectionPipelineResult> {
     byCountry: byCountryGroups.map((g) => ({ country: g.country, count: g._count._all })),
     recent,
   };
+}
+
+// ------------------------------------------------------------------
+// Program Ecosystem: per-university and per-operator breakdowns.
+// ------------------------------------------------------------------
+
+/**
+ * Always lists the full fixed partner roster (every University/Operator row), not just
+ * the ones with in-scope scholars — counts default to 0 for a partner with no matches.
+ * evaluationResults/surveyResults are explicitly null: neither has a confirmed data source.
+ */
+export async function getProgramEcosystem(
+  filters: DashboardFilters = {},
+): Promise<ProgramEcosystemResult> {
+  const { scholars, riskMap } = await loadScope(filters);
+
+  const [allUniversities, allOperators] = await Promise.all([
+    prisma.university.findMany({ orderBy: [{ country: "asc" }, { name: "asc" }] }),
+    prisma.operator.findMany({ orderBy: [{ track: "asc" }, { name: "asc" }] }),
+  ]);
+
+  const universityStats = new Map<
+    string,
+    {
+      scholarCount: number;
+      activeScholarCount: number;
+      dropOutCount: number;
+      riskDistribution: RiskDistribution;
+    }
+  >();
+  const operatorScholarCounts = new Map<string, number>();
+
+  for (const s of scholars) {
+    let uStat = universityStats.get(s.universityId);
+    if (!uStat) {
+      uStat = {
+        scholarCount: 0,
+        activeScholarCount: 0,
+        dropOutCount: 0,
+        riskDistribution: emptyRiskDistribution(),
+      };
+      universityStats.set(s.universityId, uStat);
+    }
+    uStat.scholarCount += 1;
+    if (s.programStatus === ProgramStatus.ACTIVE) uStat.activeScholarCount += 1;
+    if (s.programStatus === ProgramStatus.WITHDRAWN) uStat.dropOutCount += 1;
+    const level = riskMap.get(s.scholarId)?.globalRiskLevel;
+    if (level) uStat.riskDistribution[level] += 1;
+
+    if (s.operatorId) {
+      operatorScholarCounts.set(s.operatorId, (operatorScholarCounts.get(s.operatorId) ?? 0) + 1);
+    }
+  }
+
+  const universities = allUniversities.map((u) => {
+    const stat = universityStats.get(u.id) ?? {
+      scholarCount: 0,
+      activeScholarCount: 0,
+      dropOutCount: 0,
+      riskDistribution: emptyRiskDistribution(),
+    };
+    return {
+      universityId: u.id,
+      name: u.name,
+      city: u.city,
+      country: u.country,
+      type: u.type,
+      semesterStartDate: u.semesterStartDate,
+      semesterEndDate: u.semesterEndDate,
+      examWindowStart: u.examWindowStart,
+      examWindowEnd: u.examWindowEnd,
+      scholarCount: stat.scholarCount,
+      activeScholarCount: stat.activeScholarCount,
+      dropOutCount: stat.dropOutCount,
+      riskDistribution: stat.riskDistribution,
+      evaluationResults: null,
+    };
+  });
+
+  const operators = allOperators.map((o) => ({
+    operatorId: o.id,
+    name: o.name,
+    country: o.country,
+    track: o.track,
+    scholarCount: operatorScholarCounts.get(o.id) ?? 0,
+    surveyResults: null,
+  }));
+
+  return { universities, operators };
 }
