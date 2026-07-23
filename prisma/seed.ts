@@ -8,6 +8,8 @@
 // (which builds the Prisma pg adapter at module load) is evaluated.
 import "dotenv/config";
 import { deriveExpectedProgressStatus } from "../src/lib/academic/progress";
+import { defaultOperatorName, OPERATOR_NAMES } from "../src/lib/academic/operator-assignment";
+import { programStageFromSemester } from "../src/lib/academic/program-stage";
 import { prisma } from "../src/lib/db";
 import {
   computeAlertType,
@@ -21,10 +23,12 @@ import {
   ActivityType,
   AlertType,
   Country,
+  OperatorTrack,
   ProgramStatus,
   RequestStatus,
   ReviewStatus,
   SelectionStage,
+  UniversityType,
   UserRole,
 } from "../src/generated/prisma/enums";
 
@@ -92,16 +96,51 @@ const LAST_NAMES = [
   "Delgado", "Guerrero", "Medina", "Cruz", "Reyes", "Aguilar", "Paredes",
 ] as const;
 
-const COLOMBIA_UNIS = [
-  "Universidad Nacional de Colombia", "Universidad de los Andes", "Universidad del Valle",
-  "Universidad de Antioquia", "Pontificia Universidad Javeriana",
-  "Universidad Industrial de Santander",
+// Real partner universities (Program Ecosystem). Semester/exam dates and the relative
+// scholar-count weights are lifted verbatim from design-reference/MVP_Dashboard JULY.html's
+// Program Ecosystem cards — not invented placeholders.
+const UNIVERSITIES = [
+  { id: "uni-uniandes", name: "Universidad de Los Andes", country: Country.COLOMBIA, city: "Bogotá", type: UniversityType.PRIVATE, semesterStartDate: "2026-01-13", semesterEndDate: "2026-05-24", examWindowStart: "2026-05-05", examWindowEnd: "2026-05-16", weight: 24 },
+  { id: "uni-javeriana", name: "Pontificia Universidad Javeriana", country: Country.COLOMBIA, city: "Bogotá", type: UniversityType.PRIVATE, semesterStartDate: "2026-01-20", semesterEndDate: "2026-06-07", examWindowStart: "2026-05-18", examWindowEnd: "2026-05-29", weight: 20 },
+  { id: "uni-eafit", name: "Universidad EAFIT", country: Country.COLOMBIA, city: "Medellín", type: UniversityType.PRIVATE, semesterStartDate: "2026-01-27", semesterEndDate: "2026-06-14", examWindowStart: "2026-05-25", examWindowEnd: "2026-06-05", weight: 19 },
+  { id: "uni-icesi", name: "Universidad Icesi", country: Country.COLOMBIA, city: "Cali", type: UniversityType.PRIVATE, semesterStartDate: "2026-01-20", semesterEndDate: "2026-06-07", examWindowStart: "2026-05-18", examWindowEnd: "2026-05-29", weight: 17 },
+  { id: "uni-upb", name: "Universidad Pontificia Bolivariana", country: Country.COLOMBIA, city: "Medellín", type: UniversityType.PRIVATE, semesterStartDate: "2026-02-03", semesterEndDate: "2026-06-21", examWindowStart: "2026-06-01", examWindowEnd: "2026-06-12", weight: 16 },
+  { id: "uni-eia", name: "Universidad EIA", country: Country.COLOMBIA, city: "Medellín", type: UniversityType.PRIVATE, semesterStartDate: "2026-01-27", semesterEndDate: "2026-06-14", examWindowStart: "2026-05-25", examWindowEnd: "2026-06-05", weight: 15 },
+  { id: "uni-norte", name: "Universidad del Norte", country: Country.COLOMBIA, city: "Barranquilla", type: UniversityType.PRIVATE, semesterStartDate: "2026-01-20", semesterEndDate: "2026-06-07", examWindowStart: "2026-05-18", examWindowEnd: "2026-05-29", weight: 14 },
+  { id: "uni-udea", name: "Universidad de Antioquia", country: Country.COLOMBIA, city: "Medellín", type: UniversityType.PUBLIC, semesterStartDate: "2026-02-10", semesterEndDate: "2026-06-20", examWindowStart: "2026-06-08", examWindowEnd: "2026-06-19", weight: 10 },
+  { id: "uni-unal", name: "Universidad Nacional", country: Country.COLOMBIA, city: "Medellín", type: UniversityType.PUBLIC, semesterStartDate: "2026-02-10", semesterEndDate: "2026-06-20", examWindowStart: "2026-06-08", examWindowEnd: "2026-06-19", weight: 7 },
+  { id: "uni-utec", name: "UTEC", country: Country.PERU, city: "Lima", type: UniversityType.PRIVATE, semesterStartDate: "2026-03-04", semesterEndDate: "2026-07-12", examWindowStart: "2026-06-30", examWindowEnd: "2026-07-10", weight: 40 },
+  { id: "uni-upc", name: "UPC", country: Country.PERU, city: "Lima", type: UniversityType.PRIVATE, semesterStartDate: "2026-03-11", semesterEndDate: "2026-07-19", examWindowStart: "2026-07-07", examWindowEnd: "2026-07-17", weight: 33 },
 ] as const;
-const PERU_UNIS = [
-  "Pontificia Universidad Católica del Perú", "Universidad Nacional Mayor de San Marcos",
-  "Universidad de Ingeniería y Tecnología", "Universidad del Pacífico",
-  "Universidad Nacional de Ingeniería", "Universidad Peruana Cayetano Heredia",
+
+const COLOMBIA_UNI_WEIGHTS: [string, number][] = UNIVERSITIES.filter(
+  (u) => u.country === Country.COLOMBIA,
+).map((u) => [u.name, u.weight]);
+const PERU_UNI_WEIGHTS: [string, number][] = UNIVERSITIES.filter(
+  (u) => u.country === Country.PERU,
+).map((u) => [u.name, u.weight]);
+const COLOMBIA_UNI_NAMES = COLOMBIA_UNI_WEIGHTS.map(([name]) => name);
+const PERU_UNI_NAMES = PERU_UNI_WEIGHTS.map(([name]) => name);
+const UNIVERSITY_ID_BY_NAME: Record<string, string> = Object.fromEntries(
+  UNIVERSITIES.map((u) => [u.name, u.id]),
+);
+
+// Real delivery partners (Program Ecosystem), also lifted verbatim from the mockup.
+const OPERATORS = [
+  { id: "op-antivirus", name: OPERATOR_NAMES.EARLY_SUPPORT_COLOMBIA, country: Country.COLOMBIA, track: OperatorTrack.EARLY_SUPPORT },
+  { id: "op-escalo", name: OPERATOR_NAMES.EARLY_SUPPORT_PERU, country: Country.PERU, track: OperatorTrack.EARLY_SUPPORT },
+  { id: "op-makers", name: OPERATOR_NAMES.GROWTH_MAKERS, country: Country.COLOMBIA, track: OperatorTrack.GROWTH_DEVELOPMENT },
+  { id: "op-confident", name: OPERATOR_NAMES.GROWTH_CONFIDENT_ENGLISH, country: Country.COLOMBIA, track: OperatorTrack.GROWTH_DEVELOPMENT },
 ] as const;
+const OPERATOR_ID_BY_NAME: Record<string, string> = Object.fromEntries(
+  OPERATORS.map((o) => [o.name, o.id]),
+);
+// Illustrative split for the one case defaultOperatorName() leaves ambiguous (Colombia,
+// Growth & Development): weighted per the Program Ecosystem mockup's scholar counts.
+const CO_GROWTH_OPERATOR_WEIGHTS: [string, number][] = [
+  [OPERATOR_NAMES.GROWTH_MAKERS, 27],
+  [OPERATOR_NAMES.GROWTH_CONFIDENT_ENGLISH, 20],
+];
 
 const PROGRAMS = [
   "Computer Science", "Software Engineering", "Data Science", "Systems Engineering",
@@ -208,6 +247,10 @@ async function clearAll() {
   await prisma.controlValue.deleteMany();
   await prisma.appUser.deleteMany();
   await prisma.scholar.deleteMany();
+  // University/Operator are now parents of Scholar (universityId/operatorId FKs) —
+  // delete them last, after every Scholar row referencing them is gone.
+  await prisma.university.deleteMany();
+  await prisma.operator.deleteMany();
 }
 
 async function insertChunked<T>(
@@ -258,6 +301,24 @@ async function main() {
   console.log("Clearing existing data…");
   await clearAll();
 
+  const universityRows: Prisma.UniversityCreateManyInput[] = UNIVERSITIES.map((u) => ({
+    id: u.id,
+    name: u.name,
+    country: u.country,
+    city: u.city,
+    type: u.type,
+    semesterStartDate: new Date(u.semesterStartDate),
+    semesterEndDate: new Date(u.semesterEndDate),
+    examWindowStart: new Date(u.examWindowStart),
+    examWindowEnd: new Date(u.examWindowEnd),
+  }));
+  const operatorRows: Prisma.OperatorCreateManyInput[] = OPERATORS.map((o) => ({
+    id: o.id,
+    name: o.name,
+    country: o.country,
+    track: o.track,
+  }));
+
   const scholars: Prisma.ScholarCreateManyInput[] = [];
   const academicTerms: Prisma.AcademicTermCreateManyInput[] = [];
   const checkins: Prisma.MonthlyCheckinCreateManyInput[] = [];
@@ -300,7 +361,8 @@ async function main() {
     const countryCode = country === Country.COLOMBIA ? "CO" : "PE";
     const scholarId = `BT-${countryCode}-${String(i + 1).padStart(3, "0")}`;
     const fullName = `${pick(FIRST_NAMES)} ${pick(LAST_NAMES)} ${pick(LAST_NAMES)}`;
-    const university = pick(country === Country.COLOMBIA ? COLOMBIA_UNIS : PERU_UNIS);
+    const university = weighted(country === Country.COLOMBIA ? COLOMBIA_UNI_WEIGHTS : PERU_UNI_WEIGHTS);
+    const universityId = UNIVERSITY_ID_BY_NAME[university];
     const academicProgram = pick(PROGRAMS);
     const deptMap = country === Country.COLOMBIA ? COLOMBIA_DEPTS : PERU_DEPTS;
     const department = pick(Object.keys(deptMap));
@@ -312,12 +374,20 @@ async function main() {
     const startYear = Number(cohort);
     const startDate = new Date(Date.UTC(startYear, 1, randInt(1, 20)));
 
+    const stage = programStageFromSemester(terms.length);
+    const operatorName =
+      defaultOperatorName(country, stage) ??
+      (stage === "YEARS_3_5" && country === Country.COLOMBIA
+        ? weighted(CO_GROWTH_OPERATOR_WEIGHTS)
+        : null);
+    const operatorId = operatorName ? OPERATOR_ID_BY_NAME[operatorName] : null;
+
     scholars.push({
       scholarId,
       fullName,
       country,
       cohort,
-      university,
+      universityId,
       academicProgram,
       gender: weighted(GENDERS),
       ethnicGroup: pick(ETHNIC_GROUPS),
@@ -331,6 +401,7 @@ async function main() {
       startDate,
       expectedEndDate: new Date(Date.UTC(startYear + durationYears, 11, 15)),
       driveFolderUrl: `https://drive.google.com/drive/folders/demo-${scholarId}`,
+      operatorId,
     });
 
     // ---- Academic terms ----
@@ -682,7 +753,7 @@ async function main() {
     const country = weighted([[Country.COLOMBIA, 0.6], [Country.PERU, 0.4]]);
     const cohort = weighted([["2025", 0.5], ["2026", 0.5]]);
     const fullName = `${pick(FIRST_NAMES)} ${pick(LAST_NAMES)} ${pick(LAST_NAMES)}`;
-    const university = pick(country === Country.COLOMBIA ? COLOMBIA_UNIS : PERU_UNIS);
+    const university = pick(country === Country.COLOMBIA ? COLOMBIA_UNI_NAMES : PERU_UNI_NAMES);
     const appBase = APPLICATION_BASE[cohort];
     const path = stagePath(currentStage);
     const terminal =
@@ -815,6 +886,8 @@ async function main() {
 
   // ---- Insert (FK-safe order) ----
   console.log("Inserting scholars and related records…");
+  await insertChunked((r) => prisma.university.createMany({ data: r }), universityRows);
+  await insertChunked((r) => prisma.operator.createMany({ data: r }), operatorRows);
   await insertChunked((r) => prisma.scholar.createMany({ data: r }), scholars);
   await insertChunked((r) => prisma.academicTerm.createMany({ data: r }), academicTerms);
   await insertChunked((r) => prisma.monthlyCheckin.createMany({ data: r }), checkins);
@@ -831,6 +904,8 @@ async function main() {
 
   // ---- Summary ----
   const counts = {
+    universities: universityRows.length,
+    operators: operatorRows.length,
     scholars: scholars.length,
     academicTerms: academicTerms.length,
     checkins: checkins.length,
