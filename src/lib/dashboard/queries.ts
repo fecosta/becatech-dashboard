@@ -4,7 +4,7 @@
 import { deriveExpectedProgressStatus } from "../academic/progress";
 import { YEARS_1_2_MAX_SEMESTER } from "../academic/program-stage";
 import { prisma } from "../db";
-import type { AcademicTerm, Prisma, RiskAssessment, Scholar } from "../../generated/prisma/client";
+import type { AcademicTerm, Prisma, RiskAssessment } from "../../generated/prisma/client";
 import {
   AcademicProgressStatus,
   ActivityType,
@@ -93,7 +93,7 @@ function geoScholarWhere(filters: DashboardFilters): Prisma.ScholarWhereInput {
   return {
     ...(filters.country ? { country: filters.country } : {}),
     ...(filters.cohort ? { cohort: filters.cohort } : {}),
-    ...(filters.university ? { university: filters.university } : {}),
+    ...(filters.university ? { university: { name: filters.university } } : {}),
     ...(filters.gender ? { gender: filters.gender } : {}),
     ...(filters.department ? { currentDepartment: filters.department } : {}),
   };
@@ -113,8 +113,9 @@ async function getCurrentPeriod(): Promise<string> {
 
 /** Distinct values that populate the dashboard filter dropdowns. */
 export async function getFilterOptions(): Promise<FilterOptions> {
-  const [scholars, periods] = await Promise.all([
-    prisma.scholar.findMany({ select: { cohort: true, university: true } }),
+  const [scholars, universities, periods] = await Promise.all([
+    prisma.scholar.findMany({ select: { cohort: true } }),
+    prisma.university.findMany({ select: { name: true }, orderBy: { name: "asc" } }),
     prisma.riskAssessment.findMany({
       select: { period: true },
       distinct: ["period"],
@@ -123,7 +124,7 @@ export async function getFilterOptions(): Promise<FilterOptions> {
   ]);
   return {
     cohorts: [...new Set(scholars.map((s) => s.cohort))].sort(),
-    universities: [...new Set(scholars.map((s) => s.university))].sort(),
+    universities: universities.map((u) => u.name),
     periods: periods.map((p) => p.period),
   };
 }
@@ -179,8 +180,9 @@ async function latestTermByScholar(scholarIds: string[]) {
 /** Shared scope: filtered scholars (incl. riskLevel), their current risk, and report sets. */
 async function loadScope(filters: DashboardFilters) {
   const currentPeriod = filters.period ?? (await getCurrentPeriod());
-  let scholars: Scholar[] = await prisma.scholar.findMany({
+  let scholars = await prisma.scholar.findMany({
     where: scholarWhere(filters),
+    include: { university: true, operator: true },
     orderBy: { scholarId: "asc" },
   });
   const riskMap = await currentRiskByScholar(
@@ -298,9 +300,7 @@ export async function getHomeOverview(filters: DashboardFilters = {}): Promise<H
   const cohort = filters.cohort ?? latestCohort(active.map((s) => s.cohort));
   const cohortCount = cohort ? active.filter((s) => s.cohort === cohort).length : 0;
 
-  const activeUniversityCount = new Set(
-    active.map((s) => s.university?.trim()).filter((u): u is string => !!u),
-  ).size;
+  const activeUniversityCount = new Set(active.map((s) => s.university.name)).size;
 
   return {
     scholarsByCountry,
@@ -335,7 +335,7 @@ export async function getRiskAlerts(filters: DashboardFilters = {}): Promise<Ris
       fullName: s.fullName,
       country: s.country,
       cohort: s.cohort,
-      university: s.university,
+      university: s.university.name,
       programStatus: s.programStatus,
       currentMentor: s.currentMentor,
       period: cur.period,
@@ -427,7 +427,7 @@ export async function getScholarDirectory(
     fullName: s.fullName,
     country: s.country,
     cohort: s.cohort,
-    university: s.university,
+    university: s.university.name,
     academicProgram: s.academicProgram,
     programStatus: s.programStatus,
     currentMentor: s.currentMentor,
@@ -443,6 +443,8 @@ export async function getScholarProfile(scholarId: string) {
   const scholar = await prisma.scholar.findUnique({
     where: { scholarId },
     include: {
+      university: true,
+      operator: true,
       academicTerms: { orderBy: { term: "asc" } },
       riskAssessments: { orderBy: { period: "asc" } },
       checkins: { orderBy: { reportingMonth: "asc" } },
@@ -490,7 +492,7 @@ export async function getAcademicProgress(
       allGpas.push(g);
       pushTo(gpaByCohort, s.cohort, g);
       pushTo(gpaByCountry, s.country, g);
-      pushTo(gpaByUniversity, s.university, g);
+      pushTo(gpaByUniversity, s.university.name, g);
     }
 
     const status =
@@ -511,7 +513,7 @@ export async function getAcademicProgress(
         fullName: s.fullName,
         cohort: s.cohort,
         country: s.country,
-        university: s.university,
+        university: s.university.name,
         latestTerm: term?.term ?? null,
         progressPercentage: term?.progressPercentage ?? null,
         expectedProgressStatus: status,
@@ -585,7 +587,7 @@ export async function getSupportParticipation(
       fullName: s.fullName,
       cohort: s.cohort,
       country: s.country,
-      university: s.university,
+      university: s.university.name,
       totalActivities: total,
     }));
 

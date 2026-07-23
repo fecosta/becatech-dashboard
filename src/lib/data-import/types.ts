@@ -27,6 +27,8 @@ export interface ValidationContext {
   existingScholarIds: Set<string>;
   /** ControlValue category → allowed values. Absent or empty ⇒ that check is skipped. */
   controls: Map<string, Set<string>>;
+  /** Lowercased, trimmed University.name → University.id. */
+  universities: Map<string, string>;
 }
 
 /** Valid rows as Prisma create inputs, ready to upsert. */

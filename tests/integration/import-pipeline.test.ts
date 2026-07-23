@@ -123,6 +123,25 @@ describe("import pipeline (integration)", () => {
     expect(await prisma.riskAssessment.count()).toBe(0);
   });
 
+  it("rejects a new scholar row with an unrecognized university", async () => {
+    const data = csvBuffer(
+      "scholarId,fullName,country,cohort,university,academicProgram,gender\n" +
+        "BT-CO-060,New Scholar,COLOMBIA,2026,Universidad Inexistente,CS,Female\n",
+    );
+    const { result } = await createImportBatch({
+      data,
+      filename: "scholars.csv",
+      sourceType: "TEMPLATE",
+      entity: "SCHOLAR",
+      uploadedById: uploaderId,
+    });
+    expect(result.successRows).toBe(0);
+    expect(result.errorRows).toBe(1);
+    const error = result.errors.find((e) => e.field === "university");
+    expect(error?.message).toContain("Universidad Inexistente");
+    expect(await prisma.scholar.count({ where: { scholarId: "BT-CO-060" } })).toBe(0);
+  });
+
   it("rollback deletes the rows the batch created", async () => {
     const data = csvBuffer("scholarId,term,gpa\nBT-CO-001,2025-2,3.0\n");
     const { batchId } = await createImportBatch({

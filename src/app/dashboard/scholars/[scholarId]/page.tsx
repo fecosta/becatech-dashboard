@@ -138,7 +138,7 @@ export default async function ScholarProfilePage({
 
       <ProfileCard
         fullName={p.fullName}
-        university={p.university}
+        university={p.university.name}
         cohort={p.cohort}
         academicProgram={p.academicProgram}
         departmentOrigin={p.departmentOrigin}

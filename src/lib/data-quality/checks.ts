@@ -21,14 +21,15 @@ export async function scanDataQuality(): Promise<DetectedIssue[]> {
   const issues: DetectedIssue[] = [];
 
   const scholars = await prisma.scholar.findMany({
-    select: { scholarId: true, cohort: true, university: true, programStatus: true },
+    select: { scholarId: true, cohort: true, programStatus: true },
   });
   const scholarIds = new Set(scholars.map((s) => s.scholarId));
   const activeIds = scholars
     .filter((s) => s.programStatus === ProgramStatus.ACTIVE)
     .map((s) => s.scholarId);
 
-  // Missing cohort / university on the scholar record.
+  // Missing cohort on the scholar record. (Missing university can no longer occur —
+  // Scholar.universityId is a required foreign key to the University table.)
   for (const s of scholars) {
     if (!s.cohort?.trim()) {
       issues.push({
@@ -36,15 +37,6 @@ export async function scanDataQuality(): Promise<DetectedIssue[]> {
         sourceName: "Scholar",
         scholarId: s.scholarId,
         issueDescription: "Scholar has no cohort.",
-        severity: "medium",
-      });
-    }
-    if (!s.university?.trim()) {
-      issues.push({
-        issueType: "UNKNOWN_UNIVERSITY",
-        sourceName: "Scholar",
-        scholarId: s.scholarId,
-        issueDescription: "Scholar has no university.",
         severity: "medium",
       });
     }

@@ -19,6 +19,8 @@ export async function resetDb(): Promise<void> {
   await prisma.controlValue.deleteMany();
   await prisma.appUser.deleteMany();
   await prisma.scholar.deleteMany();
+  await prisma.university.deleteMany();
+  await prisma.operator.deleteMany();
 }
 
 /** Minimal baseline: an analyst uploader, controlled lists, and one scholar. */
@@ -43,13 +45,17 @@ export async function seedFixture(): Promise<{ uploaderId: string }> {
   add("request_status", ["SUBMITTED", "IN_REVIEW", "RESOLVED", "REJECTED", "PENDING"]);
   await prisma.controlValue.createMany({ data: controls });
 
+  const university = await prisma.university.create({
+    data: { name: "UNAL", country: "COLOMBIA", city: "Bogotá", type: "PUBLIC" },
+  });
+
   await prisma.scholar.create({
     data: {
       scholarId: "BT-CO-001",
       fullName: "Fixture Scholar",
       country: "COLOMBIA",
       cohort: "2025",
-      university: "UNAL",
+      universityId: university.id,
       academicProgram: "CS",
       gender: "Female",
       programStatus: "ACTIVE",

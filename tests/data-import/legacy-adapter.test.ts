@@ -71,6 +71,7 @@ describe("legacy wide-Excel adapter", () => {
         ["country", new Set(["COLOMBIA", "PERU"])],
         ["program_status", new Set(["ACTIVE", "WITHDRAWN", "GRADUATED", "PAUSED"])],
       ]),
+      universities: new Map([["universidad nacional de colombia", "uni-unal"]]),
     };
     const res = validateBatch(legacyAdapter(generalInfoSheet()), ctx);
     expect(res.errorRows).toBe(0);
