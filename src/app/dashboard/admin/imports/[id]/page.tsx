@@ -26,8 +26,8 @@ export default async function ImportDetailPage({ params }: { params: Promise<{ i
   if (!allowed) {
     return (
       <div>
-        <PageHeader title="Detalle de importación" />
-        <AccessDenied message="Solo el rol Analista / Admin puede gestionar importaciones." />
+        <PageHeader title="Import Detail" />
+        <AccessDenied message="Only the Analyst / Admin role can manage imports." />
       </div>
     );
   }
@@ -43,15 +43,15 @@ export default async function ImportDetailPage({ params }: { params: Promise<{ i
 
   return (
     <div>
-      <Link href="/dashboard/admin/imports" className="text-xs text-slate-500 hover:underline">
-        ← Volver a importaciones
+      <Link href="/dashboard/admin/imports" className="text-xs text-muted hover:underline">
+        ← Back to imports
       </Link>
-      <PageHeader title={batch.filename} subtitle={`Cargado por ${batch.uploadedBy?.fullName ?? "—"} · ${fmtDate(batch.uploadedAt)}`} />
+      <PageHeader title={batch.filename} subtitle={`Uploaded by ${batch.uploadedBy?.fullName ?? "—"} · ${fmtDate(batch.uploadedAt)}`} />
 
       <div className="mb-6 flex flex-wrap gap-2">
         <Badge tone="blue">{IMPORT_SOURCE_LABEL[batch.sourceType] ?? batch.sourceType}</Badge>
         {batch.rolledBackAt ? (
-          <Badge tone="amber">Revertida</Badge>
+          <Badge tone="amber">Rolled back</Badge>
         ) : (
           <Badge tone={IMPORT_STATUS_TONE[batch.status] ?? "slate"}>
             {IMPORT_STATUS_LABEL[batch.status] ?? batch.status}
@@ -60,38 +60,38 @@ export default async function ImportDetailPage({ params }: { params: Promise<{ i
         {batch.entities.map((e) => (
           <Badge key={e}>{IMPORT_ENTITY_LABEL[e] ?? e}</Badge>
         ))}
-        {batch.triggeredRiskRecompute ? <Badge tone="green">Riesgo recalculado</Badge> : null}
+        {batch.triggeredRiskRecompute ? <Badge tone="green">Risk recomputed</Badge> : null}
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <KpiCard label="Filas totales" value={batch.totalRows} />
-        <KpiCard label="Aplicadas" value={batch.successRows} />
-        <KpiCard label="Con error" value={batch.errorRows} />
-        <KpiCard label="Estado" value={batch.rolledBackAt ? "Revertida" : IMPORT_STATUS_LABEL[batch.status] ?? batch.status} />
+        <KpiCard label="Total rows" value={batch.totalRows} />
+        <KpiCard label="Applied" value={batch.successRows} />
+        <KpiCard label="With errors" value={batch.errorRows} />
+        <KpiCard label="Status" value={batch.rolledBackAt ? "Rolled back" : IMPORT_STATUS_LABEL[batch.status] ?? batch.status} />
       </div>
 
       {canRollback ? (
         <div className="mt-6">
           <RollbackButton batchId={batch.id} />
-          <p className="mt-1 text-xs text-slate-400">
-            Elimina solo las filas creadas por este lote (las actualizaciones no se revierten).
+          <p className="mt-1 text-xs text-muted">
+            Deletes only the rows created by this batch (updates are not rolled back).
           </p>
         </div>
       ) : null}
 
       <div className="mt-6">
-        <SectionTitle>Errores de validación ({errors.length})</SectionTitle>
+        <SectionTitle>Validation errors ({errors.length})</SectionTitle>
         {errors.length === 0 ? (
-          <Card className="text-sm text-slate-500">Sin errores.</Card>
+          <Card className="text-sm text-muted">No errors.</Card>
         ) : (
           <div className="max-h-[28rem] overflow-auto rounded-xl border border-slate-200 bg-white shadow-sm">
             <table className="min-w-full text-sm">
               <thead className="bg-slate-50 text-left text-slate-500">
                 <tr>
-                  <th className="px-4 py-2">Fila</th>
-                  <th className="px-4 py-2">Entidad</th>
-                  <th className="px-4 py-2">Campo</th>
-                  <th className="px-4 py-2">Mensaje</th>
+                  <th className="px-4 py-2">Row</th>
+                  <th className="px-4 py-2">Entity</th>
+                  <th className="px-4 py-2">Field</th>
+                  <th className="px-4 py-2">Message</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">

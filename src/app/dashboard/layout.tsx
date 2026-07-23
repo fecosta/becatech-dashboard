@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { type ReactNode, Suspense } from "react";
-import { type NavItem, Sidebar } from "@/components/Sidebar";
+import { type NavItem, type NavSection, Sidebar } from "@/components/Sidebar";
 import { SignOutButton } from "@/components/SignOutButton";
 import { TopFilters } from "@/components/TopFilters";
 import { can, Permission } from "@/lib/auth/authorization";
@@ -10,16 +10,71 @@ import { getFilterOptions } from "@/lib/dashboard/queries";
 // Live data dashboards — always render at request time (also avoids build-time DB access).
 export const dynamic = "force-dynamic";
 
-const NAV: (NavItem & { permission: Permission })[] = [
-  { href: "/dashboard", label: "Resumen ejecutivo", exact: true, permission: Permission.VIEW_DASHBOARD },
-  { href: "/dashboard/risk-alerts", label: "Riesgo y alertas", permission: Permission.VIEW_SCHOLAR_TRACKING },
-  { href: "/dashboard/scholars", label: "Becarios", permission: Permission.VIEW_SCHOLAR_TRACKING },
-  { href: "/dashboard/academic-progress", label: "Avance académico", permission: Permission.VIEW_SCHOLAR_TRACKING },
-  { href: "/dashboard/support-participation", label: "Participación", permission: Permission.VIEW_SCHOLAR_TRACKING },
-  { href: "/dashboard/unit-economics", label: "Costos", permission: Permission.VIEW_UNIT_ECONOMICS },
-  { href: "/dashboard/selection-pipeline", label: "Pipeline de selección", permission: Permission.VIEW_SELECTION_PIPELINE },
-  { href: "/dashboard/admin/imports", label: "Importaciones", permission: Permission.MANAGE_IMPORTS },
+type NavConfigItem = NavItem & { permission: Permission };
+type NavConfigSection = { heading?: string; items: NavConfigItem[] };
+
+// Beca Tech+ narrative IA: Home → Early Support → Career Readiness → Scholars →
+// Program Ecosystem as the primary flow; secondary tools under "More"; data tools under
+// "Admin". Permissions are unchanged from the prior IA so no role loses access.
+const NAV: NavConfigSection[] = [
+  {
+    items: [
+      { href: "/dashboard", label: "Home", exact: true, permission: Permission.VIEW_DASHBOARD },
+      {
+        href: "/dashboard/early-support",
+        label: "Early Support",
+        permission: Permission.VIEW_SCHOLAR_TRACKING,
+      },
+      {
+        href: "/dashboard/career-readiness",
+        label: "Career Readiness",
+        permission: Permission.VIEW_SCHOLAR_TRACKING,
+      },
+      { href: "/dashboard/scholars", label: "Scholars", permission: Permission.VIEW_SCHOLAR_TRACKING },
+      {
+        href: "/dashboard/actors",
+        label: "Program Ecosystem",
+        permission: Permission.VIEW_SCHOLAR_TRACKING,
+      },
+    ],
+  },
+  {
+    heading: "More",
+    items: [
+      {
+        href: "/dashboard/unit-economics",
+        label: "Unit Economics",
+        permission: Permission.VIEW_UNIT_ECONOMICS,
+      },
+      {
+        href: "/dashboard/selection-pipeline",
+        label: "Selection Pipeline",
+        permission: Permission.VIEW_SELECTION_PIPELINE,
+      },
+    ],
+  },
+  {
+    heading: "Admin",
+    items: [
+      // Nav gate aligned to VIEW_IMPORTS (what the pages already allow), so PROGRAM_MANAGER
+      // sees the links it can actually open.
+      { href: "/dashboard/admin/imports", label: "Data Imports", permission: Permission.VIEW_IMPORTS },
+      {
+        href: "/dashboard/admin/data-quality",
+        label: "Data Quality",
+        permission: Permission.VIEW_IMPORTS,
+      },
+    ],
+  },
 ];
+
+/** "PROGRAM_MANAGER" -> "Program Manager" for the sidebar profile block. */
+function titleCaseRole(role: string): string {
+  return role
+    .toLowerCase()
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
   const [options, result] = await Promise.all([getFilterOptions(), getCurrentUserResult()]);
@@ -33,25 +88,25 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   }
   const user = result.user;
 
-  const items: NavItem[] = NAV.filter((n) => can(user, n.permission)).map(
-    ({ href, label, exact }) => ({ href, label, exact }),
-  );
+  const sections: NavSection[] = NAV.map((section) => ({
+    heading: section.heading,
+    items: section.items
+      .filter((n) => can(user, n.permission))
+      .map(({ href, label, exact, activePrefixes }) => ({ href, label, exact, activePrefixes })),
+  })).filter((section) => section.items.length > 0);
 
   return (
     <div className="flex min-h-screen">
-      <Sidebar items={items} />
+      <Sidebar
+        sections={sections}
+        profile={{ name: user.fullName ?? user.email, role: titleCaseRole(user.role) }}
+      />
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white/90 px-6 py-3 backdrop-blur">
+        <header className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 border-b border-border bg-cream/80 px-6 py-3 backdrop-blur">
           <Suspense fallback={<div className="h-7" />}>
             <TopFilters options={options} />
           </Suspense>
-          <div className="flex items-center gap-3">
-            <div className="text-right text-xs leading-tight">
-              <div className="font-medium text-slate-700">{user.fullName}</div>
-              <div className="text-slate-400">{user.role.replace(/_/g, " ")}</div>
-            </div>
-            <SignOutButton />
-          </div>
+          <SignOutButton />
         </header>
         <main className="flex-1 p-6">{children}</main>
       </div>

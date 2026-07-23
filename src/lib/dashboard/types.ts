@@ -10,6 +10,7 @@ import type {
   RiskLevel,
   SelectionStage,
 } from "../../generated/prisma/enums";
+import type { ProgramStage } from "../academic/program-stage";
 
 /**
  * Filters shared across dashboard views. Scholar-level fields filter scholars directly;
@@ -25,10 +26,27 @@ export interface DashboardFilters {
   programStatus?: ProgramStatus;
   riskLevel?: RiskLevel;
   period?: string;
+  /**
+   * Program stage (Early Support vs. Career Readiness). Injected by the stage pages,
+   * not parsed from the URL; applied as a `Scholar.currentSemester` range. Scholars
+   * with a null currentSemester match neither stage. See lib/academic/program-stage.ts.
+   */
+  programStage?: ProgramStage;
 }
 
 export type RiskDistribution = Record<RiskLevel, number>;
 export type ProgressDistribution = Record<AcademicProgressStatus, number>;
+
+/** New program-narrative aggregates for Home, composed alongside ExecutiveOverview. */
+export interface HomeOverview {
+  scholarsByCountry: { colombia: number; peru: number };
+  /** Share of women among active scholars with a recognized gender; null if none classifiable. */
+  womenPercentage: number | null;
+  /** The active cohort filter if set, otherwise the latest cohort present. */
+  cohortSpotlight: { cohort: string | null; count: number };
+  /** Distinct non-empty universities among active in-scope scholars (approximation). */
+  activeUniversityCount: number;
+}
 
 export interface ExecutiveOverview {
   currentPeriod: string;
@@ -78,6 +96,19 @@ export interface RiskAlertsResult {
   distribution: RiskDistribution;
   /** scholars at medium risk or above, or with a missing current-month report */
   attentionList: RiskAlertRow[];
+}
+
+/** Compact risk summary for a stage page (Early Support), reusing the shared scope. */
+export interface RiskStageSummary {
+  currentPeriod: string;
+  distribution: RiskDistribution;
+  /** High + Critical scholars (globalRiskValue ≥ 3) — the dark-callout number. */
+  criticalHighCount: number;
+  /** Scholars whose current risk improved (riskChange < 0) vs. worsened (> 0), month over month. */
+  improved: number;
+  worsened: number;
+  /** Alert-type counts among at-risk scholars (globalRiskValue ≥ 2). */
+  alertTypeCounts: Record<AlertType, number>;
 }
 
 export interface GpaGroupStat {

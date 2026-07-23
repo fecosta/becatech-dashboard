@@ -11,6 +11,6 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
 
   const { id } = await ctx.params;
   const batch = await getImportBatchDetail(id);
-  if (!batch) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
+  if (!batch) return NextResponse.json({ error: "Not found" }, { status: 404 });
   return NextResponse.json({ batch });
 }

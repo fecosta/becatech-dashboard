@@ -16,8 +16,9 @@ import {
   YAxis,
 } from "recharts";
 
-const AXIS_TICK = { fontSize: 11, fill: "#64748b" };
-const GRID = "#e2e8f0";
+const AXIS_TICK = { fontSize: 11, fill: "#6f6c62" }; // --muted
+const GRID = "#e4e0d2"; // --border
+const DEFAULT_BAR = "#a62bff"; // --purple
 
 export interface BarDatum {
   name: string;
@@ -27,8 +28,8 @@ export interface BarDatum {
 
 function ChartCard({ title, height = 288, children }: { title: string; height?: number; children: React.ReactElement }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-      <h3 className="mb-3 text-sm font-semibold text-slate-700">{title}</h3>
+    <div className="rounded-2xl border border-border bg-card p-5">
+      <h3 className="mb-3 text-sm font-semibold text-ink">{title}</h3>
       <div style={{ width: "100%", height }}>
         <ResponsiveContainer>{children}</ResponsiveContainer>
       </div>
@@ -39,7 +40,7 @@ function ChartCard({ title, height = 288, children }: { title: string; height?: 
 export function BarCard({
   title,
   data,
-  color = "#6366f1",
+  color = DEFAULT_BAR,
   horizontal = false,
   height,
 }: {

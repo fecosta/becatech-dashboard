@@ -22,14 +22,14 @@ export function ScholarSearch() {
       <input
         value={value}
         onChange={(e) => setValue(e.target.value)}
-        placeholder="Buscar por nombre o ID…"
-        className="w-64 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm shadow-sm focus:border-slate-400 focus:outline-none"
+        placeholder="Search by name or ID…"
+        className="w-64 rounded-md border border-border bg-card px-3 py-1.5 text-sm shadow-sm focus:border-purple focus:outline-none"
       />
       <button
         type="submit"
-        className="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700"
+        className="rounded-md bg-purple px-3 py-1.5 text-sm font-medium text-white hover:opacity-90"
       >
-        Buscar
+        Search
       </button>
     </form>
   );

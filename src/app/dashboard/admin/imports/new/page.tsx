@@ -37,7 +37,7 @@ export default function NewImportPage() {
 
   async function runPreview() {
     if (!file) {
-      setError("Selecciona un archivo.");
+      setError("Select a file.");
       return;
     }
     setBusy(true);
@@ -51,10 +51,10 @@ export default function NewImportPage() {
       if (sourceType === "TEMPLATE") form.set("entity", entity);
       const res = await fetch("/api/admin/imports", { method: "POST", body: form });
       const json = await res.json();
-      if (!res.ok) setError(json.error ?? "Error al validar el archivo.");
+      if (!res.ok) setError(json.error ?? "Failed to validate the file.");
       else setPreview(json as Preview);
     } catch {
-      setError("No se pudo procesar el archivo.");
+      setError("Could not process the file.");
     } finally {
       setBusy(false);
     }
@@ -67,10 +67,10 @@ export default function NewImportPage() {
     try {
       const res = await fetch(`/api/admin/imports/${preview.batchId}/commit`, { method: "POST" });
       const json = await res.json();
-      if (!res.ok) setError(json.error ?? "Error al confirmar la importación.");
+      if (!res.ok) setError(json.error ?? "Failed to commit the import.");
       else setCommitted(json as CommitResult);
     } catch {
-      setError("No se pudo confirmar la importación.");
+      setError("Could not commit the import.");
     } finally {
       setBusy(false);
     }
@@ -78,18 +78,18 @@ export default function NewImportPage() {
 
   return (
     <div className="max-w-3xl">
-      <Link href="/dashboard/admin/imports" className="text-xs text-slate-500 hover:underline">
-        ← Volver a importaciones
+      <Link href="/dashboard/admin/imports" className="text-xs text-muted hover:underline">
+        ← Back to imports
       </Link>
-      <h1 className="mt-1 mb-6 text-xl font-semibold text-slate-900">Nueva importación</h1>
+      <h1 className="mt-1 mb-6 text-xl font-semibold text-ink">New import</h1>
 
       {/* Step 1: source + file */}
       <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-        <label className="block text-sm font-medium text-slate-700">Formato de origen</label>
+        <label className="block text-sm font-medium text-ink">Source format</label>
         <div className="mt-2 flex gap-4 text-sm">
           <label className="flex items-center gap-1.5">
             <input type="radio" checked={sourceType === "TEMPLATE"} onChange={() => setSourceType("TEMPLATE")} />
-            Plantilla (una entidad)
+            Template (single entity)
           </label>
           <label className="flex items-center gap-1.5">
             <input
@@ -97,14 +97,14 @@ export default function NewImportPage() {
               checked={sourceType === "LEGACY_WIDE_EXCEL"}
               onChange={() => setSourceType("LEGACY_WIDE_EXCEL")}
             />
-            Excel histórico (ancho)
+            Legacy Excel (wide)
           </label>
         </div>
 
         {sourceType === "TEMPLATE" ? (
           <div className="mt-4 flex flex-wrap items-end gap-3">
             <div>
-              <label className="block text-sm font-medium text-slate-700">Entidad</label>
+              <label className="block text-sm font-medium text-ink">Entity</label>
               <select
                 value={entity}
                 onChange={(e) => setEntity(e.target.value)}
@@ -121,17 +121,17 @@ export default function NewImportPage() {
               href={`/api/admin/imports/template/${entity}`}
               className="rounded-md border border-slate-300 px-2 py-1.5 text-xs text-slate-700 hover:bg-slate-50"
             >
-              Descargar plantilla
+              Download template
             </a>
           </div>
         ) : (
-          <p className="mt-3 text-xs text-slate-500">
-            Las entidades presentes en el archivo se detectan automáticamente.
+          <p className="mt-3 text-xs text-muted">
+            Entities present in the file are detected automatically.
           </p>
         )}
 
         <div className="mt-4">
-          <label className="block text-sm font-medium text-slate-700">Archivo (.xlsx o .csv)</label>
+          <label className="block text-sm font-medium text-ink">File (.xlsx or .csv)</label>
           <input
             type="file"
             accept=".xlsx,.csv"
@@ -146,7 +146,7 @@ export default function NewImportPage() {
             disabled={busy || !file}
             className="rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
           >
-            {busy && !preview ? "Validando…" : "Vista previa"}
+            {busy && !preview ? "Validating…" : "Preview"}
           </button>
         </div>
       </div>
@@ -158,14 +158,14 @@ export default function NewImportPage() {
       {/* Step 2: preview */}
       {preview ? (
         <div className="mt-6 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="mb-3 text-sm font-semibold text-slate-700">Vista previa</h2>
+          <h2 className="mb-3 text-sm font-semibold text-ink">Preview</h2>
           <div className="grid grid-cols-3 gap-3 text-center">
-            <Stat label="Filas" value={preview.totalRows} />
-            <Stat label="Válidas" value={preview.successRows} tone="green" />
-            <Stat label="Con error" value={preview.errorRows} tone={preview.errorRows ? "red" : "slate"} />
+            <Stat label="Rows" value={preview.totalRows} />
+            <Stat label="Valid" value={preview.successRows} tone="green" />
+            <Stat label="With errors" value={preview.errorRows} tone={preview.errorRows ? "red" : "slate"} />
           </div>
-          <p className="mt-3 text-xs text-slate-500">
-            Entidades: {preview.entities.map((e) => IMPORT_ENTITY_LABEL[e] ?? e).join(", ") || "—"}
+          <p className="mt-3 text-xs text-muted">
+            Entities: {preview.entities.map((e) => IMPORT_ENTITY_LABEL[e] ?? e).join(", ") || "—"}
           </p>
 
           {preview.errors.length > 0 ? (
@@ -173,10 +173,10 @@ export default function NewImportPage() {
               <table className="min-w-full text-xs">
                 <thead className="bg-slate-50 text-left text-slate-500">
                   <tr>
-                    <th className="px-3 py-1.5">Fila</th>
-                    <th className="px-3 py-1.5">Entidad</th>
-                    <th className="px-3 py-1.5">Campo</th>
-                    <th className="px-3 py-1.5">Mensaje</th>
+                    <th className="px-3 py-1.5">Row</th>
+                    <th className="px-3 py-1.5">Entity</th>
+                    <th className="px-3 py-1.5">Field</th>
+                    <th className="px-3 py-1.5">Message</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -199,7 +199,7 @@ export default function NewImportPage() {
               disabled={busy || preview.successRows === 0}
               className="mt-4 rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
             >
-              {busy ? "Confirmando…" : `Confirmar ${preview.successRows} fila(s) válida(s)`}
+              {busy ? "Committing…" : `Commit ${preview.successRows} valid row(s)`}
             </button>
           ) : null}
         </div>
@@ -208,19 +208,19 @@ export default function NewImportPage() {
       {/* Step 3: result */}
       {committed ? (
         <div className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 p-5">
-          <h2 className="text-sm font-semibold text-emerald-900">Importación confirmada</h2>
+          <h2 className="text-sm font-semibold text-emerald-900">Import committed</h2>
           <p className="mt-1 text-sm text-emerald-800">
-            {committed.successRows} fila(s) aplicada(s).
+            {committed.successRows} row(s) applied.
             {committed.triggeredRiskRecompute
-              ? ` Riesgo recalculado en ${committed.recomputed} periodo(s).`
-              : " Sin recálculo de riesgo."}
+              ? ` Risk recomputed for ${committed.recomputed} period(s).`
+              : " No risk recompute."}
           </p>
           <div className="mt-3 flex gap-3 text-sm">
             <Link href="/dashboard/admin/imports" className="font-medium text-emerald-900 underline">
-              Ver historial
+              View history
             </Link>
             <Link href={`/dashboard/admin/imports/${preview?.batchId}`} className="font-medium text-emerald-900 underline">
-              Ver detalle
+              View detail
             </Link>
           </div>
         </div>

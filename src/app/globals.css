@@ -1,13 +1,67 @@
 @import "tailwindcss";
 
+/*
+ * Beca Tech+ design tokens. Exact hex values come from the prototype at
+ * design-reference/BecaTech_Plus_Prototype.html. Raw values live in :root; the
+ * @theme inline block maps them onto Tailwind's --color-* namespace so utilities
+ * like bg-cream / text-ink / text-purple / bg-surface-dark are generated.
+ */
 :root {
-  --background: #f1f5f9; /* slate-100 */
-  --foreground: #0f172a; /* slate-900 */
+  /* Brand palette */
+  --cream: #f3f1e7; /* page background */
+  --purple: #a62bff; /* primary brand accent */
+  --yellow: #f3ff00; /* accent on dark surfaces — active nav, callout values */
+  --green: #27cf77; /* positive deltas, "on track" */
+  --surface-dark: #0a0a0a; /* sidebar + dark callout background */
+  --ink: #33312b; /* primary text */
+  --muted: #6f6c62; /* secondary text */
+  --card: #ffffff; /* card surface */
+  --border: #e4e0d2; /* hairline borders */
+
+  /* Supporting tints used across the prototype */
+  --lavender: #f5eaff; /* PROXY pill / activity chip / question chip bg */
+  --mint: #eafbf2; /* status-badge bg */
+  --chip-cream: #f8f6ef; /* stat-chip bg */
+  --track: #f1eee3; /* progress-bar track bg */
+
+  /* Segmented risk-bar palette (prototype re-colors the 0–4 scale onto brand hues).
+     Used only by the RiskBar component; the semantic RiskBadge pills keep their own
+     legible green→amber→red scale for dense tables. */
+  --risk-none: #27cf77;
+  --risk-low: #8fe0b4;
+  --risk-medium: #a62bff;
+  --risk-high: #3a0a5c;
+  --risk-critical: #0a0a0a;
+
+  /* App-level aliases (kept so existing var(--background)/var(--foreground) refs work) */
+  --background: var(--cream);
+  --foreground: var(--ink);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+
+  --color-cream: var(--cream);
+  --color-purple: var(--purple);
+  --color-yellow: var(--yellow);
+  --color-green: var(--green);
+  --color-surface-dark: var(--surface-dark);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-card: var(--card);
+  --color-border: var(--border);
+  --color-lavender: var(--lavender);
+  --color-mint: var(--mint);
+  --color-chip-cream: var(--chip-cream);
+  --color-track: var(--track);
+
+  --color-risk-none: var(--risk-none);
+  --color-risk-low: var(--risk-low);
+  --color-risk-medium: var(--risk-medium);
+  --color-risk-high: var(--risk-high);
+  --color-risk-critical: var(--risk-critical);
+
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
@@ -15,5 +69,9 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  /* System font stack per the prototype — no webfont to load. Geist var kept as a
+     first preference where the next/font var is present, then system fallbacks. */
+  font-family:
+    var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
+    sans-serif;
 }

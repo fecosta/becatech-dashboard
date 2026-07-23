@@ -36,7 +36,7 @@ export function TopFilters({ options }: { options: FilterOptions }) {
       <Select
         value={val("country")}
         onChange={(v) => setParam("country", v)}
-        placeholder="País"
+        placeholder="Country"
         options={[
           { value: "COLOMBIA", label: COUNTRY_LABEL.COLOMBIA },
           { value: "PERU", label: COUNTRY_LABEL.PERU },
@@ -45,39 +45,39 @@ export function TopFilters({ options }: { options: FilterOptions }) {
       <Select
         value={val("cohort")}
         onChange={(v) => setParam("cohort", v)}
-        placeholder="Cohorte"
+        placeholder="Cohort"
         options={options.cohorts.map((c) => ({ value: c, label: c }))}
       />
       <Select
         value={val("university")}
         onChange={(v) => setParam("university", v)}
-        placeholder="Universidad"
+        placeholder="University"
         options={options.universities.map((u) => ({ value: u, label: u }))}
       />
       <Select
         value={val("status")}
         onChange={(v) => setParam("status", v)}
-        placeholder="Estado"
+        placeholder="Status"
         options={Object.entries(PROGRAM_STATUS_LABEL).map(([value, label]) => ({ value, label }))}
       />
       <Select
         value={val("risk")}
         onChange={(v) => setParam("risk", v)}
-        placeholder="Riesgo"
+        placeholder="Risk"
         options={RISK_LEVEL_ORDER.map((r) => ({ value: r, label: RISK_LEVEL_LABEL[r] }))}
       />
       <Select
         value={val("period")}
         onChange={(v) => setParam("period", v)}
-        placeholder="Periodo"
+        placeholder="Period"
         options={options.periods.map((p) => ({ value: p, label: p }))}
       />
       {anyActive ? (
         <button
           onClick={() => router.push(pathname)}
-          className="text-xs font-medium text-slate-500 underline hover:text-slate-800"
+          className="text-xs font-medium text-muted underline hover:text-ink"
         >
-          Limpiar
+          Clear
         </button>
       ) : null}
     </div>
@@ -99,9 +99,9 @@ function Select({
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="max-w-[12rem] rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 shadow-sm focus:border-slate-400 focus:outline-none"
+      className="max-w-[12rem] rounded-md border border-border bg-card px-2 py-1 text-xs text-ink shadow-sm focus:border-purple focus:outline-none"
     >
-      <option value="">{placeholder}: todos</option>
+      <option value="">{placeholder}: all</option>
       {options.map((o) => (
         <option key={o.value} value={o.value}>
           {o.label}

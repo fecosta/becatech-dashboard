@@ -2,7 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { LineCard } from "@/components/charts";
 import { Column, DataTable } from "@/components/DataTable";
-import { AccessDenied, Badge, Card, KpiCard, PageHeader, RiskBadge, SectionTitle } from "@/components/ui";
+import { ProfileCard } from "@/components/ProfileCard";
+import { AccessDenied, Card, KpiCard, PageHeader, RiskBadge, SectionTitle } from "@/components/ui";
 import { requireScholarAccess } from "@/lib/auth/guard";
 import type {
   AcademicTerm,
@@ -18,8 +19,6 @@ import { fmtDate, fmtGpa } from "@/lib/format";
 import {
   ACTIVITY_TYPE_LABEL,
   ALERT_TYPE_LABEL,
-  COUNTRY_LABEL,
-  PROGRAM_STATUS_LABEL,
   PROGRESS_STATUS_LABEL,
   REQUEST_STATUS_LABEL,
   REVIEW_STATUS_LABEL,
@@ -27,7 +26,7 @@ import {
 } from "@/lib/labels";
 
 const money = (amount: unknown, currency: string) =>
-  new Intl.NumberFormat("es", { style: "currency", currency, maximumFractionDigits: 0 }).format(
+  new Intl.NumberFormat("en-US", { style: "currency", currency, maximumFractionDigits: 0 }).format(
     Number(amount),
   );
 
@@ -41,8 +40,8 @@ export default async function ScholarProfilePage({
   if (!allowed) {
     return (
       <div>
-        <PageHeader title="Perfil del becario" />
-        <AccessDenied message="No tienes acceso a este becario." />
+        <PageHeader title="Scholar Profile" />
+        <AccessDenied message="You don't have access to this scholar." />
       </div>
     );
   }
@@ -53,13 +52,25 @@ export default async function ScholarProfilePage({
   const latestTerm = p.academicTerms.at(-1) ?? null;
   const latestRisk = p.riskAssessments.at(-1) ?? null;
 
+  // Recent activities = distinct support-activity types in the latest period on record.
+  const latestSupportPeriod = p.supportActivities.at(-1)?.period ?? null;
+  const recentActivities = latestSupportPeriod
+    ? [
+        ...new Set(
+          p.supportActivities
+            .filter((a) => a.period === latestSupportPeriod)
+            .map((a) => a.activityType),
+        ),
+      ].map((t) => ACTIVITY_TYPE_LABEL[t])
+    : [];
+
   const gpaData = p.gpaTrend.map((t) => ({ term: t.term, gpa: t.gpa, accumulated: t.accumulatedGpa }));
   const riskData = p.riskAssessments.map((r) => ({
     period: r.period,
     Global: r.globalRiskValue,
-    Académico: r.academicRiskValue,
-    Psicosocial: r.psychosocialRiskValue,
-    Participación: r.participationRiskValue,
+    Academic: r.academicRiskValue,
+    Psychosocial: r.psychosocialRiskValue,
+    Participation: r.participationRiskValue,
   }));
 
   const supportByType = new Map<ActivityType, number>();
@@ -71,133 +82,138 @@ export default async function ScholarProfilePage({
     .sort((a, b) => b.total - a.total);
 
   const termCols: Column<AcademicTerm>[] = [
-    { header: "Término", cell: (t) => t.term },
-    { header: "Matrícula", cell: (t) => t.enrollmentStatus ?? "—" },
-    { header: "Créditos", cell: (t) => `${t.creditsCompleted ?? "—"} / ${t.creditsEnrolled ?? "—"}` },
-    { header: "Avance", cell: (t) => (t.progressPercentage != null ? `${t.progressPercentage}%` : "—") },
-    { header: "Estado", cell: (t) => (t.expectedProgressStatus ? PROGRESS_STATUS_LABEL[t.expectedProgressStatus] : "—") },
+    { header: "Term", cell: (t) => t.term },
+    { header: "Enrollment", cell: (t) => t.enrollmentStatus ?? "—" },
+    { header: "Credits", cell: (t) => `${t.creditsCompleted ?? "—"} / ${t.creditsEnrolled ?? "—"}` },
+    { header: "Progress", cell: (t) => (t.progressPercentage != null ? `${t.progressPercentage}%` : "—") },
+    { header: "Status", cell: (t) => (t.expectedProgressStatus ? PROGRESS_STATUS_LABEL[t.expectedProgressStatus] : "—") },
     { header: "GPA", cell: (t) => fmtGpa(t.gpa) },
-    { header: "Reprobadas", cell: (t) => t.failedSubjectsCount ?? 0 },
+    { header: "Failed", cell: (t) => t.failedSubjectsCount ?? 0 },
   ];
   const riskCols: Column<RiskAssessment>[] = [
-    { header: "Periodo", cell: (r) => r.period },
+    { header: "Period", cell: (r) => r.period },
     { header: "Global", cell: (r) => <RiskBadge level={r.globalRiskLevel} /> },
-    { header: "Alerta", cell: (r) => ALERT_TYPE_LABEL[r.alertType] },
-    { header: "Cambio", cell: (r) => (r.riskChangeLabel ? RISK_CHANGE_LABEL[r.riskChangeLabel] : "—") },
-    { header: "Revisión", cell: (r) => REVIEW_STATUS_LABEL[r.reviewStatus] },
-    { header: "Motivo", cell: (r) => r.riskReason ?? "—" },
+    { header: "Alert", cell: (r) => ALERT_TYPE_LABEL[r.alertType] },
+    { header: "Change", cell: (r) => (r.riskChangeLabel ? RISK_CHANGE_LABEL[r.riskChangeLabel] : "—") },
+    { header: "Review", cell: (r) => REVIEW_STATUS_LABEL[r.reviewStatus] },
+    { header: "Reason", cell: (r) => r.riskReason ?? "—" },
   ];
   const checkinCols: Column<MonthlyCheckin>[] = [
-    { header: "Mes", cell: (c) => c.reportingMonth },
-    { header: "Académico", cell: (c) => c.academicLevel ?? "—" },
-    { header: "Emocional", cell: (c) => c.psychosocialLevel ?? "—" },
-    { header: "Estado", cell: (c) => c.finalStatus ?? "—" },
+    { header: "Month", cell: (c) => c.reportingMonth },
+    { header: "Academic", cell: (c) => c.academicLevel ?? "—" },
+    { header: "Emotional", cell: (c) => c.psychosocialLevel ?? "—" },
+    { header: "Status", cell: (c) => c.finalStatus ?? "—" },
   ];
   const mentorCols: Column<MentorReport>[] = [
-    { header: "Mes", cell: (m) => m.reportingMonth ?? "—" },
-    { header: "Sesión", cell: (m) => m.sessionType ?? "—" },
-    { header: "Permanencia", cell: (m) => m.permanenceRisk ?? "—" },
-    { header: "Aprob.", cell: (m) => m.approvedCoursesCount ?? "—" },
-    { header: "En riesgo", cell: (m) => m.atRiskCoursesCount ?? "—" },
-    { header: "Próximos pasos", cell: (m) => m.nextSteps ?? "—" },
+    { header: "Month", cell: (m) => m.reportingMonth ?? "—" },
+    { header: "Session", cell: (m) => m.sessionType ?? "—" },
+    { header: "Permanence", cell: (m) => m.permanenceRisk ?? "—" },
+    { header: "Approved", cell: (m) => m.approvedCoursesCount ?? "—" },
+    { header: "At risk", cell: (m) => m.atRiskCoursesCount ?? "—" },
+    { header: "Next steps", cell: (m) => m.nextSteps ?? "—" },
   ];
   const supportCols: Column<{ activityType: ActivityType; total: number }>[] = [
-    { header: "Actividad", cell: (s) => ACTIVITY_TYPE_LABEL[s.activityType] },
-    { header: "Total sesiones", cell: (s) => s.total },
+    { header: "Activity", cell: (s) => ACTIVITY_TYPE_LABEL[s.activityType] },
+    { header: "Total sessions", cell: (s) => s.total },
   ];
   const requestCols: Column<ScholarRequest>[] = [
-    { header: "Fecha", cell: (r) => fmtDate(r.submissionDate) },
-    { header: "Tipo", cell: (r) => r.requestType },
-    { header: "Estado", cell: (r) => REQUEST_STATUS_LABEL[r.status] },
-    { header: "Canal", cell: (r) => r.responseChannel ?? "—" },
+    { header: "Date", cell: (r) => fmtDate(r.submissionDate) },
+    { header: "Type", cell: (r) => r.requestType },
+    { header: "Status", cell: (r) => REQUEST_STATUS_LABEL[r.status] },
+    { header: "Channel", cell: (r) => r.responseChannel ?? "—" },
   ];
   const financeCols: Column<FinancialInput>[] = [
-    { header: "Categoría", cell: (f) => f.costCategory },
-    { header: "Monto", cell: (f) => money(f.costAmount, f.currency), className: "text-right" },
-    { header: "Directo", cell: (f) => (f.isDirectCost ? "Sí" : "No") },
-    { header: "Fuente", cell: (f) => f.fundingSource ?? "—" },
+    { header: "Category", cell: (f) => f.costCategory },
+    { header: "Amount", cell: (f) => money(f.costAmount, f.currency), className: "text-right" },
+    { header: "Direct", cell: (f) => (f.isDirectCost ? "Yes" : "No") },
+    { header: "Source", cell: (f) => f.fundingSource ?? "—" },
   ];
 
   return (
     <div>
-      <Link href="/dashboard/scholars" className="text-xs text-slate-500 hover:underline">
-        ← Volver a becarios
+      <Link href="/dashboard/scholars" className="text-xs text-muted hover:underline">
+        ← Back to scholars
       </Link>
       <PageHeader title={p.fullName} subtitle={`${p.scholarId} · ${p.academicProgram}`} />
 
-      <div className="mb-6 flex flex-wrap gap-2">
-        <Badge tone="blue">{COUNTRY_LABEL[p.country]}</Badge>
-        <Badge>{PROGRAM_STATUS_LABEL[p.programStatus]}</Badge>
-        <Badge>Cohorte {p.cohort}</Badge>
-        <Badge>{p.university}</Badge>
-        {p.currentMentor ? <Badge>Mentor: {p.currentMentor}</Badge> : null}
-      </div>
+      <ProfileCard
+        fullName={p.fullName}
+        university={p.university}
+        cohort={p.cohort}
+        academicProgram={p.academicProgram}
+        departmentOrigin={p.departmentOrigin}
+        currentDepartment={p.currentDepartment}
+        currentMunicipality={p.currentMunicipality}
+        programStatus={p.programStatus}
+        currentRiskLevel={latestRisk?.globalRiskLevel ?? null}
+        activities={recentActivities}
+      />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <KpiCard label="GPA acumulado" value={fmtGpa(latestTerm?.accumulatedGpa)} />
-        <KpiCard label="Riesgo actual" value={latestRisk ? <RiskBadge level={latestRisk.globalRiskLevel} /> : "—"} />
-        <KpiCard label="Semestre" value={p.currentSemester ?? "—"} />
-        <KpiCard label="Avance" value={latestTerm?.progressPercentage != null ? `${latestTerm.progressPercentage}%` : "—"} />
+      <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <KpiCard label="Cumulative GPA" value={fmtGpa(latestTerm?.accumulatedGpa)} />
+        <KpiCard label="Current risk" value={latestRisk ? <RiskBadge level={latestRisk.globalRiskLevel} /> : "—"} />
+        <KpiCard label="Semester" value={p.currentSemester ?? "—"} />
+        <KpiCard label="Progress" value={latestTerm?.progressPercentage != null ? `${latestTerm.progressPercentage}%` : "—"} />
       </div>
 
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
         <LineCard
-          title="Tendencia de GPA"
+          title="GPA trend"
           data={gpaData}
           xKey="term"
           lines={[
-            { key: "gpa", name: "GPA del término", color: "#6366f1" },
-            { key: "accumulated", name: "GPA acumulado", color: "#10b981" },
+            { key: "gpa", name: "Term GPA", color: "#a62bff" },
+            { key: "accumulated", name: "Cumulative GPA", color: "#27cf77" },
           ]}
         />
         <LineCard
-          title="Historial de riesgo (0–4)"
+          title="Risk history (0–4)"
           data={riskData}
           xKey="period"
           lines={[
-            { key: "Global", name: "Global", color: "#ef4444" },
-            { key: "Académico", name: "Académico", color: "#6366f1" },
-            { key: "Psicosocial", name: "Psicosocial", color: "#f59e0b" },
-            { key: "Participación", name: "Participación", color: "#14b8a6" },
+            { key: "Global", name: "Global", color: "#0a0a0a" },
+            { key: "Academic", name: "Academic", color: "#a62bff" },
+            { key: "Psychosocial", name: "Psychosocial", color: "#f59e0b" },
+            { key: "Participation", name: "Participation", color: "#27cf77" },
           ]}
         />
       </div>
 
       <div className="mt-6 space-y-6">
         <section>
-          <SectionTitle>Términos académicos</SectionTitle>
+          <SectionTitle>Academic terms</SectionTitle>
           <DataTable columns={termCols} rows={p.academicTerms} />
         </section>
         <section>
-          <SectionTitle>Historial de riesgo</SectionTitle>
+          <SectionTitle>Risk history</SectionTitle>
           <DataTable columns={riskCols} rows={p.riskAssessments} />
         </section>
         <div className="grid gap-6 lg:grid-cols-2">
           <section>
-            <SectionTitle>Check-ins mensuales</SectionTitle>
-            <DataTable columns={checkinCols} rows={p.checkins} empty="Sin check-ins" />
+            <SectionTitle>Monthly check-ins</SectionTitle>
+            <DataTable columns={checkinCols} rows={p.checkins} empty="No check-ins" />
           </section>
           <section>
-            <SectionTitle>Participación en apoyo</SectionTitle>
-            <DataTable columns={supportCols} rows={supportRows} empty="Sin actividades" />
+            <SectionTitle>Support participation</SectionTitle>
+            <DataTable columns={supportCols} rows={supportRows} empty="No activities" />
           </section>
         </div>
         <section>
-          <SectionTitle>Reportes de mentoría</SectionTitle>
-          <DataTable columns={mentorCols} rows={p.mentorReports} empty="Sin reportes" />
+          <SectionTitle>Mentor reports</SectionTitle>
+          <DataTable columns={mentorCols} rows={p.mentorReports} empty="No reports" />
         </section>
         <div className="grid gap-6 lg:grid-cols-2">
           <section>
-            <SectionTitle>Solicitudes</SectionTitle>
-            <DataTable columns={requestCols} rows={p.requests} empty="Sin solicitudes" />
+            <SectionTitle>Requests</SectionTitle>
+            <DataTable columns={requestCols} rows={p.requests} empty="No requests" />
           </section>
           <section>
-            <SectionTitle>Costos y apoyo económico</SectionTitle>
-            <DataTable columns={financeCols} rows={p.financialInputs} empty="Sin registros" />
+            <SectionTitle>Costs &amp; financial support</SectionTitle>
+            <DataTable columns={financeCols} rows={p.financialInputs} empty="No records" />
           </section>
         </div>
       </div>
-      <Card className="mt-6 text-xs text-slate-400">Carpeta: {p.driveFolderUrl ?? "—"}</Card>
+      <Card className="mt-6 text-xs text-muted">Folder: {p.driveFolderUrl ?? "—"}</Card>
     </div>
   );
 }

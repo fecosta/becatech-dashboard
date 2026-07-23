@@ -9,7 +9,7 @@ export function RollbackButton({ batchId }: { batchId: string }) {
   const [error, setError] = useState<string | null>(null);
 
   async function rollback() {
-    if (!window.confirm("¿Revertir esta importación? Se eliminarán las filas creadas por este lote.")) {
+    if (!window.confirm("Roll back this import? The rows created by this batch will be deleted.")) {
       return;
     }
     setBusy(true);
@@ -17,10 +17,10 @@ export function RollbackButton({ batchId }: { batchId: string }) {
     try {
       const res = await fetch(`/api/admin/imports/${batchId}/rollback`, { method: "POST" });
       const json = await res.json();
-      if (!res.ok) setError(json.error ?? "Error al revertir.");
+      if (!res.ok) setError(json.error ?? "Failed to roll back.");
       else router.refresh();
     } catch {
-      setError("No se pudo revertir.");
+      setError("Could not roll back.");
     } finally {
       setBusy(false);
     }
@@ -33,7 +33,7 @@ export function RollbackButton({ batchId }: { batchId: string }) {
         disabled={busy}
         className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm font-medium text-red-800 hover:bg-red-100 disabled:opacity-50"
       >
-        {busy ? "Revirtiendo…" : "Revertir importación"}
+        {busy ? "Rolling back…" : "Roll back import"}
       </button>
       {error ? <p className="mt-1 text-xs text-red-700">{error}</p> : null}
     </div>
