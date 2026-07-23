@@ -58,6 +58,28 @@ export const RISK_LEVEL_HEX: Record<RiskLevel, string> = {
   CRITICO: "#ef4444",
 };
 
+/**
+ * Segmented risk palette (matches RiskBar.tsx's --risk-* tokens / the mockup's donut) —
+ * a different, brand-hued scale from RISK_LEVEL_HEX above. Use this one wherever a chart
+ * sits next to a RiskBar on the same page, so the colors read as the same scale.
+ */
+export const RISK_LEVEL_HEX_SEGMENTED: Record<RiskLevel, string> = {
+  SIN_RIESGO: "#27cf77",
+  RIESGO_BAJO: "#8fe0b4",
+  RIESGO_MEDIO: "#a62bff",
+  RIESGO_ALTO: "#3a0a5c",
+  CRITICO: "#0a0a0a",
+};
+
+/** Short descriptive note per risk level, for the Early Support donut's legend. */
+export const RISK_LEVEL_NOTE: Record<RiskLevel, string> = {
+  SIN_RIESGO: "Stable, no dropout risk",
+  RIESGO_BAJO: "Minor issues, low dropout risk",
+  RIESGO_MEDIO: "Needs monitoring, moderate risk",
+  RIESGO_ALTO: "Serious issues, high dropout risk",
+  CRITICO: "Urgent, very high dropout risk",
+};
+
 export const ALERT_TYPE_LABEL: Record<AlertType, string> = {
   ACADEMIC: "Academic",
   PSYCHOSOCIAL: "Psychosocial",
