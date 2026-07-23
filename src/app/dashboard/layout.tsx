@@ -13,9 +13,10 @@ export const dynamic = "force-dynamic";
 type NavConfigItem = NavItem & { permission: Permission };
 type NavConfigSection = { heading?: string; items: NavConfigItem[] };
 
-// Beca Tech+ narrative IA: Home → Early Support → Career Readiness → Scholars →
-// Program Ecosystem as the primary flow; secondary tools under "More"; data tools under
-// "Admin". Permissions are unchanged from the prior IA so no role loses access.
+// Beca Tech+ narrative IA (Phase B): Home → Early Support → Growth & Development →
+// Scholar Progress → Program Ecosystem as the primary flow, matching the mockup's own
+// nav order; secondary tools under "More"; data tools under "Admin". Permissions are
+// unchanged from the prior IA so no role loses access.
 const NAV: NavConfigSection[] = [
   {
     items: [
@@ -27,10 +28,14 @@ const NAV: NavConfigSection[] = [
       },
       {
         href: "/dashboard/career-readiness",
-        label: "Career Readiness",
+        label: "Growth & Development",
         permission: Permission.VIEW_SCHOLAR_TRACKING,
       },
-      { href: "/dashboard/scholars", label: "Scholars", permission: Permission.VIEW_SCHOLAR_TRACKING },
+      {
+        href: "/dashboard/scholars",
+        label: "Scholar Progress",
+        permission: Permission.VIEW_SCHOLAR_TRACKING,
+      },
       {
         href: "/dashboard/actors",
         label: "Program Ecosystem",
