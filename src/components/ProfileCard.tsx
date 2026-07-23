@@ -2,7 +2,8 @@
 // Deliberately omits "Age" — no birth-date field exists in the schema (documented gap).
 import type { ProgramStatus, RiskLevel } from "@/generated/prisma/enums";
 import { PROGRAM_STATUS_LABEL, RISK_LEVEL_LABEL } from "@/lib/labels";
-import { ActivityChip, Card, StatusBadge } from "@/components/ui";
+import { ActivityChip, Card, ProxyBadge, StatusBadge } from "@/components/ui";
+import { programYearFromSemester } from "@/lib/academic/program-year";
 
 export interface ProfileCardProps {
   fullName: string;
@@ -16,7 +17,16 @@ export interface ProfileCardProps {
   currentRiskLevel: RiskLevel | null;
   /** Distinct recent support-activity labels (latest period). */
   activities: string[];
+  currentSemester: number | null;
+  /** Latest academic term string (e.g. "2026-1") — distinct from the Year bucket below. */
+  latestTerm: string | null;
+  gender: string;
+  expectedEndDate: Date | null;
+  /** Delivery-partner operator name; null renders a pending badge (no operator assigned yet). */
+  operatorName: string | null;
 }
+
+const YEAR_LABEL = { YEAR_1: "Year 1", YEAR_2: "Year 2", YEAR_3: "Year 3" } as const;
 
 const DASH = "—";
 
@@ -52,11 +62,17 @@ export function ProfileCard(props: ProfileCardProps) {
     programStatus,
     currentRiskLevel,
     activities,
+    currentSemester,
+    latestTerm,
+    gender,
+    expectedEndDate,
+    operatorName,
   } = props;
 
   const statusText = `${PROGRAM_STATUS_LABEL[programStatus]}${
     currentRiskLevel ? ` · ${RISK_LEVEL_LABEL[currentRiskLevel]}` : ""
   }`;
+  const year = programYearFromSemester(currentSemester);
 
   return (
     <Card className="flex flex-col gap-[18px] p-[22px] sm:flex-row">
@@ -66,10 +82,19 @@ export function ProfileCard(props: ProfileCardProps) {
         <Field label="University">{university || DASH}</Field>
         <Field label="Cohort">{cohort || DASH}</Field>
         <Field label="Major">{academicProgram || DASH}</Field>
+        <Field label="Year">{year ? YEAR_LABEL[year] : DASH}</Field>
+        <Field label="Semester">{latestTerm ?? DASH}</Field>
         <Field label="Home Department">{departmentOrigin || DASH}</Field>
         <Field label="Residence">{residence(currentMunicipality, currentDepartment)}</Field>
+        <Field label="Gender">{gender || DASH}</Field>
         <Field label="Status">
           <StatusBadge tone={statusTone(programStatus, currentRiskLevel)}>{statusText}</StatusBadge>
+        </Field>
+        <Field label="Est. Year of Finalization">
+          {expectedEndDate ? new Date(expectedEndDate).getFullYear() : DASH}
+        </Field>
+        <Field label="Delivery Partner">
+          {operatorName ?? <ProxyBadge>PENDING</ProxyBadge>}
         </Field>
         <Field label="Activities" span>
           {activities.length > 0 ? (
