@@ -140,16 +140,62 @@ enum DataImportStatus {
   FAILED
 }
 
+enum UniversityType {
+  PUBLIC
+  PRIVATE
+}
+
+enum OperatorTrack {
+  EARLY_SUPPORT
+  GROWTH_DEVELOPMENT
+}
+
 // ------------------------------------------------------------------
 // Core
 // ------------------------------------------------------------------
+
+// Partner university (Program Ecosystem). One row per real partner institution —
+// not a per-scholar denormalized copy (those remain plain strings on other models).
+model University {
+  id                String         @id @default(cuid())
+  name              String         @unique
+  country           Country
+  city              String
+  type              UniversityType
+  semesterStartDate DateTime?
+  semesterEndDate   DateTime?
+  examWindowStart   DateTime?
+  examWindowEnd     DateTime?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  scholars Scholar[]
+
+  @@index([country])
+}
+
+// Delivery partner / operator (Program Ecosystem). `track` distinguishes Early
+// Support (academic & psychosocial) operators from Growth & Development ones.
+model Operator {
+  id        String        @id @default(cuid())
+  name      String        @unique
+  country   Country
+  track     OperatorTrack
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  scholars Scholar[]
+
+  @@index([track])
+  @@index([country])
+}
 
 model Scholar {
   scholarId           String        @id // maps to ID_becario
   fullName            String
   country             Country
   cohort              String
-  university          String
+  universityId        String
   academicProgram     String
   gender              String // free text (source data is "M o F" and more)
   ethnicGroup         String?
@@ -164,9 +210,12 @@ model Scholar {
   expectedEndDate     DateTime?
   driveFolderUrl      String?
   importBatchId       String? // last data-import batch that wrote this row (audit + rollback)
+  operatorId          String? // delivery partner / operator (Program Ecosystem), nullable
   createdAt           DateTime      @default(now())
   updatedAt           DateTime      @updatedAt
 
+  university         University          @relation(fields: [universityId], references: [id])
+  operator           Operator?           @relation(fields: [operatorId], references: [id])
   academicTerms      AcademicTerm[]
   checkins           MonthlyCheckin[]
   mentorReports      MentorReport[]
@@ -179,7 +228,8 @@ model Scholar {
 
   @@index([country])
   @@index([cohort])
-  @@index([university])
+  @@index([universityId])
+  @@index([operatorId])
   @@index([programStatus])
   @@index([importBatchId])
 }
