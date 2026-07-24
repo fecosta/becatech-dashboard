@@ -80,13 +80,13 @@ function checkFields(
 }
 
 // --- per-entity builders (mappers; all validation already passed) ---
-function buildScholar(row: CanonicalRow): Prisma.ScholarUncheckedCreateInput {
+function buildScholar(row: CanonicalRow, universityId: string): Prisma.ScholarUncheckedCreateInput {
   return {
     scholarId: gS(row, "scholarId")!,
     fullName: gS(row, "fullName")!,
     country: gS(row, "country") as Country,
     cohort: gS(row, "cohort")!,
-    university: gS(row, "university")!,
+    universityId,
     academicProgram: gS(row, "academicProgram")!,
     gender: gS(row, "gender")!,
     programStatus: gS(row, "programStatus") as ProgramStatus | undefined,
@@ -258,9 +258,26 @@ export function validateBatch(batch: CanonicalBatch, ctx: ValidationContext): Va
         }
       }
 
+      let universityId: string | undefined;
+      if (entity === "SCHOLAR") {
+        const universityName = gS(row, "university");
+        universityId = universityName
+          ? ctx.universities.get(universityName.trim().toLowerCase())
+          : undefined;
+        if (!universityId) {
+          errors.push({
+            entity,
+            rowNumber: row.rowNumber,
+            field: "university",
+            message: `Universidad no encontrada en el catálogo: ${universityName ?? ""}`,
+          });
+          continue;
+        }
+      }
+
       switch (entity) {
         case "SCHOLAR": {
-          const r = buildScholar(row);
+          const r = buildScholar(row, universityId!);
           validated.SCHOLAR.push(r);
           scholarIds.add(r.scholarId);
           break;

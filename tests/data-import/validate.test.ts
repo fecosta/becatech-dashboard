@@ -14,6 +14,7 @@ function ctx(): ValidationContext {
       ["cost_category", new Set(["Tuition", "Scholarship amount"])],
       ["academic_progress_status", new Set(["ON_TRACK", "SLIGHTLY_BEHIND", "BEHIND", "CRITICAL_DELAY"])],
     ]),
+    universities: new Map([["u", "uni-test"]]),
   };
 }
 

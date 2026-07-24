@@ -32,7 +32,7 @@ export async function recomputeRiskForScholars(
   for (const scholarId of uniq(scholarIds)) {
     const scholar = await prisma.scholar.findUnique({
       where: { scholarId },
-      select: { country: true, cohort: true, university: true },
+      select: { country: true, cohort: true, university: { select: { name: true } } },
     });
     if (!scholar) continue;
 
@@ -138,7 +138,7 @@ export async function recomputeRiskForScholars(
           period,
           country: scholar.country,
           cohort: scholar.cohort,
-          university: scholar.university,
+          university: scholar.university.name,
           ...fields,
         },
       });

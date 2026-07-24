@@ -2,14 +2,15 @@
 
 import {
   Bar,
-  BarChart,
   CartesianGrid,
   Cell,
+  ComposedChart,
   Legend,
   Line,
   LineChart,
   Pie,
   PieChart,
+  BarChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -135,6 +136,83 @@ export function LineCard({
           <Line key={l.key} type="monotone" dataKey={l.key} name={l.name} stroke={l.color} dot={{ r: 2 }} strokeWidth={2} />
         ))}
       </LineChart>
+    </ChartCard>
+  );
+}
+
+/** Bare donut (no ChartCard chrome) — for when the caller wants a custom legend next to it. */
+export function Donut({
+  data,
+  size = 150,
+}: {
+  data: { name: string; value: number; color: string }[];
+  size?: number;
+}) {
+  return (
+    <div style={{ width: size, height: size }}>
+      <ResponsiveContainer>
+        <PieChart>
+          <Pie
+            data={data}
+            dataKey="value"
+            nameKey="name"
+            innerRadius={size * 0.32}
+            outerRadius={size * 0.5}
+            paddingAngle={2}
+          >
+            {data.map((d, i) => (
+              <Cell key={i} fill={d.color} />
+            ))}
+          </Pie>
+          <Tooltip />
+        </PieChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+/** Bar + line combo (e.g. monthly activity volume with a participation-rate overlay). */
+export function ComboBarLineCard({
+  title,
+  data,
+  xKey,
+  barKey,
+  barName,
+  barColor = DEFAULT_BAR,
+  lineKey,
+  lineName,
+  lineColor = "#a62bff",
+}: {
+  title: string;
+  data: Record<string, unknown>[];
+  xKey: string;
+  barKey: string;
+  barName: string;
+  barColor?: string;
+  lineKey: string;
+  lineName: string;
+  lineColor?: string;
+}) {
+  return (
+    <ChartCard title={title}>
+      <ComposedChart data={data} margin={{ top: 8, right: 12, bottom: 8, left: -12 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke={GRID} vertical={false} />
+        <XAxis dataKey={xKey} tick={AXIS_TICK} />
+        <YAxis yAxisId="left" tick={AXIS_TICK} allowDecimals={false} />
+        <YAxis yAxisId="right" orientation="right" tick={AXIS_TICK} unit="%" />
+        <Tooltip />
+        <Legend />
+        <Bar yAxisId="left" dataKey={barKey} name={barName} fill={barColor} opacity={0.55} radius={[4, 4, 0, 0]} />
+        <Line
+          yAxisId="right"
+          type="monotone"
+          dataKey={lineKey}
+          name={lineName}
+          stroke={lineColor}
+          dot={{ r: 3 }}
+          strokeWidth={2.5}
+        />
+      </ComposedChart>
     </ChartCard>
   );
 }

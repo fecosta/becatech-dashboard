@@ -17,11 +17,6 @@ export interface NavSection {
   items: NavItem[];
 }
 
-export interface SidebarProfile {
-  name: string;
-  role: string;
-}
-
 /** The href may carry a query string (e.g. ?tab=summary); active-state matches on the path only. */
 function basePath(href: string): string {
   const q = href.indexOf("?");
@@ -35,7 +30,8 @@ function isActive(pathname: string, item: NavItem): boolean {
   );
 }
 
-function initials(name: string): string {
+/** "Diego Ramírez" -> "DR" — shared with the header's profile block (DashboardShell). */
+export function initials(name: string): string {
   return name
     .split(/\s+/)
     .filter(Boolean)
@@ -46,15 +42,23 @@ function initials(name: string): string {
 
 export function Sidebar({
   sections,
-  profile,
+  open = false,
+  onNavigate,
 }: {
   sections: NavSection[];
-  profile?: SidebarProfile;
+  /** Whether the mobile off-canvas drawer is open. Ignored at md: and up (always visible). */
+  open?: boolean;
+  /** Called when a nav link is clicked — used to close the mobile drawer. */
+  onNavigate?: () => void;
 }) {
   const pathname = usePathname();
 
   return (
-    <aside className="flex w-[246px] shrink-0 flex-col justify-between bg-surface-dark text-white">
+    <aside
+      className={`fixed inset-y-0 left-0 z-40 flex w-[246px] shrink-0 flex-col justify-between bg-surface-dark text-white transition-transform duration-200 ease-in-out md:static md:z-auto md:translate-x-0 ${
+        open ? "translate-x-0" : "-translate-x-full"
+      }`}
+    >
       <div>
         <div className="flex items-center gap-3 border-b border-white/10 px-5 py-[22px]">
           <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-purple text-sm font-bold text-white">
@@ -80,6 +84,7 @@ export function Sidebar({
                     key={item.href}
                     href={item.href}
                     aria-current={active ? "page" : undefined}
+                    onClick={onNavigate}
                     className={`mb-[3px] flex items-center gap-2.5 rounded-[10px] border-l-[3px] px-3 py-2.5 transition-colors ${
                       active
                         ? "border-yellow bg-purple/20 font-semibold text-yellow"
@@ -94,17 +99,6 @@ export function Sidebar({
           ))}
         </nav>
       </div>
-      {profile ? (
-        <div className="flex items-center gap-2.5 border-t border-white/10 px-5 py-4">
-          <div className="flex h-[30px] w-[30px] items-center justify-center rounded-full bg-purple text-[11px] font-bold text-white">
-            {initials(profile.name)}
-          </div>
-          <div>
-            <div className="text-xs font-semibold leading-tight text-white">{profile.name}</div>
-            <div className="text-[11px] leading-tight text-white/45">{profile.role}</div>
-          </div>
-        </div>
-      ) : null}
     </aside>
   );
 }

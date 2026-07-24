@@ -39,3 +39,23 @@ export function preserveParams(sp: SearchParams, overrides: Record<string, strin
   for (const [key, value] of Object.entries(overrides)) params.set(key, value);
   return params.toString();
 }
+
+export type FilterKey = "country" | "cohort" | "university" | "status" | "risk" | "period" | "department";
+
+/**
+ * Which TopFilters pills a given dashboard route should show. Per the Phase B indicator
+ * spec: most views only need cohort/country/university; Home also gets a department
+ * pill (for its department breakdown); Scholar Progress puts university first (its
+ * search matches on university name too). Out-of-scope routes (unit-economics,
+ * selection-pipeline, admin/**) keep today's full pill set.
+ */
+export function visiblePillsForPath(pathname: string): FilterKey[] {
+  if (pathname === "/dashboard") return ["cohort", "country", "university", "department"];
+  if (pathname.startsWith("/dashboard/early-support")) return ["cohort", "country", "university"];
+  if (pathname.startsWith("/dashboard/career-readiness")) return ["cohort", "country", "university"];
+  if (pathname.startsWith("/dashboard/actors")) return ["cohort", "country", "university"];
+  if (pathname.startsWith("/dashboard/scholars")) {
+    return ["university", "country", "cohort", "status", "risk"];
+  }
+  return ["country", "cohort", "university", "status", "risk", "period"];
+}

@@ -96,11 +96,31 @@ export function DarkCallout({
   );
 }
 
+type StatChipTone = "default" | "green" | "red";
+const STAT_CHIP_BG_CLASS: Record<StatChipTone, string> = {
+  default: "bg-chip-cream",
+  green: "bg-mint",
+  red: "bg-red-50",
+};
+const STAT_CHIP_VALUE_CLASS: Record<StatChipTone, string> = {
+  default: "text-surface-dark",
+  green: "text-green",
+  red: "text-red-700",
+};
+
 /** Small filled chip for pace / participation breakdowns. */
-export function StatChip({ value, label }: { value: ReactNode; label: ReactNode }) {
+export function StatChip({
+  value,
+  label,
+  tone = "default",
+}: {
+  value: ReactNode;
+  label: ReactNode;
+  tone?: StatChipTone;
+}) {
   return (
-    <div className="min-w-[130px] rounded-xl border border-border bg-chip-cream px-4 py-3">
-      <div className="text-xl font-extrabold text-surface-dark">{value}</div>
+    <div className={`min-w-[130px] rounded-xl border border-border px-4 py-3 ${STAT_CHIP_BG_CLASS[tone]}`}>
+      <div className={`text-xl font-extrabold ${STAT_CHIP_VALUE_CLASS[tone]}`}>{value}</div>
       <div className="mt-0.5 text-[11.5px] text-muted">{label}</div>
     </div>
   );

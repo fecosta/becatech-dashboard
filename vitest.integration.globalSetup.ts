@@ -13,10 +13,11 @@ export default async function setup() {
 
   const client = new Client({ connectionString: adminUrl });
   await client.connect();
-  const existing = await client.query("SELECT 1 FROM pg_database WHERE datname = $1", [dbName]);
-  if (existing.rowCount === 0) {
-    await client.query(`CREATE DATABASE "${dbName}"`);
-  }
+  // Drop + recreate on every run: the test DB is disposable fixture data, and forcing
+  // NOT NULL/required columns onto a non-empty table (e.g. an FK migration) would
+  // otherwise fail against whatever rows a prior run left behind.
+  await client.query(`DROP DATABASE IF EXISTS "${dbName}"`);
+  await client.query(`CREATE DATABASE "${dbName}"`);
   await client.end();
 
   execSync("npx prisma migrate deploy", {

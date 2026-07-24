@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { preserveParams } from "@/lib/dashboard/filters";
+import { preserveParams, visiblePillsForPath } from "@/lib/dashboard/filters";
 
 // preserveParams builds the filter-preserving query string used by the deprecated-route
 // redirect stubs (risk-alerts → early-support, tracking → its new destinations, etc.).
@@ -27,5 +27,69 @@ describe("preserveParams (filter-preserving redirect builder)", () => {
   it("returns an empty string when there is nothing to preserve", () => {
     expect(preserveParams({})).toBe("");
     expect(preserveParams({ tab: "" })).toBe("");
+  });
+});
+
+describe("visiblePillsForPath", () => {
+  it("Home shows cohort/country/university/department", () => {
+    expect(visiblePillsForPath("/dashboard")).toEqual([
+      "cohort",
+      "country",
+      "university",
+      "department",
+    ]);
+  });
+
+  it("Early Support and Growth & Development show cohort/country/university only", () => {
+    expect(visiblePillsForPath("/dashboard/early-support")).toEqual([
+      "cohort",
+      "country",
+      "university",
+    ]);
+    expect(visiblePillsForPath("/dashboard/career-readiness")).toEqual([
+      "cohort",
+      "country",
+      "university",
+    ]);
+  });
+
+  it("Program Ecosystem shows cohort/country/university only", () => {
+    expect(visiblePillsForPath("/dashboard/actors")).toEqual(["cohort", "country", "university"]);
+  });
+
+  it("Scholar Progress puts university first and includes status/risk", () => {
+    expect(visiblePillsForPath("/dashboard/scholars")).toEqual([
+      "university",
+      "country",
+      "cohort",
+      "status",
+      "risk",
+    ]);
+    expect(visiblePillsForPath("/dashboard/scholars/BT-CO-001")).toEqual([
+      "university",
+      "country",
+      "cohort",
+      "status",
+      "risk",
+    ]);
+  });
+
+  it("out-of-scope routes keep the full pill set", () => {
+    expect(visiblePillsForPath("/dashboard/unit-economics")).toEqual([
+      "country",
+      "cohort",
+      "university",
+      "status",
+      "risk",
+      "period",
+    ]);
+    expect(visiblePillsForPath("/dashboard/admin/imports")).toEqual([
+      "country",
+      "cohort",
+      "university",
+      "status",
+      "risk",
+      "period",
+    ]);
   });
 });
