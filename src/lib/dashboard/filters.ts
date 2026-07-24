@@ -54,6 +54,8 @@ export function visiblePillsForPath(pathname: string): FilterKey[] {
   if (pathname.startsWith("/dashboard/early-support")) return ["cohort", "country", "university"];
   if (pathname.startsWith("/dashboard/career-readiness")) return ["cohort", "country", "university"];
   if (pathname.startsWith("/dashboard/actors")) return ["cohort", "country", "university"];
-  if (pathname.startsWith("/dashboard/scholars")) return ["university", "country", "cohort"];
+  if (pathname.startsWith("/dashboard/scholars")) {
+    return ["university", "country", "cohort", "status", "risk"];
+  }
   return ["country", "cohort", "university", "status", "risk", "period"];
 }

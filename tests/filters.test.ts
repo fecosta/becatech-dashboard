@@ -57,12 +57,20 @@ describe("visiblePillsForPath", () => {
     expect(visiblePillsForPath("/dashboard/actors")).toEqual(["cohort", "country", "university"]);
   });
 
-  it("Scholar Progress puts university first", () => {
-    expect(visiblePillsForPath("/dashboard/scholars")).toEqual(["university", "country", "cohort"]);
+  it("Scholar Progress puts university first and includes status/risk", () => {
+    expect(visiblePillsForPath("/dashboard/scholars")).toEqual([
+      "university",
+      "country",
+      "cohort",
+      "status",
+      "risk",
+    ]);
     expect(visiblePillsForPath("/dashboard/scholars/BT-CO-001")).toEqual([
       "university",
       "country",
       "cohort",
+      "status",
+      "risk",
     ]);
   });
 

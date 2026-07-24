@@ -1,13 +1,15 @@
 import Link from "next/link";
+import { type Column, DataTable } from "@/components/DataTable";
 import { ScholarProfileView } from "@/components/ScholarProfileView";
 import { ScholarSearch } from "@/components/ScholarSearch";
-import { AccessDenied, Badge, Card, PageHeader, RiskBadge } from "@/components/ui";
+import { AccessDenied, Badge, PageHeader, RiskBadge } from "@/components/ui";
 import { canAccessScholar, type CurrentUser, Permission } from "@/lib/auth/authorization";
 import { requirePermission } from "@/lib/auth/guard";
 import { parseFilters, preserveParams, type SearchParams } from "@/lib/dashboard/filters";
 import { getScholarDirectory } from "@/lib/dashboard/queries";
 import type { DashboardFilters, ScholarDirectoryRow } from "@/lib/dashboard/types";
 import type { ProgramStatus } from "@/generated/prisma/enums";
+import { fmtGpa } from "@/lib/format";
 import { COUNTRY_LABEL, PROGRAM_STATUS_LABEL } from "@/lib/labels";
 
 export const dynamic = "force-dynamic";
@@ -44,20 +46,38 @@ export default async function ScholarsPage({
       <PageHeader
         title="Scholar Progress"
         tag="Individual record"
-        subtitle="Who is this scholar, and how are they doing? Search any scholar to see their full record."
+        subtitle="Who is this scholar, and how are they doing? Search any scholar, or browse the full list below."
       />
       <ScholarSearch />
-
-      {!q ? (
-        <Card className="mt-4">
-          <p className="text-sm text-muted">Search for a scholar to view their record.</p>
-        </Card>
-      ) : (
-        <ScholarResults q={q} filters={filters} sp={sp} user={user!} />
-      )}
+      <ScholarResults q={q} filters={filters} sp={sp} user={user!} />
     </div>
   );
 }
+
+const columns = (sp: SearchParams): Column<ScholarDirectoryRow>[] => [
+  {
+    header: "Scholar",
+    cell: (r) => (
+      <Link href={`?${preserveParams(sp, { q: r.scholarId })}`} className="font-medium text-purple hover:underline">
+        {r.fullName}
+        <span className="ml-1 text-xs text-muted">{r.scholarId}</span>
+      </Link>
+    ),
+  },
+  { header: "Country", cell: (r) => COUNTRY_LABEL[r.country] },
+  { header: "Cohort", cell: (r) => r.cohort },
+  { header: "University", cell: (r) => r.university },
+  { header: "Program", cell: (r) => r.academicProgram },
+  {
+    header: "Status",
+    cell: (r) => <Badge tone={STATUS_TONE[r.programStatus]}>{PROGRAM_STATUS_LABEL[r.programStatus]}</Badge>,
+  },
+  {
+    header: "Risk",
+    cell: (r) => (r.currentRiskLevel ? <RiskBadge level={r.currentRiskLevel} /> : <span className="text-muted">—</span>),
+  },
+  { header: "GPA", cell: (r) => fmtGpa(r.latestGpa) },
+];
 
 async function ScholarResults({
   q,
@@ -65,20 +85,12 @@ async function ScholarResults({
   sp,
   user,
 }: {
-  q: string;
+  q?: string;
   filters: DashboardFilters;
   sp: SearchParams;
   user: CurrentUser;
 }) {
   const results = await getScholarDirectory(filters, q);
-
-  if (results.length === 0) {
-    return (
-      <Card className="mt-4">
-        <p className="text-sm text-muted">No scholars found matching &quot;{q}&quot;.</p>
-      </Card>
-    );
-  }
 
   if (results.length === 1) {
     const scholarId = results[0].scholarId;
@@ -89,31 +101,21 @@ async function ScholarResults({
   }
 
   return (
-    <Card className="mt-4">
-      <p className="mb-3 text-xs text-muted">
-        {results.length} scholars match &quot;{q}&quot; — pick one:
-      </p>
-      <div className="divide-y divide-border">
-        {results.map((r: ScholarDirectoryRow) => (
-          <Link
-            key={r.scholarId}
-            href={`?${preserveParams(sp, { q: r.scholarId })}`}
-            className="flex flex-wrap items-center justify-between gap-2 rounded-lg px-2 py-3 hover:bg-chip-cream"
-          >
-            <div>
-              <span className="font-medium text-purple">{r.fullName}</span>
-              <span className="ml-1.5 text-xs text-muted">{r.scholarId}</span>
-            </div>
-            <div className="flex flex-wrap items-center gap-3 text-xs text-muted">
-              <span>{r.university}</span>
-              <span>{r.cohort}</span>
-              <span>{COUNTRY_LABEL[r.country]}</span>
-              <Badge tone={STATUS_TONE[r.programStatus]}>{PROGRAM_STATUS_LABEL[r.programStatus]}</Badge>
-              {r.currentRiskLevel ? <RiskBadge level={r.currentRiskLevel} /> : null}
-            </div>
-          </Link>
-        ))}
+    <div className="mt-4">
+      <div className="mb-2 text-xs text-muted">
+        {results.length} scholar{results.length === 1 ? "" : "s"}
+        {q ? (
+          <>
+            {" "}
+            matching &quot;{q}&quot;
+          </>
+        ) : null}
       </div>
-    </Card>
+      <DataTable
+        columns={columns(sp)}
+        rows={results}
+        empty={q ? `No scholars found matching "${q}".` : "No scholars found."}
+      />
+    </div>
   );
 }
