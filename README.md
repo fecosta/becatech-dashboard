@@ -367,7 +367,14 @@ read-gated by `VIEW_IMPORTS`).
    this app's own callback to the redirect allowlist: the production URL
    (`https://becatech-dashboard.vercel.app/auth/callback`) and a wildcard for Preview deployments
    (`https://becatech-dashboard-*-<team-slug>.vercel.app/auth/callback`).
-5. Apply migrations during release: `prisma migrate deploy` (uses `DIRECT_URL`).
+5. Apply migrations during release: `npm run build` runs `prisma migrate deploy` (uses
+   `DIRECT_URL`) automatically, but **only when `VERCEL_ENV=production`** — Preview builds skip
+   it and just run `next build`. This matters because Preview and Production share the same
+   database here (step 3): if Preview ran migrations too, a schema-changing branch would alter
+   the live database before it's merged, breaking whatever's currently deployed to Production.
+   Test schema-changing branches locally (against the docker Postgres) before merging — a Preview
+   deployment for such a branch will build fine but error at runtime until it's merged and
+   deployed to Production.
 6. Seed once if desired: export `DATABASE_URL`/`DIRECT_URL` explicitly in your shell first (don't
    rely on `.env`/`.env.local`, which won't override already-set process env vars), then run
    `npm run db:seed` against the provisioned database.
