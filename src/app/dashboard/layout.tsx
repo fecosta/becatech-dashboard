@@ -1,8 +1,7 @@
 import { redirect } from "next/navigation";
-import { type ReactNode, Suspense } from "react";
-import { type NavItem, type NavSection, Sidebar } from "@/components/Sidebar";
-import { SignOutButton } from "@/components/SignOutButton";
-import { TopFilters } from "@/components/TopFilters";
+import type { ReactNode } from "react";
+import { DashboardShell } from "@/components/DashboardShell";
+import type { NavItem, NavSection } from "@/components/Sidebar";
 import { can, Permission } from "@/lib/auth/authorization";
 import { getCurrentUserResult } from "@/lib/auth/current-user";
 import { getFilterOptions } from "@/lib/dashboard/queries";
@@ -101,20 +100,12 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   })).filter((section) => section.items.length > 0);
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar
-        sections={sections}
-        profile={{ name: user.fullName ?? user.email, role: titleCaseRole(user.role) }}
-      />
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 border-b border-border bg-cream/80 px-6 py-3 backdrop-blur">
-          <Suspense fallback={<div className="h-7" />}>
-            <TopFilters options={options} />
-          </Suspense>
-          <SignOutButton />
-        </header>
-        <main className="flex-1 p-6">{children}</main>
-      </div>
-    </div>
+    <DashboardShell
+      sections={sections}
+      profile={{ name: user.fullName ?? user.email, role: titleCaseRole(user.role) }}
+      options={options}
+    >
+      {children}
+    </DashboardShell>
   );
 }
