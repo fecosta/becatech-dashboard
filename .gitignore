@@ -46,6 +46,7 @@ next-env.d.ts
 
 # internal program context docs (not committed)
 /context
+/design-reference
 
 # stray downloaded import templates / scratch spreadsheets at repo root
 /template-*.xlsx
