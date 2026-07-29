@@ -11,6 +11,7 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:seed": "tsx prisma/seed.ts",
+    "db:seed:users": "tsx prisma/seed-users.ts",
     "db:reset": "prisma migrate reset",
     "db:studio": "prisma studio",
     "dashboard:check": "tsx src/scripts/dashboard-check.ts",

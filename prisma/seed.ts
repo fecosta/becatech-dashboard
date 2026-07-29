@@ -882,6 +882,8 @@ async function main() {
     { id: "user-selection", fullName: "Mateo Gómez", email: "selection@becatech.test", role: UserRole.SELECTION_TEAM },
     // Real account (not synthetic demo data) for Google sign-in QA — see auth section of README.
     { id: "user-felipe-admin", fullName: "Felipe Costa", email: "felipe@velezreyesmas.com", role: UserRole.ANALYST_ADMIN },
+    // System user attributed to Google Sheets sync batches (POST /api/sync/import) — not a login.
+    { id: "user-sheets-sync", fullName: "Google Sheets Sync", email: "sheets-sync@becatech.internal", role: UserRole.ANALYST_ADMIN },
   ];
 
   // ---- Insert (FK-safe order) ----

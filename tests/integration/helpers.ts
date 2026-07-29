@@ -33,13 +33,29 @@ export async function seedFixture(): Promise<{ uploaderId: string }> {
       role: "ANALYST_ADMIN",
     },
   });
+  // System user the sync endpoint (POST /api/sync/import) attributes its batches to.
+  await prisma.appUser.create({
+    data: {
+      id: "test-sheets-sync",
+      fullName: "Google Sheets Sync",
+      email: "sheets-sync@becatech.internal",
+      role: "ANALYST_ADMIN",
+    },
+  });
 
   const controls: { category: string; value: string; label: string }[] = [];
   const add = (category: string, values: string[]) =>
     values.forEach((v) => controls.push({ category, value: v, label: v }));
   add("country", ["COLOMBIA", "PERU"]);
   add("program_status", ["ACTIVE", "WITHDRAWN", "GRADUATED", "PAUSED"]);
-  add("activity_type", ["INDIVIDUAL_TUTORING", "GROUP_TUTORING", "WORKSHOP", "OTHER"]);
+  add("activity_type", [
+    "INDIVIDUAL_TUTORING",
+    "GROUP_TUTORING",
+    "INDIVIDUAL_MENTORING",
+    "GROUP_MENTORING",
+    "WORKSHOP",
+    "OTHER",
+  ]);
   add("cost_category", ["Tuition", "Scholarship amount"]);
   add("academic_progress_status", ["ON_TRACK", "SLIGHTLY_BEHIND", "BEHIND", "CRITICAL_DELAY"]);
   add("request_status", ["SUBMITTED", "IN_REVIEW", "RESOLVED", "REJECTED", "PENDING"]);
