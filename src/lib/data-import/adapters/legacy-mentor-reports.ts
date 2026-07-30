@@ -74,14 +74,21 @@ export function mentorReportsLegacyAdapter(sheet: ParsedSheet): CanonicalRow[] {
 
   records.forEach((rec, i) => {
     const idx = indexRecord(rec);
+    // "Número de ID" (right after "Soy: ", the mentor's own self-identification question) is the
+    // MENTOR's ID, not the scholar's — MENTOR REPORTS has no real scholar-ID column at all.
+    // validate.ts resolves the real scholarId by matching `scholarName` against Scholar.fullName
+    // instead of trusting this field (falling back to trusting this raw value only when
+    // scholarName is absent). A decorative/blank row has neither — skip only when BOTH are blank,
+    // so a real row missing just one of the two isn't silently dropped before validation sees it.
     const scholarId = c(idx.get("numero de id"), "string");
-    if (typeof scholarId !== "string" || scholarId === "") return; // skip blank rows
+    const scholarName = c(idx.get("nombre del becario"), "string");
+    if (!scholarId && !scholarName) return; // skip fully blank rows
 
     out.push({
       rowNumber: headerRowIndex + i + 2, // +1: header row itself, +1: 1-based row numbers
       data: {
         scholarId,
-        scholarName: c(idx.get("nombre del becario"), "string"),
+        scholarName,
         mentorName: c(idx.get("soy:"), "string"),
         country: mapCountry(idx.get("pais")),
         cohort: c(idx.get("cohorte del programa:"), "string"),

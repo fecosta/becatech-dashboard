@@ -40,15 +40,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Empty body" }, { status: 400 });
   }
 
-  // TEMP diagnostic — remove once the total:0 sync issue is resolved. Header line + counts only,
-  // no data rows, so this never logs scholar data.
-  {
-    const firstNewline = text.indexOf("\n");
-    console.log(
-      `[sync-debug] entity=${req.headers.get("x-entity")} textLength=${text.length} lineCount=${text.split("\n").length} header=${JSON.stringify(text.slice(0, firstNewline === -1 ? 300 : Math.min(firstNewline, 300)))}`,
-    );
-  }
-
   const uploadedById = (
     await prisma.appUser.findUnique({ where: { email: SYNC_USER_EMAIL }, select: { id: true } })
   )?.id;

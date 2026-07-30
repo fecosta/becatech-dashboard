@@ -8,6 +8,7 @@ import type {
   ProgramStatus,
   RequestStatus,
 } from "../../generated/prisma/enums";
+import { normKey } from "./adapters/shared";
 import { isBadDate, isBadNumber } from "./coerce";
 import { synthSubmissionId } from "./synthkey";
 import { TEMPLATE_COLUMNS } from "./templates";
@@ -239,6 +240,9 @@ export function validateBatch(batch: CanonicalBatch, ctx: ValidationContext): Va
   const validated = emptyValidatedBatch();
   const errors: RowError[] = [];
   const scholarIds = new Set(ctx.existingScholarIds);
+  const nameIndex = new Map(
+    [...ctx.scholarIdsByNormalizedName].map(([k, ids]) => [k, [...ids]] as [string, string[]]),
+  );
   const entities: ImportEntity[] = [];
   let totalRows = 0;
   let successRows = 0;
@@ -254,7 +258,50 @@ export function validateBatch(batch: CanonicalBatch, ctx: ValidationContext): Va
       checkFields(entity, row, ctx, errors);
       if (errors.length > before) continue;
 
-      if (entity !== "SCHOLAR") {
+      if (entity === "MENTOR_REPORT") {
+        // MENTOR REPORTS has no real scholar-ID column — "Número de ID" there is the mentor's own
+        // ID, not the scholar's (see legacy-mentor-reports.ts). Resolve by scholarName instead
+        // whenever one is given; only fall back to trusting the raw scholarId when scholarName is
+        // absent (the manual admin-upload template, where an analyst types a real scholarId and
+        // has no reason to supply a name). Never guess: zero or ambiguous name matches are errors.
+        const rawName = gS(row, "scholarName");
+        if (rawName) {
+          const matches = nameIndex.get(normKey(rawName)) ?? [];
+          if (matches.length === 0) {
+            errors.push({
+              entity,
+              rowNumber: row.rowNumber,
+              field: "scholarName",
+              message: `Becario no encontrado por nombre: ${rawName}`,
+            });
+            continue;
+          }
+          if (matches.length > 1) {
+            errors.push({
+              entity,
+              rowNumber: row.rowNumber,
+              field: "scholarName",
+              message: `Nombre de becario ambiguo (coincide con ${matches.length} becarios): ${rawName}`,
+            });
+            continue;
+          }
+          // Overwrite before buildMentorReport() runs below — it derives a synthetic
+          // submissionId from scholarId when the sheet doesn't supply one, and that must be keyed
+          // on the real scholar, not the mentor's ID.
+          row.data.scholarId = matches[0];
+        } else {
+          const sid = gS(row, "scholarId");
+          if (!sid || !scholarIds.has(sid)) {
+            errors.push({
+              entity,
+              rowNumber: row.rowNumber,
+              field: "scholarId",
+              message: `scholarId no existe: ${sid ?? ""}`,
+            });
+            continue;
+          }
+        }
+      } else if (entity !== "SCHOLAR") {
         const sid = gS(row, "scholarId");
         if (!sid || !scholarIds.has(sid)) {
           errors.push({
@@ -289,6 +336,15 @@ export function validateBatch(batch: CanonicalBatch, ctx: ValidationContext): Va
           const r = buildScholar(row, universityId!);
           validated.SCHOLAR.push(r);
           scholarIds.add(r.scholarId);
+          // Grow the name index in step, so a batch containing both a SCHOLAR tab and a
+          // MENTOR_REPORT tab (LEGACY_WIDE_EXCEL manual upload) can resolve names against
+          // scholars created earlier in this same batch, not just pre-existing ones.
+          const nameKey = normKey(r.fullName);
+          if (nameKey) {
+            const arr = nameIndex.get(nameKey) ?? [];
+            if (!arr.includes(r.scholarId)) arr.push(r.scholarId);
+            nameIndex.set(nameKey, arr);
+          }
           break;
         }
         case "ACADEMIC_TERM":

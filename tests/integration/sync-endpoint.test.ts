@@ -72,8 +72,15 @@ describe("sync endpoint (integration)", () => {
   });
 
   it("mentor reports happy path: commits and attributes the batch to the sync system user", async () => {
+    // "Número de ID" is deliberately the mentor's (wrong) ID, not the scholar's — proves scholarId
+    // resolution goes by "Nombre del becario" and ignores this field, matching real sheet shape.
     const csv = mentorReportsCsv([
-      { "Número de ID": "BT-CO-001", "¿Qué mes reportas?": "2026-06", "Submission ID": "sub-e2e-001" },
+      {
+        "Número de ID": "MENTOR-77",
+        "Nombre del becario": "Fixture Scholar",
+        "¿Qué mes reportas?": "2026-06",
+        "Submission ID": "sub-e2e-001",
+      },
     ]);
     const res = await POST(syncRequest(csv, { "x-api-key": API_KEY, "x-sheet-name": "MENTOR REPORTS" }));
     expect(res.status).toBe(200);
@@ -115,8 +122,18 @@ describe("sync endpoint (integration)", () => {
 
   it("partial failure: commits the valid row, logs the invalid one, still returns 200", async () => {
     const csv = mentorReportsCsv([
-      { "Número de ID": "BT-CO-001", "¿Qué mes reportas?": "2026-06", "Submission ID": "sub-ok" },
-      { "Número de ID": "BT-XX-999", "¿Qué mes reportas?": "2026-06", "Submission ID": "sub-bad" },
+      {
+        "Número de ID": "MENTOR-77",
+        "Nombre del becario": "Fixture Scholar",
+        "¿Qué mes reportas?": "2026-06",
+        "Submission ID": "sub-ok",
+      },
+      {
+        "Número de ID": "MENTOR-77",
+        "Nombre del becario": "Nadie Existe",
+        "¿Qué mes reportas?": "2026-06",
+        "Submission ID": "sub-bad",
+      },
     ]);
     const res = await POST(syncRequest(csv, { "x-api-key": API_KEY }));
     expect(res.status).toBe(200);
@@ -124,10 +141,44 @@ describe("sync endpoint (integration)", () => {
     expect(json.committed).toBe(true);
     expect(json.successRows).toBe(1);
     expect(json.errorRows).toBe(1);
-    expect(json.errors[0].message).toContain("BT-XX-999");
+    expect(json.errors[0].message).toContain("Nadie Existe");
 
     expect(await prisma.mentorReport.count()).toBe(1);
     expect(await prisma.mentorReport.findUnique({ where: { submissionId: "sub-ok" } })).not.toBeNull();
+  });
+
+  it("does not collide two scholars' reports into one when they share a mentor and month", async () => {
+    // Both rows use the SAME mentor-shaped "Número de ID" and the same reporting month, with no
+    // sheet-provided Submission ID — if scholarId resolution ran after the synthetic-submissionId
+    // computation (instead of before), both rows would derive the identical synthetic key and the
+    // second would silently overwrite the first via the upsert's ON CONFLICT.
+    const university = await prisma.university.findFirstOrThrow();
+    await prisma.scholar.create({
+      data: {
+        scholarId: "BT-CO-002",
+        fullName: "Other Scholar",
+        country: "COLOMBIA",
+        cohort: "2025",
+        universityId: university.id,
+        academicProgram: "CS",
+        gender: "Male",
+        programStatus: "ACTIVE",
+      },
+    });
+    const csv = mentorReportsCsv([
+      { "Número de ID": "MENTOR-77", "Nombre del becario": "Fixture Scholar", "¿Qué mes reportas?": "2026-06" },
+      { "Número de ID": "MENTOR-77", "Nombre del becario": "Other Scholar", "¿Qué mes reportas?": "2026-06" },
+    ]);
+    const res = await POST(syncRequest(csv, { "x-api-key": API_KEY }));
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.committed).toBe(true);
+    expect(json.successRows).toBe(2);
+    expect(json.errorRows).toBe(0);
+
+    const reports = await prisma.mentorReport.findMany({ where: { reportingMonth: "2026-06" } });
+    expect(reports).toHaveLength(2);
+    expect(reports.map((r) => r.scholarId).sort()).toEqual(["BT-CO-001", "BT-CO-002"]);
   });
 
   it("idempotent re-sync: posting the same CSV twice does not duplicate rows", async () => {

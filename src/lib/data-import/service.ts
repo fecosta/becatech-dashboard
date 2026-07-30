@@ -6,6 +6,7 @@ import { runDataQualityScan } from "../data-quality/checks";
 import { prisma } from "../db";
 import { recomputeRiskForScholars } from "../risk/recompute";
 import { legacyAdapter } from "./adapters/legacy";
+import { normKey } from "./adapters/shared";
 import { templateAdapter } from "./adapters/template";
 import { type CommitResult, commitValidated } from "./commit";
 import { parseWorkbook } from "./parse";
@@ -21,7 +22,7 @@ import { validateBatch } from "./validate";
 
 async function loadValidationContext(): Promise<ValidationContext> {
   const [scholars, controls, universities] = await Promise.all([
-    prisma.scholar.findMany({ select: { scholarId: true } }),
+    prisma.scholar.findMany({ select: { scholarId: true, fullName: true } }),
     prisma.controlValue.findMany({ where: { isActive: true }, select: { category: true, value: true } }),
     prisma.university.findMany({ select: { id: true, name: true } }),
   ]);
@@ -36,10 +37,19 @@ async function loadValidationContext(): Promise<ValidationContext> {
   }
   const universityMap = new Map<string, string>();
   for (const u of universities) universityMap.set(u.name.trim().toLowerCase(), u.id);
+  const scholarIdsByNormalizedName = new Map<string, string[]>();
+  for (const s of scholars) {
+    const key = normKey(s.fullName);
+    if (!key) continue;
+    const arr = scholarIdsByNormalizedName.get(key) ?? [];
+    arr.push(s.scholarId);
+    scholarIdsByNormalizedName.set(key, arr);
+  }
   return {
     existingScholarIds: new Set(scholars.map((s) => s.scholarId)),
     controls: controlMap,
     universities: universityMap,
+    scholarIdsByNormalizedName,
   };
 }
 

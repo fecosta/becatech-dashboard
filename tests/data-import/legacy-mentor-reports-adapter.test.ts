@@ -51,6 +51,11 @@ const HEADER = [
 ];
 
 const COL = {
+  // NOTE: this column is actually the mentor's own ID ("Número de ID" follows "Soy: ", the
+  // mentor's self-identification question) — MENTOR REPORTS has no real scholar-ID column at
+  // all. validate.ts resolves the real scholarId by matching `scholarName` against
+  // Scholar.fullName instead of trusting this field. Kept as a distinct field purely because the
+  // adapter's canonical row shape still has a `scholarId` slot pending that resolution.
   scholarId: 4,
   cohort: 5,
   scholarName: 6,
@@ -183,6 +188,7 @@ describe("mentor-reports legacy adapter", () => {
   it("produces rows that pass validation, synthesizing a submissionId when absent", () => {
     const ctx: ValidationContext = {
       existingScholarIds: new Set(["BT-CO-001"]),
+      scholarIdsByNormalizedName: new Map([["ana perez gomez", ["BT-CO-001"]]]),
       controls: new Map<string, Set<string>>([["country", new Set(["COLOMBIA", "PERU"])]]),
       universities: new Map(),
     };
@@ -191,5 +197,58 @@ describe("mentor-reports legacy adapter", () => {
     expect(res.errorRows).toBe(0);
     expect(res.validated.MENTOR_REPORT).toHaveLength(1);
     expect(res.validated.MENTOR_REPORT[0].submissionId).toMatch(/^import:mentor:BT-CO-001:/);
+  });
+
+  it("resolves scholarId by name even when the sheet's ID cell is the mentor's, not the scholar's", () => {
+    const ctx: ValidationContext = {
+      existingScholarIds: new Set(["BT-CO-001"]),
+      scholarIdsByNormalizedName: new Map([["ana perez gomez", ["BT-CO-001"]]]),
+      controls: new Map<string, Set<string>>([["country", new Set(["COLOMBIA", "PERU"])]]),
+      universities: new Map(),
+    };
+    // A mentor-shaped ID, not any real scholarId — this is the actual production bug shape.
+    const row = sampleRow({ scholarId: "MENTOR-77" });
+    const batch = { MENTOR_REPORT: mentorReportsLegacyAdapter(mentorReportsSheet(row)) };
+    const res = validateBatch(batch, ctx);
+    expect(res.errorRows).toBe(0);
+    expect(res.validated.MENTOR_REPORT).toHaveLength(1);
+    expect(res.validated.MENTOR_REPORT[0].scholarId).toBe("BT-CO-001");
+  });
+
+  it("rejects a mentor report whose scholar name matches no scholar", () => {
+    const ctx: ValidationContext = {
+      existingScholarIds: new Set(["BT-CO-001"]),
+      scholarIdsByNormalizedName: new Map([["ana perez gomez", ["BT-CO-001"]]]),
+      controls: new Map<string, Set<string>>([["country", new Set(["COLOMBIA", "PERU"])]]),
+      universities: new Map(),
+    };
+    const row = sampleRow({ scholarName: "Nadie Existe" });
+    const batch = { MENTOR_REPORT: mentorReportsLegacyAdapter(mentorReportsSheet(row)) };
+    const res = validateBatch(batch, ctx);
+    expect(res.errorRows).toBe(1);
+    expect(res.errors[0].field).toBe("scholarName");
+    expect(res.errors[0].message).toContain("Nadie Existe");
+  });
+
+  it("rejects a mentor report whose scholar name is ambiguous (shared by 2+ scholars)", () => {
+    const ctx: ValidationContext = {
+      existingScholarIds: new Set(["BT-CO-001", "BT-CO-002"]),
+      scholarIdsByNormalizedName: new Map([["ana perez gomez", ["BT-CO-001", "BT-CO-002"]]]),
+      controls: new Map<string, Set<string>>([["country", new Set(["COLOMBIA", "PERU"])]]),
+      universities: new Map(),
+    };
+    const batch = { MENTOR_REPORT: mentorReportsLegacyAdapter(mentorReportsSheet(sampleRow())) };
+    const res = validateBatch(batch, ctx);
+    expect(res.errorRows).toBe(1);
+    expect(res.errors[0].field).toBe("scholarName");
+    expect(res.errors[0].message).toContain("ambiguo");
+    expect(res.errors[0].message).toContain("2");
+  });
+
+  it("does not drop a row with a blank mentor-ID cell as long as scholarName is present", () => {
+    const row = sampleRow({ scholarId: null });
+    const batch = mentorReportsLegacyAdapter(mentorReportsSheet(row));
+    expect(batch).toHaveLength(1);
+    expect(batch[0].data.scholarName).toBe("Ana Pérez Gómez");
   });
 });

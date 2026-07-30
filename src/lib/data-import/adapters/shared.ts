@@ -28,9 +28,11 @@ export function mapCountry(v: unknown): string | undefined {
 export function mapStatus(v: unknown): string | undefined {
   const s = normKey(v);
   if (!s) return undefined;
-  if (s.startsWith("activ")) return "ACTIVE";
-  if (s.startsWith("retir") || s.startsWith("desert")) return "WITHDRAWN";
-  if (s.startsWith("gradu")) return "GRADUATED";
-  if (s.startsWith("paus")) return "PAUSED";
+  // Real sheet values are like "BECARIO(A) ACTIVO" — the keyword isn't a prefix, so this
+  // matches anywhere in the string, not just at position 0.
+  if (s.includes("activ")) return "ACTIVE";
+  if (s.includes("retir") || s.includes("desert")) return "WITHDRAWN";
+  if (s.includes("gradu")) return "GRADUATED";
+  if (s.includes("paus")) return "PAUSED";
   return String(v).trim();
 }

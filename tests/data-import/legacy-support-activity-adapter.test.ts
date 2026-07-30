@@ -84,6 +84,7 @@ describe("support-activity-log legacy adapter", () => {
     const batch = { SUPPORT_ACTIVITY: supportActivityLogLegacyAdapter(buildSheet(SUB_HEADER, [row])) };
     const ctx: ValidationContext = {
       existingScholarIds: new Set(["BT-CO-001"]),
+      scholarIdsByNormalizedName: new Map(),
       controls: new Map<string, Set<string>>([
         ["country", new Set(["COLOMBIA", "PERU"])],
         [

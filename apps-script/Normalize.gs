@@ -57,11 +57,46 @@ function mapCountry_(v) {
 function mapStatus_(v) {
   var s = normKey_(v);
   if (!s) return "";
-  if (s.indexOf("activ") === 0) return "ACTIVE";
-  if (s.indexOf("retir") === 0 || s.indexOf("desert") === 0) return "WITHDRAWN";
-  if (s.indexOf("gradu") === 0) return "GRADUATED";
-  if (s.indexOf("paus") === 0) return "PAUSED";
+  // Real sheet values are like "BECARIO(A) ACTIVO" — the keyword isn't a prefix, so this
+  // matches anywhere in the string, not just at position 0.
+  if (s.indexOf("activ") !== -1) return "ACTIVE";
+  if (s.indexOf("retir") !== -1 || s.indexOf("desert") !== -1) return "WITHDRAWN";
+  if (s.indexOf("gradu") !== -1) return "GRADUATED";
+  if (s.indexOf("paus") !== -1) return "PAUSED";
   return String(v).trim();
+}
+
+/** Ordinal-word prefix -> semester number, checked after accent/case normalization via normKey_.
+ * Real sheet values look like "Quinto semestre" ("Fifth semester"), not a plain int. */
+var SEMESTER_WORD_RE_ = [
+  [/^primer/, 1],
+  [/^segund/, 2],
+  [/^tercer/, 3],
+  [/^cuart/, 4],
+  [/^quint/, 5],
+  [/^sext/, 6],
+  [/^septim/, 7],
+  [/^setim/, 7],
+  [/^octav/, 8],
+  [/^noven/, 9],
+  [/^decim/, 10],
+  [/^undecim/, 11],
+  [/^duodecim/, 12],
+];
+
+/** "Quinto semestre" -> 5, "3er semestre" -> 3, 7 -> 7, "" -> "" (unparseable -> blank, so it
+ * coerces to null downstream instead of NaN — see coerceValue in coerce.ts). */
+function parseSemesterCell_(v) {
+  if (v === null || v === undefined || v === "") return "";
+  if (typeof v === "number") return v;
+  var s = normKey_(v);
+  if (!s) return "";
+  var digitMatch = /^(\d+)/.exec(s);
+  if (digitMatch) return Number(digitMatch[1]);
+  for (var i = 0; i < SEMESTER_WORD_RE_.length; i++) {
+    if (SEMESTER_WORD_RE_[i][0].test(s)) return SEMESTER_WORD_RE_[i][1];
+  }
+  return "";
 }
 
 /** JS Date -> "yyyy-MM-dd" (unambiguous, locale-independent); anything else passes through as-is. */
@@ -171,22 +206,10 @@ function normalizeScholarGeneralInfo_(ss) {
     return hasId && hasTermGpa;
   });
   if (headerRowIndex < 0) {
-    // TEMP diagnostic — remove once resolved. Structural counts/booleans only, per scanned row —
-    // never logs actual cell values, so this is safe even though most of these rows hold scholar
-    // data.
-    var limit = Math.min(values.length, HEADER_SCAN_LIMIT_);
-    var summary = [];
-    for (var i = 0; i < limit; i++) {
-      var keys = values[i].map(normKey_);
-      var nonEmpty = keys.filter(function (k) { return k !== ""; }).length;
-      var hasId = keys.indexOf("id") !== -1 || keys.indexOf("id_becario") !== -1;
-      var hasGpaTerm = keys.some(function (k) { return TERM_RE_.test(k); });
-      summary.push("row" + i + "[len=" + values[i].length + ",nonEmpty=" + nonEmpty + ",hasId=" + hasId + ",hasGpaTerm=" + hasGpaTerm + "]");
-    }
     logSyncEvent(
       "NORMALIZE",
       "ERROR",
-      "SCHOLAR GENERAL INFO: real header not found in first " + HEADER_SCAN_LIMIT_ + " rows. " + summary.join(" "),
+      "SCHOLAR GENERAL INFO: real header not found in first " + HEADER_SCAN_LIMIT_ + " rows.",
     );
     return;
   }
@@ -222,7 +245,7 @@ function normalizeScholarGeneralInfo_(ss) {
       programCol !== -1 ? row[programCol] : "",
       genderCol !== -1 ? row[genderCol] : "",
       statusCol !== -1 ? mapStatus_(row[statusCol]) : "",
-      semesterCol !== -1 ? row[semesterCol] : "",
+      semesterCol !== -1 ? parseSemesterCell_(row[semesterCol]) : "",
       startDateCol !== -1 ? normalizeDateCell_(row[startDateCol]) : "",
       endDateCol !== -1 ? normalizeDateCell_(row[endDateCol]) : "",
     ]);
@@ -321,12 +344,17 @@ function normalizeMentorReports_(ss) {
   var rows = [];
   for (var r = headerRowIndex + 1; r < values.length; r++) {
     var row = values[r];
+    // "numero de id" here is the MENTOR's ID, not the scholar's (see the dashboard-side
+    // validate.ts, which resolves the real scholarId by matching scholarName instead, falling
+    // back to this raw value only when scholarName is absent). A decorative/blank row has neither
+    // — skip only when BOTH are blank, so a real row missing just one of the two isn't dropped.
     var scholarId = get(row, "scholarId");
-    if (scholarId === "" || scholarId === null || scholarId === undefined) continue; // skip blank rows
+    var scholarName = get(row, "scholarName");
+    if (!scholarId && !scholarName) continue; // skip fully blank rows
 
     rows.push([
       scholarId,
-      get(row, "scholarName"),
+      scholarName,
       get(row, "mentorName"),
       mapCountry_(get(row, "country")),
       get(row, "cohort"),

@@ -81,6 +81,26 @@ export async function seedFixture(): Promise<{ uploaderId: string }> {
   return { uploaderId: "test-analyst" };
 }
 
+/** A second scholar sharing seedFixture()'s scholar's fullName exactly — for exercising
+ * ambiguous-name resolution (MENTOR_REPORT's scholarId-by-name lookup). Opt-in, not part of the
+ * shared seedFixture() baseline, since every other test assumes exactly one scholar exists. */
+export async function seedAmbiguousNamesake(): Promise<{ scholarId: string }> {
+  const university = await prisma.university.findFirstOrThrow();
+  const scholar = await prisma.scholar.create({
+    data: {
+      scholarId: "BT-CO-002",
+      fullName: "Fixture Scholar",
+      country: "COLOMBIA",
+      cohort: "2025",
+      universityId: university.id,
+      academicProgram: "CS",
+      gender: "Female",
+      programStatus: "ACTIVE",
+    },
+  });
+  return { scholarId: scholar.scholarId };
+}
+
 export function csvBuffer(text: string): Uint8Array {
   return new TextEncoder().encode(text);
 }
