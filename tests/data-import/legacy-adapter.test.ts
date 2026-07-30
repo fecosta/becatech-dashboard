@@ -1,3 +1,4 @@
+import * as XLSX from "xlsx";
 import { describe, expect, it } from "vitest";
 import { isGeneralInfoSheet, legacyAdapter } from "@/lib/data-import/adapters/legacy";
 import type { ParsedSheet } from "@/lib/data-import/parse";
@@ -62,6 +63,31 @@ describe("legacy wide-Excel adapter", () => {
   it("auto-detects a new term column via regex (no code change)", () => {
     const batch = legacyAdapter(generalInfoSheet({ "GPA 2026-1": "3.5" }));
     expect(termRow(batch.ACADEMIC_TERM, "2026-1")?.data.gpa).toBe(3.5);
+  });
+
+  it("locates the real header when decorative rows sit above it (raw export)", () => {
+    const aoa = [
+      ["INFORMACIÓN BECARIOS(A)"],
+      [],
+      ["DATOS IDENTIFICACIÓN"],
+      ["ID", "PAÍS", "COHORTE", "UNIVERSIDAD", "PROGRAMA ACADÉMICO", "NOMBRE COMPLETO", "GÉNERO", "ESTADO ACTUAL", "GPA 2024-1"],
+      ["BT-CO-070", "Colombia", "2024", "UNAL", "CS", "Raw Export Scholar", "Female", "Activo", "4.0"],
+    ];
+    const sheet: ParsedSheet = {
+      sheetName: "SCHOLAR GENERAL INFO",
+      sheet: XLSX.utils.aoa_to_sheet(aoa),
+      records: XLSX.utils.sheet_to_json(XLSX.utils.aoa_to_sheet(aoa), { defval: null, raw: true, blankrows: false }),
+    };
+
+    // Row-1 detection misses it (row 1 is the decorative title, not the real header) — that's
+    // exactly the gap the dynamic fallback in legacyAdapter() covers.
+    expect(isGeneralInfoSheet(sheet.records)).toBe(false);
+
+    const batch = legacyAdapter([sheet]);
+    expect(batch.SCHOLAR).toHaveLength(1);
+    expect(batch.SCHOLAR?.[0].data.scholarId).toBe("BT-CO-070");
+    expect(batch.ACADEMIC_TERM).toHaveLength(1);
+    expect(batch.ACADEMIC_TERM?.[0].data.term).toBe("2024-1");
   });
 
   it("produces rows that pass validation (wide -> long -> valid)", () => {

@@ -7,9 +7,10 @@
 // self-detects its own tab from its header shape, the same way this adapter self-detects
 // SCHOLAR GENERAL INFO — so a single LEGACY_WIDE_EXCEL upload (or sync call) handles whichever
 // of the three tabs it's given with no explicit entity/tab parameter.
+import * as XLSX from "xlsx";
 import { coerceValue } from "../coerce";
 import type { ParsedSheet } from "../parse";
-import type { CanonicalBatch, CanonicalRow, FieldType } from "../types";
+import type { CanonicalBatch, CanonicalRow, FieldType, RawRecord } from "../types";
 import { isMentorReportsSheet, mentorReportsLegacyAdapter } from "./legacy-mentor-reports";
 import { isSupportActivityLogSheet, supportActivityLogLegacyAdapter } from "./legacy-support-activity";
 import { indexRecord, mapCountry, mapStatus, normKey } from "./shared";
@@ -24,14 +25,52 @@ const RE = {
   failed: new RegExp(`^materias reprobadas.*${TERM}$`),
 };
 
-/** A general-info sheet has an ID column and at least one `GPA <term>` column. */
-export function isGeneralInfoSheet(records: Record<string, unknown>[]): boolean {
-  const sample = records[0];
-  if (!sample) return false;
-  const keys = Object.keys(sample).map(normKey);
+/** A general-info header row has an ID column and at least one `GPA <term>` column. */
+function looksLikeGeneralInfoHeader(keys: string[]): boolean {
   const hasId = keys.some((k) => k === "id" || k === "id_becario");
   const hasTermGpa = keys.some((k) => RE.gpa.test(k));
   return hasId && hasTermGpa;
+}
+
+export function isGeneralInfoSheet(records: Record<string, unknown>[]): boolean {
+  const sample = records[0];
+  if (!sample) return false;
+  return looksLikeGeneralInfoHeader(Object.keys(sample).map(normKey));
+}
+
+const HEADER_SCAN_LIMIT = 20;
+
+/**
+ * Fallback for a raw export with decorative rows above the real header (e.g. a title row and a
+ * block-label row before "ID, PAÍS, COHORTE, ..."), which `isGeneralInfoSheet`'s row-1 check
+ * misses. Scans the first ~20 rows for the real header and, if found, returns records re-anchored
+ * there plus that header's physical row index (for accurate rowNumber reporting) — same technique
+ * as the MENTOR REPORTS adapter's dynamic header detection.
+ */
+function findGeneralInfoRecords(sheet: ParsedSheet): { records: RawRecord[]; headerRowIndex: number } | null {
+  if (!sheet.sheet) return null;
+  const rawRows = XLSX.utils.sheet_to_json<unknown[]>(sheet.sheet, {
+    header: 1,
+    defval: null,
+    raw: true,
+    blankrows: true,
+  });
+  const startRow = sheet.sheet["!ref"] ? XLSX.utils.decode_range(sheet.sheet["!ref"]).s.r : 0;
+  const limit = Math.min(rawRows.length, HEADER_SCAN_LIMIT);
+  for (let i = 0; i < limit; i++) {
+    const keys = (rawRows[i] ?? []).map(normKey);
+    if (looksLikeGeneralInfoHeader(keys)) {
+      const headerRowIndex = startRow + i;
+      const records = XLSX.utils.sheet_to_json<RawRecord>(sheet.sheet, {
+        range: headerRowIndex,
+        defval: null,
+        raw: true,
+        blankrows: false,
+      });
+      return { records, headerRowIndex };
+    }
+  }
+  return null;
 }
 
 function scholarRow(idx: Map<string, unknown>, rowNumber: number): CanonicalRow {
@@ -54,12 +93,15 @@ function scholarRow(idx: Map<string, unknown>, rowNumber: number): CanonicalRow 
   };
 }
 
-function generalInfoRows(sheet: ParsedSheet): { scholars: CanonicalRow[]; terms: CanonicalRow[] } {
+function generalInfoRows(
+  records: RawRecord[],
+  rowNumberOffset = 0,
+): { scholars: CanonicalRow[]; terms: CanonicalRow[] } {
   const scholars: CanonicalRow[] = [];
   const terms: CanonicalRow[] = [];
 
-  sheet.records.forEach((rec, i) => {
-    const rowNumber = i + 2;
+  records.forEach((rec, i) => {
+    const rowNumber = rowNumberOffset + i + 2;
     const idx = indexRecord(rec);
     const scholarId = coerceValue(idx.get("id") ?? idx.get("id_becario"), "string");
     if (typeof scholarId !== "string" || scholarId === "") return; // skip blank rows
@@ -97,7 +139,15 @@ export function legacyAdapter(sheets: ParsedSheet[]): CanonicalBatch {
 
   for (const sheet of sheets) {
     if (isGeneralInfoSheet(sheet.records)) {
-      const rows = generalInfoRows(sheet);
+      const rows = generalInfoRows(sheet.records);
+      scholars.push(...rows.scholars);
+      terms.push(...rows.terms);
+      continue;
+    }
+
+    const reAnchored = findGeneralInfoRecords(sheet);
+    if (reAnchored) {
+      const rows = generalInfoRows(reAnchored.records, reAnchored.headerRowIndex);
       scholars.push(...rows.scholars);
       terms.push(...rows.terms);
     } else if (isMentorReportsSheet(sheet)) {
