@@ -90,6 +90,29 @@ describe("legacy wide-Excel adapter", () => {
     expect(batch.ACADEMIC_TERM?.[0].data.term).toBe("2024-1");
   });
 
+  it("maps gender when the real header cell is a merged multi-line hint (GÉNERO\\n(M o F))", () => {
+    const sheets: ParsedSheet[] = [
+      {
+        sheetName: "SCHOLAR GENERAL INFO",
+        records: [
+          {
+            ID: "BT-CO-071",
+            PAÍS: "Colombia",
+            COHORTE: "2025",
+            UNIVERSIDAD: "Universidad Nacional de Colombia",
+            "PROGRAMA ACADÉMICO": "Computer Science",
+            "NOMBRE COMPLETO": "Multiline Header Scholar",
+            "GÉNERO\n(M o F)": "Female",
+            "ESTADO ACTUAL": "Activo",
+            "GPA 2024-1": "4.0",
+          },
+        ],
+      },
+    ];
+    const batch = legacyAdapter(sheets);
+    expect(batch.SCHOLAR?.[0].data.gender).toBe("Female");
+  });
+
   it("produces rows that pass validation (wide -> long -> valid)", () => {
     const ctx: ValidationContext = {
       existingScholarIds: new Set(),

@@ -73,6 +73,18 @@ function findGeneralInfoRecords(sheet: ParsedSheet): { records: RawRecord[]; hea
   return null;
 }
 
+/**
+ * First value whose normalized key starts with `prefix`. Needed for columns like "GÉNERO" whose
+ * real-export header cell is actually "GÉNERO\n(M o F)" — a merged hint line that normKey folds
+ * into "genero (m o f)", not the exact "genero" an equality lookup expects.
+ */
+function getByKeyPrefix(idx: Map<string, unknown>, prefix: string): unknown {
+  for (const [k, v] of idx) {
+    if (k.startsWith(prefix)) return v;
+  }
+  return undefined;
+}
+
 function scholarRow(idx: Map<string, unknown>, rowNumber: number): CanonicalRow {
   const c = (v: unknown, t: FieldType) => coerceValue(v, t);
   return {
@@ -84,7 +96,7 @@ function scholarRow(idx: Map<string, unknown>, rowNumber: number): CanonicalRow 
       cohort: c(idx.get("cohorte"), "string"),
       university: c(idx.get("universidad"), "string"),
       academicProgram: c(idx.get("programa academico"), "string"),
-      gender: c(idx.get("genero"), "string"),
+      gender: c(getByKeyPrefix(idx, "genero"), "string"),
       programStatus: mapStatus(idx.get("estado actual")),
       currentSemester: c(idx.get("semester") ?? idx.get("semestre"), "int"),
       startDate: c(idx.get("fecha de inicio"), "date"),
