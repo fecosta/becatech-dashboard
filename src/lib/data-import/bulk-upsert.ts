@@ -29,11 +29,25 @@ export interface UpsertedRow {
  * separate `id` field, which the caller must have already generated for every row (no DB-level
  * default exists for it, unlike createdAt).
  *
- * All rows must have the exact same set of keys (guaranteed by the `build*` functions in
- * validate.ts, which assign every field unconditionally). Returns, per row, whether it was a
- * fresh insert or an update-in-place (via the `xmax = 0` trick) - callers need this to only
- * record freshly-created rows for insert-only rollback, matching the old per-row `create` vs
- * `update` branching.
+ * The `build*` functions in validate.ts assign every field unconditionally, but a row's shape can
+ * still differ from row to row by the time it reaches here: `createImportBatch`/`commitImportBatch`
+ * round-trip the validated batch through a Prisma `Json` column, and that serialization drops any
+ * key whose value is `undefined` (unlike an explicit `null`, which survives) — so two rows built by
+ * the exact same function can end up with different key sets purely because one happened to have a
+ * real value for an optional field and another didn't. The column list is therefore the UNION of
+ * every row's keys, not just the first row's — using only the first row's keys would silently drop
+ * a later row's value for any column the first row happened to lack, for every row in the batch, not
+ * just the ones missing it.
+ *
+ * Any column that's NOT NULL with a DB-level default (e.g. SupportActivity.activityCount) must be
+ * given a real value by the caller before calling this — a per-row VALUES tuple in a multi-row
+ * INSERT has no way to say "omit this column, use its default" only for some rows, so a row that
+ * lacks the key gets an explicit NULL here, which violates NOT NULL instead of falling back to the
+ * default the way Prisma's typed `create()` would have.
+ *
+ * Returns, per row, whether it was a fresh insert or an update-in-place (via the `xmax = 0` trick)
+ * — callers need this to only record freshly-created rows for insert-only rollback, matching the
+ * old per-row `create` vs `update` branching.
  */
 export async function bulkUpsert(
   tx: Prisma.TransactionClient,
@@ -57,7 +71,9 @@ export async function bulkUpsert(
   }
   const dedupedRows = [...dedupedByKey.values()];
 
-  const columns = Object.keys(dedupedRows[0]);
+  const columnSet = new Set<string>();
+  for (const row of dedupedRows) for (const c of Object.keys(row)) columnSet.add(c);
+  const columns = [...columnSet];
   const updateColumns = columns.filter((c) => !conflictColumns.includes(c) && c !== idColumn);
   const columnsSql = Prisma.raw(columns.map((c) => `"${c}"`).join(", "));
   const conflictSql = Prisma.raw(conflictColumns.map((c) => `"${c}"`).join(", "));

@@ -48,7 +48,14 @@ export async function commitValidated(
     async (tx) => {
       // Scholars first (dependents' FKs resolve within the txn).
       if (validated.SCHOLAR.length > 0) {
-        const rows = validated.SCHOLAR.map((s) => ({ ...s, importBatchId: batchId, updatedAt: new Date() }));
+        const rows = validated.SCHOLAR.map((s) => ({
+          ...s,
+          // Explicit default, not left to Postgres's column default — a raw multi-row INSERT
+          // can't say "omit this column, use its default" per row (see bulk-upsert.ts).
+          programStatus: s.programStatus ?? "ACTIVE",
+          importBatchId: batchId,
+          updatedAt: new Date(),
+        }));
         const results = await bulkUpsert(tx, "Scholar", "scholarId", ["scholarId"], rows);
         for (const r of results) if (r.wasInserted) recordCreate("Scholar", r.id);
         successRows += validated.SCHOLAR.length;
@@ -57,6 +64,8 @@ export async function commitValidated(
       if (validated.ACADEMIC_TERM.length > 0) {
         const rows = validated.ACADEMIC_TERM.map((t) => ({
           ...t,
+          isLeveling: t.isLeveling ?? false,
+          receivedSupport: t.receivedSupport ?? false,
           id: randomUUID(),
           importBatchId: batchId,
           updatedAt: new Date(),
@@ -83,7 +92,16 @@ export async function commitValidated(
       }
 
       if (validated.MENTOR_REPORT.length > 0) {
-        const rows = validated.MENTOR_REPORT.map((m) => ({ ...m, id: randomUUID(), importBatchId: batchId }));
+        const rows = validated.MENTOR_REPORT.map((m) => ({
+          ...m,
+          individualTutoring: m.individualTutoring ?? 0,
+          groupTutoring: m.groupTutoring ?? 0,
+          individualMentoring: m.individualMentoring ?? 0,
+          groupMentoring: m.groupMentoring ?? 0,
+          workshops: m.workshops ?? 0,
+          id: randomUUID(),
+          importBatchId: batchId,
+        }));
         const results = await bulkUpsert(tx, "MentorReport", "id", ["submissionId"], rows);
         for (const r of results) if (r.wasInserted) recordCreate("MentorReport", r.id);
         for (const m of validated.MENTOR_REPORT) {
@@ -97,6 +115,7 @@ export async function commitValidated(
       if (validated.SUPPORT_ACTIVITY.length > 0) {
         const rows = validated.SUPPORT_ACTIVITY.map((a) => ({
           ...a,
+          activityCount: a.activityCount ?? 0,
           source: a.source ?? "import",
           id: randomUUID(),
           importBatchId: batchId,
