@@ -2,15 +2,25 @@
  * Google Sheets → Beca Tech Dashboard sync.
  *
  * Bound to the program's master spreadsheet. Marks the sheet "dirty" on edit, then on a
- * time-driven trigger exports the three raw tabs and POSTs each to the dashboard's
- * POST /api/sync/import endpoint. See README.md in this folder for setup instructions.
+ * time-driven trigger:
+ *   1. Normalizes the three messy master tabs into clean, canonical-header tabs (Normalize.gs —
+ *      must be in the same Apps Script project).
+ *   2. Exports each normalized tab as CSV and POSTs it to the dashboard's
+ *      POST /api/sync/import endpoint, one call per entity, in FK-safe order.
+ * See README.md in this folder for setup instructions.
  *
  * Configuration (Project Settings > Script Properties — never hardcode these in source):
  *   SYNC_ENDPOINT_URL  e.g. https://your-dashboard.vercel.app/api/sync/import
  *   SYNC_API_KEY       must match the dashboard's SHEETS_SYNC_API_KEY env var
  */
 
-var TAB_NAMES = ["SCHOLAR GENERAL INFO", "MENTOR REPORTS", "SUPPORT ACTIVITY LOG"];
+// FK-safe order: SCHOLAR must land before anything that references scholarId.
+var ENTITY_TABS = [
+  { entity: "SCHOLAR", tab: "NORMALIZED_SCHOLAR" },
+  { entity: "ACADEMIC_TERM", tab: "NORMALIZED_ACADEMIC_TERM" },
+  { entity: "MENTOR_REPORT", tab: "NORMALIZED_MENTOR_REPORT" },
+  { entity: "SUPPORT_ACTIVITY", tab: "NORMALIZED_SUPPORT_ACTIVITY" },
+];
 var SYNC_LOG_SHEET_NAME = "Sync Log";
 var DIRTY_PROPERTY = "dirty";
 var DIRTY_SINCE_PROPERTY = "dirtySince";
@@ -29,9 +39,9 @@ function markDirty(e) {
 
 /**
  * Time-driven trigger (install via setupTriggers(), every 10-15 min). If the sheet has been
- * edited since the last successful sync, exports each of the 3 tabs as CSV and POSTs it to the
- * dashboard. Clears the dirty flag only if every tab synced successfully, so a partial failure
- * is retried on the next run instead of silently dropping data.
+ * edited since the last successful sync: normalizes the master tabs, then exports+POSTs each of
+ * the 4 canonical entities, in FK-safe order. Clears the dirty flag only if every entity synced
+ * successfully, so a partial failure is retried on the next run instead of silently dropping data.
  */
 function syncIfDirty() {
   var props = PropertiesService.getScriptProperties();
@@ -45,13 +55,22 @@ function syncIfDirty() {
   }
 
   var ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  try {
+    normalizeAll_();
+  } catch (err) {
+    logSyncEvent("NORMALIZE", "FAILED", String(err));
+    return; // don't sync stale/partial normalized tabs if normalization itself broke
+  }
+
   var allOk = true;
 
-  for (var i = 0; i < TAB_NAMES.length; i++) {
-    var tabName = TAB_NAMES[i];
+  for (var i = 0; i < ENTITY_TABS.length; i++) {
+    var entity = ENTITY_TABS[i].entity;
+    var tabName = ENTITY_TABS[i].tab;
     var sheet = ss.getSheetByName(tabName);
     if (!sheet) {
-      logSyncEvent(tabName, "ERROR", "Tab not found in this spreadsheet.");
+      logSyncEvent(entity, "ERROR", 'Normalized tab "' + tabName + '" not found — normalization may have failed silently.');
       allOk = false;
       continue;
     }
@@ -60,10 +79,9 @@ function syncIfDirty() {
       var range = sheet.getDataRange();
       var csv = sheetToCsv(sheet);
       // Logged unconditionally (even if the POST below throws) so a bad export is visible
-      // without having to reproduce it — e.g. a near-empty payload for a tab that normally has
-      // thousands of rows points at the export itself, not the dashboard's parsing.
+      // without having to reproduce it.
       logSyncEvent(
-        tabName,
+        entity,
         "EXPORT",
         "sheetRows=" + range.getNumRows() + " sheetCols=" + range.getNumColumns() + " csvChars=" + csv.length,
       );
@@ -71,7 +89,7 @@ function syncIfDirty() {
       var response = UrlFetchApp.fetch(endpoint, {
         method: "post",
         contentType: "text/csv; charset=utf-8",
-        headers: { "x-api-key": apiKey, "x-sheet-name": tabName },
+        headers: { "x-api-key": apiKey, "x-entity": entity, "x-sheet-name": tabName },
         payload: csv,
         muteHttpExceptions: true,
       });
@@ -79,17 +97,17 @@ function syncIfDirty() {
       if (status >= 200 && status < 300) {
         var body = JSON.parse(response.getContentText());
         logSyncEvent(
-          tabName,
+          entity,
           "OK",
           "batchId=" + body.batchId + " total=" + body.totalRows + " success=" + body.successRows + " errors=" + body.errorRows,
         );
       } else {
         allOk = false;
-        logSyncEvent(tabName, "FAILED", "HTTP " + status + ": " + response.getContentText().slice(0, 500));
+        logSyncEvent(entity, "FAILED", "HTTP " + status + ": " + response.getContentText().slice(0, 500));
       }
     } catch (err) {
       allOk = false;
-      logSyncEvent(tabName, "FAILED", String(err));
+      logSyncEvent(entity, "FAILED", String(err));
     }
   }
 
@@ -128,18 +146,33 @@ function testConnection() {
   SpreadsheetApp.getActiveSpreadsheet().toast("Check the \"" + SYNC_LOG_SHEET_NAME + "\" tab for the result.", "Sync test run");
 }
 
-/** Convert a sheet's full data range to CSV text (values as displayed, not formulas). */
+/**
+ * Convert a sheet's full data range to CSV text. Uses getValues() (raw values), not
+ * getDisplayValues() — display values are formatted per the spreadsheet's locale (e.g. a number
+ * might render as "4,5" instead of "4.5" in a Spanish-locale sheet), which would silently corrupt
+ * numeric fields on the dashboard side. cellToText_ converts each raw value to locale-independent
+ * text itself.
+ */
 function sheetToCsv(sheet) {
-  var values = sheet.getDataRange().getDisplayValues();
+  var values = sheet.getDataRange().getValues();
   var lines = [];
   for (var r = 0; r < values.length; r++) {
     var fields = [];
     for (var c = 0; c < values[r].length; c++) {
-      fields.push(csvEscape(values[r][c]));
+      fields.push(csvEscape(cellToText_(values[r][c])));
     }
     lines.push(fields.join(","));
   }
   return lines.join("\n");
+}
+
+/** Locale-independent text for one cell's raw value (from getValues()). */
+function cellToText_(value) {
+  if (value === null || value === undefined || value === "") return "";
+  if (Object.prototype.toString.call(value) === "[object Date]") {
+    return Utilities.formatDate(value, Session.getScriptTimeZone(), "yyyy-MM-dd");
+  }
+  return String(value); // numbers/booleans/strings: JS's own toString, never locale-formatted
 }
 
 function csvEscape(value) {

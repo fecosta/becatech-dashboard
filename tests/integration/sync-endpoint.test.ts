@@ -141,6 +141,39 @@ describe("sync endpoint (integration)", () => {
     expect(await prisma.mentorReport.count({ where: { submissionId: "sub-idem" } })).toBe(1);
   });
 
+  it("rejects an unrecognized x-entity value", async () => {
+    const res = await POST(syncRequest("a,b\n1,2", { "x-api-key": API_KEY, "x-entity": "NOT_A_REAL_ENTITY" }));
+    expect(res.status).toBe(400);
+  });
+
+  it("x-entity: SCHOLAR uses the TEMPLATE adapter on a clean, canonical-header CSV", async () => {
+    const csv = "scholarId,fullName,country,cohort,university,academicProgram,gender\nBT-CO-050,New Scholar,COLOMBIA,2025,UNAL,CS,Female\n";
+    const res = await POST(syncRequest(csv, { "x-api-key": API_KEY, "x-entity": "SCHOLAR", "x-sheet-name": "NORMALIZED_SCHOLAR" }));
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.committed).toBe(true);
+    expect(json.entities).toEqual(["SCHOLAR"]);
+    expect(json.successRows).toBe(1);
+
+    const scholar = await prisma.scholar.findUnique({ where: { scholarId: "BT-CO-050" } });
+    expect(scholar?.fullName).toBe("New Scholar");
+    expect(scholar?.gender).toBe("Female");
+  });
+
+  it("x-entity: ACADEMIC_TERM uses the TEMPLATE adapter and attaches to an existing scholar", async () => {
+    const csv = "scholarId,term,gpa\nBT-CO-001,2025-2,4.2\n";
+    const res = await POST(syncRequest(csv, { "x-api-key": API_KEY, "x-entity": "ACADEMIC_TERM" }));
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.committed).toBe(true);
+    expect(json.successRows).toBe(1);
+
+    const term = await prisma.academicTerm.findUnique({
+      where: { scholarId_term: { scholarId: "BT-CO-001", term: "2025-2" } },
+    });
+    expect(term?.gpa).toBe(4.2);
+  });
+
   it("rollback still works for a sync-created batch", async () => {
     const csv = mentorReportsCsv([
       { "Número de ID": "BT-CO-001", "¿Qué mes reportas?": "2026-06", "Submission ID": "sub-rollback" },

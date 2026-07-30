@@ -4,7 +4,9 @@
 // panel, auto-committing valid rows and logging invalid rows — no human "confirm" step.
 import { timingSafeEqual } from "crypto";
 import { NextResponse } from "next/server";
+import { DataImportEntity } from "@/generated/prisma/enums";
 import { commitImportBatch, createImportBatch } from "@/lib/data-import/service";
+import type { ImportEntity } from "@/lib/data-import/types";
 import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -38,6 +40,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Empty body" }, { status: 400 });
   }
 
+  // TEMP diagnostic — remove once the total:0 sync issue is resolved. Header line + counts only,
+  // no data rows, so this never logs scholar data.
+  {
+    const firstNewline = text.indexOf("\n");
+    console.log(
+      `[sync-debug] entity=${req.headers.get("x-entity")} textLength=${text.length} lineCount=${text.split("\n").length} header=${JSON.stringify(text.slice(0, firstNewline === -1 ? 300 : Math.min(firstNewline, 300)))}`,
+    );
+  }
+
   const uploadedById = (
     await prisma.appUser.findUnique({ where: { email: SYNC_USER_EMAIL }, select: { id: true } })
   )?.id;
@@ -51,17 +62,29 @@ export async function POST(req: Request) {
   const sheetName = req.headers.get("x-sheet-name")?.trim();
   const filename = sheetName ? `${sheetName}.csv` : `sheets-sync-${Date.now()}.csv`;
 
+  // Optional x-entity header: when present, the caller (Apps Script, post-normalization) is
+  // sending a clean, canonical-header CSV for exactly one entity — use the simpler, already-built
+  // TEMPLATE adapter instead of the wide-format one. Absent (e.g. a raw tab posted directly,
+  // without normalization) falls back to the original self-detecting LEGACY_WIDE_EXCEL behavior.
+  const entityHeader = req.headers.get("x-entity")?.trim();
+  if (entityHeader && !Object.values(DataImportEntity).includes(entityHeader as DataImportEntity)) {
+    return NextResponse.json({ error: `Invalid x-entity: ${entityHeader}` }, { status: 400 });
+  }
+  const entity = entityHeader as ImportEntity | undefined;
+
   try {
-    // Every tab (SCHOLAR GENERAL INFO / MENTOR REPORTS / SUPPORT ACTIVITY LOG) self-detects from
-    // its own header shape — the caller never needs to say which one this is. `entities: []` /
-    // `totalRows: 0` isn't necessarily an error: a correctly-detected tab with no data rows yet
-    // (e.g. no mentor sessions logged this month) looks identical at this level to an
-    // unrecognized format, so it's reported as a normal (if uneventful) success rather than
-    // guessed at — same as the admin manual-upload path already does for an empty upload.
+    // Without x-entity: every raw tab (SCHOLAR GENERAL INFO / MENTOR REPORTS /
+    // SUPPORT ACTIVITY LOG) self-detects from its own header shape — the caller never needs to
+    // say which one this is. `entities: []` / `totalRows: 0` isn't necessarily an error: a
+    // correctly-detected tab with no data rows yet (e.g. no mentor sessions logged this month)
+    // looks identical at this level to an unrecognized format, so it's reported as a normal (if
+    // uneventful) success rather than guessed at — same as the admin manual-upload path already
+    // does for an empty upload.
     const { batchId, result } = await createImportBatch({
       data: Buffer.from(text, "utf-8"),
       filename,
-      sourceType: "LEGACY_WIDE_EXCEL",
+      sourceType: entity ? "TEMPLATE" : "LEGACY_WIDE_EXCEL",
+      entity,
       uploadedById,
     });
 
