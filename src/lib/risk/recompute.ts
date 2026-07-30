@@ -17,6 +17,14 @@ import {
 
 const uniq = (a: string[]): string[] => [...new Set(a)];
 
+// Each scholar's recompute is fully independent of every other scholar's (no shared state, and
+// this runs against the plain `prisma` client, not a held transaction, so genuinely concurrent
+// connections are safe) — a Google-Sheets-sync batch can touch hundreds of scholars, and doing
+// them one at a time was slow enough to hit Vercel's function timeout on large syncs
+// (SUPPORT_ACTIVITY: ~236 scholars x up to 6 periods each). Bounded so we don't try to open more
+// simultaneous connections than the pool comfortably supports.
+const CONCURRENCY = 15;
+
 /**
  * Recompute risk for the given scholars. Periods to (re)compute:
  *  - months among `batchPeriods` where the scholar now has a check-in/mentor/support row;
@@ -27,14 +35,24 @@ export async function recomputeRiskForScholars(
   scholarIds: string[],
   batchPeriods: string[] = [],
 ): Promise<number> {
+  const ids = uniq(scholarIds);
   let count = 0;
+  for (let i = 0; i < ids.length; i += CONCURRENCY) {
+    const chunk = ids.slice(i, i + CONCURRENCY);
+    const results = await Promise.all(chunk.map((scholarId) => recomputeOneScholar(scholarId, batchPeriods)));
+    for (const n of results) count += n;
+  }
+  return count;
+}
 
-  for (const scholarId of uniq(scholarIds)) {
+async function recomputeOneScholar(scholarId: string, batchPeriods: string[]): Promise<number> {
+  let count = 0;
+  {
     const scholar = await prisma.scholar.findUnique({
       where: { scholarId },
       select: { country: true, cohort: true, university: { select: { name: true } } },
     });
-    if (!scholar) continue;
+    if (!scholar) return count;
 
     const latestTerm = await prisma.academicTerm.findFirst({
       where: { scholarId },
@@ -75,7 +93,7 @@ export async function recomputeRiskForScholars(
         orderBy: { period: "desc" },
         select: { period: true },
       });
-      if (!latest) continue;
+      if (!latest) return count;
       periods = [latest.period];
     }
     periods.sort();
