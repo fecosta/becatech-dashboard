@@ -171,7 +171,23 @@ function normalizeScholarGeneralInfo_(ss) {
     return hasId && hasTermGpa;
   });
   if (headerRowIndex < 0) {
-    logSyncEvent("NORMALIZE", "ERROR", "SCHOLAR GENERAL INFO: real header not found in first " + HEADER_SCAN_LIMIT_ + " rows.");
+    // TEMP diagnostic — remove once resolved. Structural counts/booleans only, per scanned row —
+    // never logs actual cell values, so this is safe even though most of these rows hold scholar
+    // data.
+    var limit = Math.min(values.length, HEADER_SCAN_LIMIT_);
+    var summary = [];
+    for (var i = 0; i < limit; i++) {
+      var keys = values[i].map(normKey_);
+      var nonEmpty = keys.filter(function (k) { return k !== ""; }).length;
+      var hasId = keys.indexOf("id") !== -1 || keys.indexOf("id_becario") !== -1;
+      var hasGpaTerm = keys.some(function (k) { return TERM_RE_.test(k); });
+      summary.push("row" + i + "[len=" + values[i].length + ",nonEmpty=" + nonEmpty + ",hasId=" + hasId + ",hasGpaTerm=" + hasGpaTerm + "]");
+    }
+    logSyncEvent(
+      "NORMALIZE",
+      "ERROR",
+      "SCHOLAR GENERAL INFO: real header not found in first " + HEADER_SCAN_LIMIT_ + " rows. " + summary.join(" "),
+    );
     return;
   }
 
