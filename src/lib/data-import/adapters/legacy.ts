@@ -112,11 +112,15 @@ function generalInfoRows(
   const scholars: CanonicalRow[] = [];
   const terms: CanonicalRow[] = [];
 
+  let blankSkipped = 0;
   records.forEach((rec, i) => {
     const rowNumber = rowNumberOffset + i + 2;
     const idx = indexRecord(rec);
     const scholarId = coerceValue(idx.get("id") ?? idx.get("id_becario"), "string");
-    if (typeof scholarId !== "string" || scholarId === "") return; // skip blank rows
+    if (typeof scholarId !== "string" || scholarId === "") {
+      blankSkipped += 1;
+      return; // skip blank rows
+    }
 
     scholars.push(scholarRow(idx, rowNumber));
 
@@ -140,6 +144,11 @@ function generalInfoRows(
     for (const data of byTerm.values()) terms.push({ rowNumber, data });
   });
 
+  // TEMP diagnostic (counts only, no PII) — remove once the production sync issue is resolved.
+  console.log(
+    `[sync-debug] generalInfoRows: records=${records.length} blankSkipped=${blankSkipped} scholars=${scholars.length} terms=${terms.length}`,
+  );
+
   return { scholars, terms };
 }
 
@@ -151,6 +160,8 @@ export function legacyAdapter(sheets: ParsedSheet[]): CanonicalBatch {
 
   for (const sheet of sheets) {
     if (isGeneralInfoSheet(sheet.records)) {
+      // TEMP diagnostic — remove once the production sync issue is resolved.
+      console.log(`[sync-debug] "${sheet.sheetName}": matched isGeneralInfoSheet directly (row 1 header)`);
       const rows = generalInfoRows(sheet.records);
       scholars.push(...rows.scholars);
       terms.push(...rows.terms);
@@ -159,6 +170,10 @@ export function legacyAdapter(sheets: ParsedSheet[]): CanonicalBatch {
 
     const reAnchored = findGeneralInfoRecords(sheet);
     if (reAnchored) {
+      // TEMP diagnostic — remove once the production sync issue is resolved.
+      console.log(
+        `[sync-debug] "${sheet.sheetName}": matched via header fallback at row index ${reAnchored.headerRowIndex}, records=${reAnchored.records.length}`,
+      );
       const rows = generalInfoRows(reAnchored.records, reAnchored.headerRowIndex);
       scholars.push(...rows.scholars);
       terms.push(...rows.terms);
@@ -166,6 +181,9 @@ export function legacyAdapter(sheets: ParsedSheet[]): CanonicalBatch {
       mentorReports.push(...mentorReportsLegacyAdapter(sheet));
     } else if (isSupportActivityLogSheet(sheet)) {
       supportActivities.push(...supportActivityLogLegacyAdapter(sheet));
+    } else {
+      // TEMP diagnostic — remove once the production sync issue is resolved.
+      console.log(`[sync-debug] "${sheet.sheetName}": matched NONE of the 3 known tab formats`);
     }
   }
 
