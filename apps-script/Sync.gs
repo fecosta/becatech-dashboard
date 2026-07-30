@@ -57,7 +57,17 @@ function syncIfDirty() {
     }
 
     try {
+      var range = sheet.getDataRange();
       var csv = sheetToCsv(sheet);
+      // Logged unconditionally (even if the POST below throws) so a bad export is visible
+      // without having to reproduce it — e.g. a near-empty payload for a tab that normally has
+      // thousands of rows points at the export itself, not the dashboard's parsing.
+      logSyncEvent(
+        tabName,
+        "EXPORT",
+        "sheetRows=" + range.getNumRows() + " sheetCols=" + range.getNumColumns() + " csvChars=" + csv.length,
+      );
+
       var response = UrlFetchApp.fetch(endpoint, {
         method: "post",
         contentType: "text/csv; charset=utf-8",
