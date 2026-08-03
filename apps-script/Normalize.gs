@@ -139,14 +139,32 @@ function findHeaderRowIndex_(values, matches) {
   return -1;
 }
 
-/** Clears and rewrites a hidden NORMALIZED_* tab with `header` + `rows` (array of arrays). */
-function writeNormalizedTab_(ss, tabName, header, rows) {
+/** Clears and rewrites a hidden NORMALIZED_* tab with `header` + `rows` (array of arrays).
+ * `textColumns` (header names) are forced to Plain Text format BEFORE the values are written —
+ * order matters: Sheets auto-detects/reformats a value into a date or number AT WRITE TIME (the
+ * same way typing "2024-1" into the UI auto-converts it to a date), so setting the format after
+ * writing wouldn't undo an already-applied conversion. This is why AcademicTerm's `term` column
+ * ("2024-1", "2024-2", ...) was silently turning into real Date values (then exported as
+ * "2024-01-01") despite looking correct when viewed in the sheet — the cell's underlying value
+ * was a Date the whole time, just displayed via a format that happened to render like the
+ * original text. `scholarId` is forced defensively for the same reason, even though it hasn't
+ * shown symptoms yet: a long digit string risks the same kind of silent reinterpretation
+ * (as a number, potentially losing leading zeros or rendering in scientific notation). */
+function writeNormalizedTab_(ss, tabName, header, rows, textColumns) {
   var sheet = ss.getSheetByName(tabName);
   if (!sheet) {
     sheet = ss.insertSheet(tabName);
     sheet.hideSheet();
   } else {
-    sheet.clear();
+    sheet.clear(); // also clears formats, so text-forcing below must happen on every run
+  }
+  var numRows = rows.length + 1; // +1: header row
+  if (textColumns) {
+    for (var i = 0; i < textColumns.length; i++) {
+      var colIndex = header.indexOf(textColumns[i]);
+      if (colIndex === -1) continue;
+      sheet.getRange(1, colIndex + 1, numRows, 1).setNumberFormat("@");
+    }
   }
   var data = [header].concat(rows);
   sheet.getRange(1, 1, data.length, header.length).setValues(data);
@@ -267,8 +285,8 @@ function normalizeScholarGeneralInfo_(ss) {
     });
   }
 
-  writeNormalizedTab_(ss, "NORMALIZED_SCHOLAR", SCHOLAR_HEADER_, scholarRows);
-  writeNormalizedTab_(ss, "NORMALIZED_ACADEMIC_TERM", ACADEMIC_TERM_HEADER_, termRows);
+  writeNormalizedTab_(ss, "NORMALIZED_SCHOLAR", SCHOLAR_HEADER_, scholarRows, ["scholarId"]);
+  writeNormalizedTab_(ss, "NORMALIZED_ACADEMIC_TERM", ACADEMIC_TERM_HEADER_, termRows, ["scholarId", "term"]);
 }
 
 // ---------------------------------------------------------------------------
@@ -387,7 +405,7 @@ function normalizeMentorReports_(ss) {
     ]);
   }
 
-  writeNormalizedTab_(ss, "NORMALIZED_MENTOR_REPORT", MENTOR_REPORT_HEADER_, rows);
+  writeNormalizedTab_(ss, "NORMALIZED_MENTOR_REPORT", MENTOR_REPORT_HEADER_, rows, ["scholarId"]);
 }
 
 // ---------------------------------------------------------------------------
@@ -451,5 +469,5 @@ function normalizeSupportActivityLog_(ss) {
     });
   }
 
-  writeNormalizedTab_(ss, "NORMALIZED_SUPPORT_ACTIVITY", SUPPORT_ACTIVITY_HEADER_, rows);
+  writeNormalizedTab_(ss, "NORMALIZED_SUPPORT_ACTIVITY", SUPPORT_ACTIVITY_HEADER_, rows, ["scholarId"]);
 }
