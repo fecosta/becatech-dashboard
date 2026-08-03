@@ -189,6 +189,7 @@ describe("mentor-reports legacy adapter", () => {
     const ctx: ValidationContext = {
       existingScholarIds: new Set(["BT-CO-001"]),
       scholarIdsByNormalizedName: new Map([["ana perez gomez", ["BT-CO-001"]]]),
+      countryByScholarId: new Map(),
       controls: new Map<string, Set<string>>([["country", new Set(["COLOMBIA", "PERU"])]]),
       universities: new Map(),
     };
@@ -203,6 +204,7 @@ describe("mentor-reports legacy adapter", () => {
     const ctx: ValidationContext = {
       existingScholarIds: new Set(["BT-CO-001"]),
       scholarIdsByNormalizedName: new Map([["ana perez gomez", ["BT-CO-001"]]]),
+      countryByScholarId: new Map(),
       controls: new Map<string, Set<string>>([["country", new Set(["COLOMBIA", "PERU"])]]),
       universities: new Map(),
     };
@@ -219,6 +221,7 @@ describe("mentor-reports legacy adapter", () => {
     const ctx: ValidationContext = {
       existingScholarIds: new Set(["BT-CO-001"]),
       scholarIdsByNormalizedName: new Map([["ana perez gomez", ["BT-CO-001"]]]),
+      countryByScholarId: new Map(),
       controls: new Map<string, Set<string>>([["country", new Set(["COLOMBIA", "PERU"])]]),
       universities: new Map(),
     };
@@ -234,6 +237,7 @@ describe("mentor-reports legacy adapter", () => {
     const ctx: ValidationContext = {
       existingScholarIds: new Set(["BT-CO-001", "BT-CO-002"]),
       scholarIdsByNormalizedName: new Map([["ana perez gomez", ["BT-CO-001", "BT-CO-002"]]]),
+      countryByScholarId: new Map(),
       controls: new Map<string, Set<string>>([["country", new Set(["COLOMBIA", "PERU"])]]),
       universities: new Map(),
     };

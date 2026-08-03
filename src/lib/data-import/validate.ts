@@ -8,6 +8,7 @@ import type {
   ProgramStatus,
   RequestStatus,
 } from "../../generated/prisma/enums";
+import { GPA_SCALE_MAX } from "../academic/gpa-bucket";
 import { normKey } from "./adapters/shared";
 import { isBadDate, isBadNumber } from "./coerce";
 import { synthSubmissionId } from "./synthkey";
@@ -69,13 +70,6 @@ function checkFields(
       if (allowed && allowed.size > 0 && !allowed.has(String(v))) {
         push(col.field, `Valor no permitido para ${col.enumCategory}: ${String(v)}`);
       }
-    }
-  }
-
-  if (entity === "ACADEMIC_TERM") {
-    for (const f of ["gpa", "accumulatedGpa"]) {
-      const n = gN(row, f);
-      if (n !== undefined && (n < 0 || n > 5)) push(f, "GPA fuera de rango 0–5");
     }
   }
 }
@@ -243,6 +237,7 @@ export function validateBatch(batch: CanonicalBatch, ctx: ValidationContext): Va
   const nameIndex = new Map(
     [...ctx.scholarIdsByNormalizedName].map(([k, ids]) => [k, [...ids]] as [string, string[]]),
   );
+  const countryByScholarId = new Map(ctx.countryByScholarId);
   const entities: ImportEntity[] = [];
   let totalRows = 0;
   let successRows = 0;
@@ -312,6 +307,21 @@ export function validateBatch(batch: CanonicalBatch, ctx: ValidationContext): Va
           });
           continue;
         }
+        if (entity === "ACADEMIC_TERM") {
+          // Colombia and Peru use different native GPA scales (0-5 vs 0-20, see
+          // gpa-bucket.ts's GPA_SCALE_MAX) — validate against the scholar's own country instead
+          // of a hardcoded 0-5, or Peru's legitimate GPA values get rejected as "out of range."
+          const country = countryByScholarId.get(sid);
+          const max = country ? GPA_SCALE_MAX[country] : GPA_SCALE_MAX.COLOMBIA;
+          const before2 = errors.length;
+          for (const f of ["gpa", "accumulatedGpa"]) {
+            const n = gN(row, f);
+            if (n !== undefined && (n < 0 || n > max)) {
+              errors.push({ entity, rowNumber: row.rowNumber, field: f, message: `GPA fuera de rango 0–${max}` });
+            }
+          }
+          if (errors.length > before2) continue;
+        }
       }
 
       let universityId: string | undefined;
@@ -336,6 +346,7 @@ export function validateBatch(batch: CanonicalBatch, ctx: ValidationContext): Va
           const r = buildScholar(row, universityId!);
           validated.SCHOLAR.push(r);
           scholarIds.add(r.scholarId);
+          countryByScholarId.set(r.scholarId, r.country as Country);
           // Grow the name index in step, so a batch containing both a SCHOLAR tab and a
           // MENTOR_REPORT tab (LEGACY_WIDE_EXCEL manual upload) can resolve names against
           // scholars created earlier in this same batch, not just pre-existing ones.

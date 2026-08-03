@@ -1,6 +1,6 @@
 // Shared types for the data-import pipeline (parse → adapt → validate → commit).
 import type { Prisma } from "../../generated/prisma/client";
-import type { DataImportEntity } from "../../generated/prisma/enums";
+import type { Country, DataImportEntity } from "../../generated/prisma/enums";
 
 export type ImportEntity = DataImportEntity; // "SCHOLAR" | "ACADEMIC_TERM" | ...
 
@@ -34,6 +34,10 @@ export interface ValidationContext {
    *  never guess which scholar a report belongs to. Used for MENTOR_REPORT, whose source sheet
    *  has no real scholar-ID column (see legacy-mentor-reports.ts). */
   scholarIdsByNormalizedName: Map<string, string[]>;
+  /** scholarId -> Scholar.country. Colombia and Peru use different native GPA scales (0-5 vs
+   *  0-20, see gpa-bucket.ts's GPA_SCALE_MAX) — used to validate ACADEMIC_TERM's gpa/accumulatedGpa
+   *  against the right range instead of a hardcoded 0-5. */
+  countryByScholarId: Map<string, Country>;
 }
 
 /** Valid rows as Prisma create inputs, ready to upsert. */

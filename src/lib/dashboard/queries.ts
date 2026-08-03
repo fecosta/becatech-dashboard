@@ -635,7 +635,7 @@ export async function getAcademicProgress(
       pushTo(gpaByCohort, s.cohort, g);
       pushTo(gpaByCountry, s.country, g);
       pushTo(gpaByUniversity, s.university.name, g);
-      const bucket = bucketGpa(g);
+      const bucket = bucketGpa(g, s.country);
       if (bucket === "BELOW_3_5") gpaDistribution.below3_5 += 1;
       else if (bucket === "GPA_3_5_TO_3_9") gpaDistribution.from3_5To3_9 += 1;
       else if (bucket === "GPA_4_0_TO_5_0") gpaDistribution.from4_0To5_0 += 1;

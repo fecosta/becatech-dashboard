@@ -6,7 +6,8 @@
 //   - check-in finalStatus: "Estable" | "Requiere seguimiento" | "En riesgo"
 //   - mentor permanenceRisk: "Bajo" | "Medio" | "Alto"
 //   - mentor psychosocialStatus: "Estable" | "En observación" | "En riesgo"
-import type { AcademicProgressStatus } from "../../generated/prisma/enums";
+import type { AcademicProgressStatus, Country } from "../../generated/prisma/enums";
+import { GPA_SCALE_MAX } from "../academic/gpa-bucket";
 
 const clamp = (n: number): number => Math.max(0, Math.min(4, Math.round(n)));
 
@@ -18,6 +19,10 @@ export interface AcademicInputs {
   gpa?: number | null;
   failedSubjectsCount?: number | null;
   expectedProgressStatus?: AcademicProgressStatus | null;
+  /** Colombia and Peru use different native GPA scales (0-5 vs 0-20) — the GPA band below is
+   *  computed as a fraction of the scholar's own country's scale, not an absolute cutoff, so it
+   *  needs to know which country this is. Defaults to Colombia's scale if omitted. */
+  country?: Country | null;
 }
 
 const PROGRESS_BAND: Record<AcademicProgressStatus, number> = {
@@ -28,8 +33,23 @@ const PROGRESS_BAND: Record<AcademicProgressStatus, number> = {
 };
 
 export function deriveAcademicRiskValue(a: AcademicInputs): number {
+  const scaleMax = a.country ? GPA_SCALE_MAX[a.country] : GPA_SCALE_MAX.COLOMBIA;
+  const gpaFraction = a.gpa == null ? null : a.gpa / scaleMax;
+  // Thresholds are Colombia's original absolute cutoffs (4/5, 3.5/5, 3/5, 2.5/5) expressed as
+  // fractions of the max, so this reproduces Colombia's exact prior behavior unchanged and
+  // extends correctly to Peru's 0-20 scale.
   const gpaBand =
-    a.gpa == null ? 0 : a.gpa >= 4 ? 0 : a.gpa >= 3.5 ? 1 : a.gpa >= 3 ? 2 : a.gpa >= 2.5 ? 3 : 4;
+    gpaFraction == null
+      ? 0
+      : gpaFraction >= 0.8
+        ? 0
+        : gpaFraction >= 0.7
+          ? 1
+          : gpaFraction >= 0.6
+            ? 2
+            : gpaFraction >= 0.5
+              ? 3
+              : 4;
   const failed = a.failedSubjectsCount ?? 0;
   const failedBand = failed <= 0 ? 0 : Math.min(4, failed);
   const progressBand = a.expectedProgressStatus ? PROGRESS_BAND[a.expectedProgressStatus] : 0;

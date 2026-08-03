@@ -63,6 +63,7 @@ async function recomputeOneScholar(scholarId: string, batchPeriods: string[]): P
       gpa: latestTerm?.gpa ?? null,
       failedSubjectsCount: latestTerm?.failedSubjectsCount ?? null,
       expectedProgressStatus: latestTerm?.expectedProgressStatus ?? null,
+      country: scholar.country,
     });
 
     let periods: string[] = [];

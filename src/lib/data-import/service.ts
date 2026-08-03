@@ -22,7 +22,7 @@ import { validateBatch } from "./validate";
 
 async function loadValidationContext(): Promise<ValidationContext> {
   const [scholars, controls, universities] = await Promise.all([
-    prisma.scholar.findMany({ select: { scholarId: true, fullName: true } }),
+    prisma.scholar.findMany({ select: { scholarId: true, fullName: true, country: true } }),
     prisma.controlValue.findMany({ where: { isActive: true }, select: { category: true, value: true } }),
     prisma.university.findMany({ select: { id: true, name: true } }),
   ]);
@@ -45,11 +45,13 @@ async function loadValidationContext(): Promise<ValidationContext> {
     arr.push(s.scholarId);
     scholarIdsByNormalizedName.set(key, arr);
   }
+  const countryByScholarId = new Map(scholars.map((s) => [s.scholarId, s.country] as const));
   return {
     existingScholarIds: new Set(scholars.map((s) => s.scholarId)),
     controls: controlMap,
     universities: universityMap,
     scholarIdsByNormalizedName,
+    countryByScholarId,
   };
 }
 

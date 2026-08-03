@@ -85,6 +85,7 @@ describe("support-activity-log legacy adapter", () => {
     const ctx: ValidationContext = {
       existingScholarIds: new Set(["BT-CO-001"]),
       scholarIdsByNormalizedName: new Map(),
+      countryByScholarId: new Map(),
       controls: new Map<string, Set<string>>([
         ["country", new Set(["COLOMBIA", "PERU"])],
         [

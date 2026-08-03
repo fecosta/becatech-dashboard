@@ -7,6 +7,7 @@ function ctx(): ValidationContext {
   return {
     existingScholarIds: new Set(["BT-CO-001"]),
     scholarIdsByNormalizedName: new Map(),
+    countryByScholarId: new Map(),
     controls: new Map<string, Set<string>>([
       ["country", new Set(["COLOMBIA", "PERU"])],
       ["program_status", new Set(["ACTIVE", "WITHDRAWN", "GRADUATED", "PAUSED"])],

@@ -117,6 +117,7 @@ describe("legacy wide-Excel adapter", () => {
     const ctx: ValidationContext = {
       existingScholarIds: new Set(),
       scholarIdsByNormalizedName: new Map(),
+      countryByScholarId: new Map(),
       controls: new Map<string, Set<string>>([
         ["country", new Set(["COLOMBIA", "PERU"])],
         ["program_status", new Set(["ACTIVE", "WITHDRAWN", "GRADUATED", "PAUSED"])],

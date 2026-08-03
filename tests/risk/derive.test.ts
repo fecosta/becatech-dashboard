@@ -14,6 +14,16 @@ describe("risk derivation (default heuristic)", () => {
     expect(deriveAcademicRiskValue({})).toBe(0);
   });
 
+  it("scales the GPA band to the scholar's own country (Colombia 0-5 vs Peru 0-20)", () => {
+    // 17/20 = 85%, equivalent to Colombia's 4.25/5 — same band (0) as a strong Colombia GPA.
+    expect(deriveAcademicRiskValue({ gpa: 17, country: "PERU" })).toBe(0);
+    // 8/20 = 40%, equivalent to Colombia's 2.0/5 — same band (4) as a failing Colombia GPA, even
+    // though 8 alone would look "fine" under Colombia's absolute 0-5 thresholds.
+    expect(deriveAcademicRiskValue({ gpa: 8, country: "PERU" })).toBe(4);
+    // Omitting country falls back to Colombia's scale, unchanged from before this field existed.
+    expect(deriveAcademicRiskValue({ gpa: 4.5 })).toBe(deriveAcademicRiskValue({ gpa: 4.5, country: "COLOMBIA" }));
+  });
+
   it("derives psychosocial risk from check-in and mentor signals (accent-tolerant)", () => {
     expect(derivePsychosocialRiskValue({ checkinFinalStatus: "En riesgo" })).toBe(3);
     expect(derivePsychosocialRiskValue({ checkinFinalStatus: "Requiere seguimiento" })).toBe(2);
