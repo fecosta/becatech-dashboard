@@ -115,6 +115,38 @@ access to the script itself:
   live header's exact text (casing/punctuation/apostrophes matter less, since `normKey_` strips
   accents/case/whitespace, but a genuinely different phrase needs a new alias added to the relevant
   list) against the column-name literals in `normalizeScholarGeneralInfo_`/`normalizeMentorReports_`.
+- **A `WARN` row from "NORMALIZE"** (`"unrecognized columns: ..."`): `detectUnrecognizedColumns_`
+  found a header the sheet has that's neither mapped to a field nor on the reviewed
+  `SCHOLAR_UNMAPPED_HEADERS_`/`MENTOR_REPORT_UNMAPPED_HEADERS_` list below — either a genuinely new
+  column that needs a decision (map it, or add it to the documented list with a reason), or a
+  transcription mismatch in that list (the list's strings were written from a header inventory, not
+  read from the live sheet — check exact punctuation/spacing first). Not fatal — the run still
+  completes — but worth triaging before the next sync.
+
+## Unmapped columns
+
+Columns the source sheets carry that `Normalize.gs` deliberately does not map yet, and why. Kept
+in sync with the `SCHOLAR_UNMAPPED_HEADERS_`/`MENTOR_REPORT_UNMAPPED_HEADERS_` constants in
+`Normalize.gs` — update both together when the sheet changes or a decision is made.
+
+**SCHOLAR GENERAL INFO:**
+
+| Column(s) | Why unmapped |
+|---|---|
+| `ACUMULADO`, `Materias atrasadas`, `Alternativa de nivelación`, `¿Está nivelando?`, `PLAZO MÁXIMO`, `¿Recibió apoyo?`, `ESTADO`, `Total Credits`, `Cumulative - Credits`, `Overdue Courses`, `Academic Progress`, `Cumulative GPA` | Single-value-per-scholar academic-summary fields; the target model (`AcademicTerm`) is keyed per term and there's no reliable term to attach a bare value to without guessing. Several correspond to real fields (`delayedSubjects`, `levelingAlternative`, `maxDeadline`, `isLeveling`, `receivedSupport`) importable via the manual per-term upload template instead. |
+| English-tracking block (`Participatin in English program`, `English level - 2026-1`, `Número de cursos U (requeridos)`, `Nivel requerido por la U`, `NIVEL DE INICIO`, `NIVEL (MARCO)`, `¿Hizo validación?`, `Cursos obligatorios`, `Cursos realizados (a la fecha)`, `% avance`, `NIVEL ACTUAL 2025-2`) | Proposed as a longitudinal `EnglishTracking` model (like `AcademicTerm`), not built yet — needs confirmation these actually repeat per term on the live sheet (only `English level - 2026-1` looks term-suffixed today). |
+| `LB: ACADÉMICO`, `ICFES COL`, `NOTAS (Puntaje IB - Perú)`, `LB: Socioeconómico`, `SISBEN COL`, `Nivel económico (Perú)`, `NIVEL DE PRIORIZACIÓN`, `MONTO`, `OBSERVACIÓN`, `PUNTAJE SELECCIÓN` | Look conceptually closer to `SelectionCandidate`/`FinancialInput` than the `Scholar` profile. Flagged, not decided. |
+| The lone `ESTADO FINAL` on 2025-1/2025-2's term blocks | Not on this static list — handled dynamically by `findAcademicStatusColumns_`, which leaves it unresolved (not a WARN) when two `MATERIAS REPROBADAS`/`MENCIONAR` pairs sit back-to-back with no way to tell which term the status belongs to. |
+
+**MENTOR REPORTS:**
+
+| Column(s) | Why unmapped |
+|---|---|
+| `MENTOR ID` | Real signal — the mentor's own ID — but `MentorReport` has no field for a mentor identity yet (plain string vs. a full `Mentor` model, not decided). Never read into `mentorName`. |
+| `MONTH`, `DATE` | Ambiguous relationship to `reportingMonth`/`registrationDate`/`sessionDate` — the sheet has both a new bare structural column and the original free-text question already mapped; unclear which (if either) is authoritative without asking whoever maintains the sheet. |
+| `ACADEMIC CAUSE`, `PSYCHOSOCIAL CAUSE` | New columns; unclear relationship to the existing `academicAlertType`/`psychosocialAlertType` mapping (which still targets the "situación específica" free-text questions). |
+| The three "plan"/"materias rezagadas" columns | The new sheet splits one `nextSteps`-shaped question into three. Concatenate into `nextSteps` vs. new fields is an open question. |
+| `¿Participó en actividades?` | Genuinely new; no clear destination field yet. |
 
 ### Manual verification after changing header-matching logic (no automated test runner here)
 
@@ -129,5 +161,8 @@ manual pass:
    `ESTADO FINAL`) and correctly left blank for any term where two such blocks sit back-to-back
    before a single `ESTADO FINAL` (an intentionally-unresolved ambiguity, not a bug — see
    `findAcademicStatusColumns_`).
-4. Check the Sync Log tab for any unexpected `WARN`/`ERROR` rows after running `testConnection`.
+4. Check the Sync Log tab for any unexpected `WARN`/`ERROR` rows after running `testConnection` —
+   a `WARN` naming columns already on the "Unmapped columns" table above is expected and fine; one
+   naming anything else means either a genuinely new column (triage it) or a typo in this file's
+   list vs. the live sheet's exact text.
 - **Want to force a sync right now**: run `testConnection` from the Apps Script editor.

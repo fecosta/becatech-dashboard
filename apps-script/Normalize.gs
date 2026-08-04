@@ -180,6 +180,26 @@ function findHeaderRowIndex_(values, matches) {
   return -1;
 }
 
+/** Diffs a header row against everything this normalizer actually claimed (by column index) plus
+ * a reviewed, documented "known unmapped, here's why" list — logging a Sync Log WARN only for
+ * whatever's left over. This is the safety net half of the unmapped-columns paper trail: the
+ * documented lists below (SCHOLAR_UNMAPPED_HEADERS_ / MENTOR_REPORT_UNMAPPED_HEADERS_) are the
+ * "why" for a human reviewer, written once and updated when the sheet changes; this function is
+ * the "did something change" check that fires only for a genuinely new, unacknowledged column —
+ * not on every 15-minute run for gaps that are already known and accepted. */
+function detectUnrecognizedColumns_(headerKeys, claimedIndexes, documentedUnmapped) {
+  var claimed = {};
+  claimedIndexes.forEach(function (i) {
+    if (i !== -1 && i !== undefined) claimed[i] = true;
+  });
+  var unknown = [];
+  headerKeys.forEach(function (key, i) {
+    if (key === "" || claimed[i] || documentedUnmapped.indexOf(key) !== -1) return;
+    unknown.push(key);
+  });
+  return unknown;
+}
+
 /** Clears and rewrites a hidden NORMALIZED_* tab with `header` + `rows` (array of arrays).
  * `textColumns` (header names) are forced to Plain Text format BEFORE the values are written —
  * order matters: Sheets auto-detects/reformats a value into a date or number AT WRITE TIME (the
@@ -247,6 +267,31 @@ var SCHOLAR_HEADER_ = [
 var ACADEMIC_TERM_HEADER_ = [
   "scholarId", "term", "gpa", "creditsEnrolled", "enrollmentStatus", "failedSubjectsCount",
   "failedSubjectsDetail", "academicStatus",
+];
+
+// Reviewed, intentionally-unmapped SCHOLAR GENERAL INFO columns (normalized keys) and why. Update
+// this list AND apps-script/README.md's "Unmapped columns" table together when the sheet changes.
+// Verify exact text (accents don't matter — normKey_ strips them — but punctuation/spacing does)
+// against the live sheet; these were transcribed from a header list, not read from the sheet
+// directly, so a transcription mismatch will just show up as a spurious drift-detector WARN below.
+var SCHOLAR_UNMAPPED_HEADERS_ = [
+  // Single-value-per-scholar academic-summary fields whose target model (AcademicTerm) is keyed
+  // per term — no reliable "which term" to attach them to without guessing (explicit decision:
+  // leave unmapped rather than guess). Several map to real AcademicTerm/Scholar fields that DO
+  // exist (delayedSubjects, levelingAlternative, maxDeadline, isLeveling, receivedSupport) but
+  // only via the manual per-term upload template, where an analyst supplies them deliberately.
+  "acumulado", "materias atrasadas", "alternativa de nivelacion", "¿esta nivelando?",
+  "plazo maximo", "¿recibio apoyo?", "estado", "total credits", "cumulative - credits",
+  "overdue courses", "academic progress", "cumulative gpa",
+  // English-tracking block (Task 7b) — proposed as a longitudinal EnglishTracking model, not
+  // built this round pending confirmation that these actually repeat per term on the live sheet.
+  "participatin in english program", "english level - 2026-1", "numero de cursos u (requeridos)",
+  "nivel requerido por la u", "nivel de inicio", "nivel (marco)", "¿hizo validacion?",
+  "cursos obligatorios", "cursos realizados (a la fecha)", "% avance", "nivel actual 2025-2",
+  // Selection-pipeline / financial-input-looking columns — conceptually closer to
+  // SelectionCandidate/FinancialInput than the Scholar profile; flagged, not decided.
+  "lb: academico", "icfes col", "notas (puntaje ib - peru)", "lb: socioeconomico", "sisben col",
+  "nivel economico (peru)", "nivel de priorizacion", "monto", "observacion", "puntaje seleccion",
 ];
 
 /** Positionally resolve bare "ESTADO FINAL" columns (no term in the header text — it repeats
@@ -412,6 +457,19 @@ function normalizeScholarGeneralInfo_(ss) {
     });
   }
 
+  var claimedCols = [
+    idCol, fullNameCol, countryCol, cohortCol, universityCol, programCol, genderCol, statusCol,
+    semesterCol, startDateCol, endDateCol, ethnicGroupCol, departmentOriginCol,
+    municipalityOriginCol, currentDepartmentCol, currentMunicipalityCol, driveFolderUrlCol,
+    estimatedGraduationYearCol, programDurationYearsCol, highSchoolGraduationYearCol,
+    motherEducationLevelCol, fatherEducationLevelCol, email1Col, email2Col, dateOfBirthCol,
+    mobilePhoneCol, socioeconomicLevelCol, operatorCol,
+  ].concat(termColumns.map(function (c) { return c.colIndex; }));
+  var unrecognized = detectUnrecognizedColumns_(headerKeys, claimedCols, SCHOLAR_UNMAPPED_HEADERS_);
+  if (unrecognized.length > 0) {
+    logSyncEvent("NORMALIZE", "WARN", "SCHOLAR GENERAL INFO: unrecognized columns: " + unrecognized.join(", "));
+  }
+
   writeNormalizedTab_(ss, "NORMALIZED_SCHOLAR", SCHOLAR_HEADER_, scholarRows, ["scholarId"]);
   writeNormalizedTab_(ss, "NORMALIZED_ACADEMIC_TERM", ACADEMIC_TERM_HEADER_, termRows, ["scholarId", "term"]);
 }
@@ -428,6 +486,30 @@ var MENTOR_REPORT_HEADER_ = [
   "accompanimentPlan", "estimatedSupportTime", "individualTutoring", "groupTutoring",
   "individualMentoring", "groupMentoring", "workshops", "highlights", "academicProgressNotes",
   "nextSteps", "mentorReportedGlobalStatus", "submissionId",
+];
+
+// Reviewed, intentionally-unmapped MENTOR REPORTS columns (normalized keys) and why. Update this
+// list AND apps-script/README.md's "Unmapped columns" table together when the sheet changes. Verify
+// exact text against the live sheet (transcribed from a header list, not read from the sheet
+// directly — a transcription mismatch just shows up as a spurious drift-detector WARN below).
+var MENTOR_REPORT_UNMAPPED_HEADERS_ = [
+  // The mentor's own ID — real signal, but MentorReport has no field for a mentor identity yet
+  // (Task 7c: plain string vs. a full Mentor model, not decided). Never read into mentorName.
+  "mentor id",
+  // Ambiguous relationship to reportingMonth/registrationDate/sessionDate — the sheet has both a
+  // structural bare column and the original free-text question already mapped; unclear which (if
+  // either) is authoritative without checking the sheet owner.
+  "month", "date",
+  // New, unclear relationship to the existing academicAlertType/psychosocialAlertType mapping
+  // (which still targets the "situación específica" free-text questions).
+  "academic cause", "psychosocial cause",
+  // The new sheet splits one "plan y fecha de inicio" question (old sheet's nextSteps) into three
+  // — concatenate-vs-new-fields is an open question, not resolved here.
+  "cuentanos cual es el plan y la fecha de inicio (materias rezagadas — plan 1)",
+  "escribe que materias estan rezagadas, semestre y numero de veces cursadas",
+  "cuentanos cual es el plan y la fecha de inicio (plan 2 — creditos/intersemestral)",
+  // Genuinely new, no clear destination field yet.
+  "¿participo en actividades?",
 ];
 
 function normalizeMentorReports_(ss) {
@@ -557,6 +639,12 @@ function normalizeMentorReports_(ss) {
       get(row, "mentorReportedGlobalStatus"),
       get(row, "submissionId"),
     ]);
+  }
+
+  var claimedCols = Object.keys(col).map(function (key) { return col[key]; });
+  var unrecognized = detectUnrecognizedColumns_(k, claimedCols, MENTOR_REPORT_UNMAPPED_HEADERS_);
+  if (unrecognized.length > 0) {
+    logSyncEvent("NORMALIZE", "WARN", "MENTOR REPORTS: unrecognized columns: " + unrecognized.join(", "));
   }
 
   writeNormalizedTab_(ss, "NORMALIZED_MENTOR_REPORT", MENTOR_REPORT_HEADER_, rows, ["scholarId"]);
