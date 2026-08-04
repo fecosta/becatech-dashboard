@@ -24,6 +24,37 @@ describe("template adapter", () => {
     expect(rows[0].data.startDate).toBeInstanceOf(Date);
   });
 
+  it("maps the new Scholar profile fields, coercing a bare graduation year to int (not a Date)", () => {
+    const batch = templateAdapter("SCHOLAR", [
+      {
+        scholarId: "BT-CO-001",
+        fullName: "Ana",
+        country: "COLOMBIA",
+        cohort: "2025",
+        university: "U",
+        academicProgram: "CS",
+        gender: "Female",
+        estimatedGraduationYear: "2027",
+        programDurationYears: "5",
+        highSchoolGraduationYear: "2020",
+        motherEducationLevel: "Secundaria",
+        fatherEducationLevel: "Técnico",
+        email1: "ana@example.com",
+        email2: "ana.alt@example.com",
+        dateOfBirth: "2002-05-10",
+        mobilePhone: "+57 300 000 0000",
+        socioeconomicLevel: "2",
+      },
+    ]);
+    const row = (batch.SCHOLAR ?? [])[0];
+    expect(row.data.estimatedGraduationYear).toBe(2027);
+    expect(typeof row.data.estimatedGraduationYear).toBe("number");
+    expect(row.data.estimatedGraduationYear).not.toBeInstanceOf(Date);
+    expect(row.data.programDurationYears).toBe(5);
+    expect(row.data.dateOfBirth).toBeInstanceOf(Date);
+    expect(row.data.email1).toBe("ana@example.com");
+  });
+
   it("accepts the ID_becario alias and coerces floats", () => {
     const batch = templateAdapter("ACADEMIC_TERM", [{ ID_becario: "BT-CO-001", term: "2025-1", gpa: "4.2" }]);
     const row = (batch.ACADEMIC_TERM ?? [])[0];

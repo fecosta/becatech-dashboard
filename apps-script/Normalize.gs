@@ -240,7 +240,9 @@ var SCHOLAR_HEADER_ = [
   "scholarId", "fullName", "country", "cohort", "university", "academicProgram", "gender",
   "programStatus", "currentSemester", "startDate", "expectedEndDate", "ethnicGroup",
   "departmentOrigin", "municipalityOrigin", "currentDepartment", "currentMunicipality",
-  "driveFolderUrl",
+  "driveFolderUrl", "estimatedGraduationYear", "programDurationYears", "highSchoolGraduationYear",
+  "motherEducationLevel", "fatherEducationLevel", "email1", "email2", "dateOfBirth",
+  "mobilePhone", "socioeconomicLevel",
 ];
 var ACADEMIC_TERM_HEADER_ = [
   "scholarId", "term", "gpa", "creditsEnrolled", "enrollmentStatus", "failedSubjectsCount",
@@ -329,6 +331,19 @@ function normalizeScholarGeneralInfo_(ss) {
   var currentDepartmentCol = colIndexOf_(headerKeys, "current department of residence");
   var currentMunicipalityCol = colIndexOf_(headerKeys, "current municipality of residence");
   var driveFolderUrlCol = colIndexOf_(headerKeys, "carpeta del becario");
+  // New-sheet-only columns, no prior mapping to preserve — a bare 4-digit year isn't one of
+  // Sheets' auto-date-detection patterns (unlike "2024-1"), so estimatedGraduationYear needs no
+  // setNumberFormat("@") text-forcing in writeNormalizedTab_'s textColumns list.
+  var estimatedGraduationYearCol = colIndexOf_(headerKeys, "estimated graduation year");
+  var programDurationYearsCol = colIndexOf_(headerKeys, "program duration (years)");
+  var highSchoolGraduationYearCol = colIndexOf_(headerKeys, "high school graduation year");
+  var motherEducationLevelCol = colIndexOf_(headerKeys, "mother's education level");
+  var fatherEducationLevelCol = colIndexOf_(headerKeys, "father's education level");
+  var email1Col = colIndexOf_(headerKeys, "email 1");
+  var email2Col = colIndexOf_(headerKeys, "email 2");
+  var dateOfBirthCol = colIndexOf_(headerKeys, "date of birth");
+  var mobilePhoneCol = colIndexOf_(headerKeys, "mobile phone");
+  var socioeconomicLevelCol = colIndexOf_(headerKeys, "socioeconomic level");
   var termColumns = findTermColumns_(headerKeys);
 
   var scholarRows = [];
@@ -357,6 +372,16 @@ function normalizeScholarGeneralInfo_(ss) {
       currentDepartmentCol !== -1 ? row[currentDepartmentCol] : "",
       currentMunicipalityCol !== -1 ? row[currentMunicipalityCol] : "",
       driveFolderUrlCol !== -1 ? row[driveFolderUrlCol] : "",
+      estimatedGraduationYearCol !== -1 ? row[estimatedGraduationYearCol] : "",
+      programDurationYearsCol !== -1 ? row[programDurationYearsCol] : "",
+      highSchoolGraduationYearCol !== -1 ? row[highSchoolGraduationYearCol] : "",
+      motherEducationLevelCol !== -1 ? row[motherEducationLevelCol] : "",
+      fatherEducationLevelCol !== -1 ? row[fatherEducationLevelCol] : "",
+      email1Col !== -1 ? row[email1Col] : "",
+      email2Col !== -1 ? row[email2Col] : "",
+      dateOfBirthCol !== -1 ? normalizeDateCell_(row[dateOfBirthCol]) : "",
+      mobilePhoneCol !== -1 ? row[mobilePhoneCol] : "",
+      socioeconomicLevelCol !== -1 ? row[socioeconomicLevelCol] : "",
     ]);
 
     // Pivot repeating per-term columns — a term bucket is created whenever ANY matching column

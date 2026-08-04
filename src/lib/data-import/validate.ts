@@ -95,6 +95,16 @@ function buildScholar(row: CanonicalRow, universityId: string): Prisma.ScholarUn
     startDate: gD(row, "startDate"),
     expectedEndDate: gD(row, "expectedEndDate"),
     driveFolderUrl: gS(row, "driveFolderUrl"),
+    estimatedGraduationYear: gN(row, "estimatedGraduationYear"),
+    programDurationYears: gN(row, "programDurationYears"),
+    highSchoolGraduationYear: gN(row, "highSchoolGraduationYear"),
+    motherEducationLevel: gS(row, "motherEducationLevel"),
+    fatherEducationLevel: gS(row, "fatherEducationLevel"),
+    email1: gS(row, "email1"),
+    email2: gS(row, "email2"),
+    dateOfBirth: gD(row, "dateOfBirth"),
+    mobilePhone: gS(row, "mobilePhone"),
+    socioeconomicLevel: gS(row, "socioeconomicLevel"),
   };
 }
 

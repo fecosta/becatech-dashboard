@@ -191,28 +191,41 @@ model Operator {
 }
 
 model Scholar {
-  scholarId           String        @id // maps to ID_becario
-  fullName            String
-  country             Country
-  cohort              String
-  universityId        String
-  academicProgram     String
-  gender              String // free text (source data is "M o F" and more)
-  ethnicGroup         String?
-  departmentOrigin    String?
-  municipalityOrigin  String?
-  currentDepartment   String?
-  currentMunicipality String?
-  programStatus       ProgramStatus @default(ACTIVE)
-  currentSemester     Int?
-  currentMentor       String?
-  startDate           DateTime?
-  expectedEndDate     DateTime?
-  driveFolderUrl      String?
-  importBatchId       String? // last data-import batch that wrote this row (audit + rollback)
-  operatorId          String? // delivery partner / operator (Program Ecosystem), nullable
-  createdAt           DateTime      @default(now())
-  updatedAt           DateTime      @updatedAt
+  scholarId                String        @id // maps to ID_becario
+  fullName                 String
+  country                  Country
+  cohort                   String
+  universityId             String
+  academicProgram          String
+  gender                   String // free text (source data is "M o F" and more)
+  ethnicGroup              String?
+  departmentOrigin         String?
+  municipalityOrigin       String?
+  currentDepartment        String?
+  currentMunicipality      String?
+  programStatus            ProgramStatus @default(ACTIVE)
+  currentSemester          Int?
+  currentMentor            String?
+  startDate                DateTime?
+  expectedEndDate          DateTime?
+  driveFolderUrl           String?
+  // Bare year only — never coerced into expectedEndDate (a real date). Sheets' write-time
+  // auto-format risk (see Normalize.gs's writeNormalizedTab_) applies to date-shaped strings like
+  // "2024-1", not a plain 4-digit year, so no text-forcing is needed for this column.
+  estimatedGraduationYear  Int?
+  programDurationYears     Int?
+  highSchoolGraduationYear Int?
+  motherEducationLevel     String?
+  fatherEducationLevel     String?
+  email1                   String?
+  email2                   String?
+  dateOfBirth              DateTime?
+  mobilePhone              String?
+  socioeconomicLevel       String?
+  importBatchId            String? // last data-import batch that wrote this row (audit + rollback)
+  operatorId               String? // delivery partner / operator (Program Ecosystem), nullable
+  createdAt                DateTime      @default(now())
+  updatedAt                DateTime      @updatedAt
 
   university         University          @relation(fields: [universityId], references: [id])
   operator           Operator?           @relation(fields: [operatorId], references: [id])
@@ -297,46 +310,46 @@ model MonthlyCheckin {
 }
 
 model MentorReport {
-  id                    String    @id @default(cuid())
-  scholarId             String
-  scholarName           String?
-  mentorName            String?
-  semester              String?
-  country               Country?
-  cohort                String?
-  university            String?
-  reportingMonth        String?
-  registrationDate      DateTime?
-  sessionDate           DateTime?
-  sessionType           String?
-  sessionSummary        String?
-  modality              String?
-  permanenceRisk        String?
-  academicStatus        String?
-  academicAlertType     String?
-  approvedCoursesCount  Int?
-  atRiskCoursesCount    Int?
-  difficultSubjects     String?
-  psychosocialStatus    String?
-  psychosocialAlertType String?
-  accompanimentPlan     String?
-  estimatedSupportTime  String?
-  individualTutoring    Int       @default(0)
-  groupTutoring         Int       @default(0)
-  individualMentoring   Int       @default(0)
-  groupMentoring        Int       @default(0)
-  workshops             Int       @default(0)
-  highlights            String?
-  academicProgressNotes String?
-  nextSteps             String?
+  id                         String    @id @default(cuid())
+  scholarId                  String
+  scholarName                String?
+  mentorName                 String?
+  semester                   String?
+  country                    Country?
+  cohort                     String?
+  university                 String?
+  reportingMonth             String?
+  registrationDate           DateTime?
+  sessionDate                DateTime?
+  sessionType                String?
+  sessionSummary             String?
+  modality                   String?
+  permanenceRisk             String?
+  academicStatus             String?
+  academicAlertType          String?
+  approvedCoursesCount       Int?
+  atRiskCoursesCount         Int?
+  difficultSubjects          String?
+  psychosocialStatus         String?
+  psychosocialAlertType      String?
+  accompanimentPlan          String?
+  estimatedSupportTime       String?
+  individualTutoring         Int       @default(0)
+  groupTutoring              Int       @default(0)
+  individualMentoring        Int       @default(0)
+  groupMentoring             Int       @default(0)
+  workshops                  Int       @default(0)
+  highlights                 String?
+  academicProgressNotes      String?
+  nextSteps                  String?
   // The mentor's own self-reported global assessment (GLOBAL STATUS on the sheet). Quarantined by
   // design: global risk is always derived (src/lib/risk/derive.ts, recompute.ts), never uploaded —
   // this field must never feed into RiskAssessment.globalRiskValue/globalRiskLevel.
   mentorReportedGlobalStatus String?
-  submissionId          String    @unique
-  rawSubmissionId       String?
-  importBatchId         String?
-  createdAt             DateTime  @default(now())
+  submissionId               String    @unique
+  rawSubmissionId            String?
+  importBatchId              String?
+  createdAt                  DateTime  @default(now())
 
   scholar       Scholar               @relation(fields: [scholarId], references: [scholarId], onDelete: Cascade)
   rawSubmission RawJotformSubmission? @relation(fields: [rawSubmissionId], references: [id])
