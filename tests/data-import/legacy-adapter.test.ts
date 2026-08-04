@@ -113,6 +113,48 @@ describe("legacy wide-Excel adapter", () => {
     expect(batch.SCHOLAR?.[0].data.gender).toBe("Female");
   });
 
+  it("maps identity columns and per-term columns from the new sheet's English headers", () => {
+    const sheets: ParsedSheet[] = [
+      {
+        sheetName: "SCHOLAR GENERAL INFO",
+        records: [
+          {
+            ID: "BT-CO-080",
+            COUNTRY: "Colombia",
+            COHORT: "2025",
+            UNIVERSITY: "Universidad Nacional de Colombia",
+            "ACADEMIC PROGRAM": "Computer Science",
+            "SCHOLARS NAME": "English Header Scholar",
+            GENDER: "Female",
+            "CURRENT STATUS": "Activo",
+            "CURRENT SEMESTER": "3",
+            "STARTED DATE": "2024-01-15",
+            "GPA 2024-1": "4.1",
+            "Credits 2024-1": "16",
+            "Enrollment Status 2024-1": "Matriculado",
+            "MATERIAS REPROBADAS/CANCELADAS 2024-1": "1",
+            "MENCIONAR LAS ASIGNATURAS 2024-1": "Cálculo I",
+          },
+        ],
+      },
+    ];
+    const batch = legacyAdapter(sheets);
+    const scholar = (batch.SCHOLAR ?? [])[0];
+    expect(scholar.data.scholarId).toBe("BT-CO-080");
+    expect(scholar.data.country).toBe("COLOMBIA");
+    expect(scholar.data.fullName).toBe("English Header Scholar");
+    expect(scholar.data.gender).toBe("Female");
+    expect(scholar.data.programStatus).toBe("ACTIVE");
+    expect(scholar.data.currentSemester).toBe(3);
+
+    const t1 = termRow(batch.ACADEMIC_TERM, "2024-1");
+    expect(t1?.data.gpa).toBe(4.1);
+    expect(t1?.data.creditsEnrolled).toBe(16);
+    expect(t1?.data.enrollmentStatus).toBe("Matriculado");
+    expect(t1?.data.failedSubjectsCount).toBe(1);
+    expect(t1?.data.failedSubjectsDetail).toBe("Cálculo I");
+  });
+
   it("produces rows that pass validation (wide -> long -> valid)", () => {
     const ctx: ValidationContext = {
       existingScholarIds: new Set(),

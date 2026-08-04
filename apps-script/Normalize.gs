@@ -22,10 +22,16 @@
 
 var HEADER_SCAN_LIMIT_ = 20;
 
+// "gpa" and the bare "materias reprobadas..." prefix are the same word/phrase in both the old
+// Spanish and new English sheet headers, so those two patterns need no bilingual alternation.
 var TERM_RE_ = /^gpa (\d{4}-\d)$/;
-var CREDITS_RE_ = /^creditos (\d{4}-\d)$/;
-var ENROLLMENT_RE_ = /^estado matricula (\d{4}-\d)$/;
+var CREDITS_RE_ = /^(?:creditos|credits) (\d{4}-\d)$/;
+var ENROLLMENT_RE_ = /^(?:estado matricula|enrollment status) (\d{4}-\d)$/;
 var FAILED_RE_ = /^materias reprobadas.*(\d{4}-\d)$/;
+var FAILED_DETAIL_RE_ = /^mencionar las asignaturas (\d{4}-\d)$/;
+// "ESTADO FINAL" (bare, no term in the text) repeats identically once per term block — it can only
+// be resolved to a term positionally (see findAcademicStatusColumns_), not by regex on its own.
+var ESTADO_FINAL_KEY_ = "estado final";
 
 var ACTIVITY_TYPE_BY_KEY_ = {
   "tutorias ind": "INDIVIDUAL_TUTORING",
@@ -111,9 +117,29 @@ function colIndexOf_(headerKeys, name) {
   return headerKeys.indexOf(name);
 }
 
+/** First column whose normalized header exactly equals any of `names` — the general-purpose
+ * bilingual lookup (old Spanish header text alongside the new sheet's English equivalent). */
+function colIndexOfAny_(headerKeys, names) {
+  for (var i = 0; i < names.length; i++) {
+    var idx = headerKeys.indexOf(names[i]);
+    if (idx !== -1) return idx;
+  }
+  return -1;
+}
+
 function colIndexByPrefix_(headerKeys, prefix) {
   for (var i = 0; i < headerKeys.length; i++) {
     if (headerKeys[i].indexOf(prefix) === 0) return i;
+  }
+  return -1;
+}
+
+/** Bilingual version of colIndexByPrefix_ — first column whose header starts with any prefix. */
+function colIndexByPrefixAny_(headerKeys, prefixes) {
+  for (var i = 0; i < headerKeys.length; i++) {
+    for (var j = 0; j < prefixes.length; j++) {
+      if (headerKeys[i].indexOf(prefixes[j]) === 0) return i;
+    }
   }
   return -1;
 }
@@ -125,6 +151,21 @@ function colIndexByIncludes_(headerKeys, substr, occurrence) {
     if (headerKeys[i].indexOf(substr) !== -1) {
       if (count === occurrence) return i;
       count += 1;
+    }
+  }
+  return -1;
+}
+
+/** Bilingual version of colIndexByIncludes_ — nth column whose header includes any of `substrs`. */
+function colIndexByIncludesAny_(headerKeys, substrs, occurrence) {
+  var count = 0;
+  for (var i = 0; i < headerKeys.length; i++) {
+    for (var j = 0; j < substrs.length; j++) {
+      if (headerKeys[i].indexOf(substrs[j]) !== -1) {
+        if (count === occurrence) return i;
+        count += 1;
+        break;
+      }
     }
   }
   return -1;
@@ -199,7 +240,34 @@ var SCHOLAR_HEADER_ = [
   "scholarId", "fullName", "country", "cohort", "university", "academicProgram", "gender",
   "programStatus", "currentSemester", "startDate", "expectedEndDate",
 ];
-var ACADEMIC_TERM_HEADER_ = ["scholarId", "term", "gpa", "creditsEnrolled", "enrollmentStatus", "failedSubjectsCount"];
+var ACADEMIC_TERM_HEADER_ = [
+  "scholarId", "term", "gpa", "creditsEnrolled", "enrollmentStatus", "failedSubjectsCount",
+  "failedSubjectsDetail", "academicStatus",
+];
+
+/** Positionally resolve bare "ESTADO FINAL" columns (no term in the header text — it repeats
+ * identically once per term block) to a specific term, by pairing each with the MATERIAS
+ * REPROBADAS/MENCIONAR block immediately preceding it. Real layout for most terms is a clean
+ * 3-column block (MATERIAS -> MENCIONAR -> ESTADO FINAL); two terms (2025-1/2025-2) instead stack
+ * two MATERIAS/MENCIONAR pairs back-to-back before a single ESTADO FINAL, which makes that column
+ * genuinely ambiguous. Per policy, an ambiguous or orphaned ESTADO FINAL is left unresolved
+ * (surfaced via Task 8's unmapped-columns list) rather than guessed. */
+function findAcademicStatusColumns_(headerKeys) {
+  var cols = [];
+  var pendingTerms = [];
+  for (var i = 0; i < headerKeys.length; i++) {
+    var key = headerKeys[i];
+    var failedMatch = FAILED_RE_.exec(key);
+    if (failedMatch) {
+      var nextDetail = headerKeys[i + 1] ? FAILED_DETAIL_RE_.exec(headerKeys[i + 1]) : null;
+      if (nextDetail && nextDetail[1] === failedMatch[1]) pendingTerms.push(failedMatch[1]);
+    } else if (key === ESTADO_FINAL_KEY_) {
+      if (pendingTerms.length === 1) cols.push({ colIndex: i, term: pendingTerms[0], field: "academicStatus" });
+      pendingTerms = []; // clear at every boundary, whether resolved, ambiguous, or orphaned
+    }
+  }
+  return cols;
+}
 
 function findTermColumns_(headerKeys) {
   var cols = [];
@@ -209,8 +277,9 @@ function findTermColumns_(headerKeys) {
     else if ((m = CREDITS_RE_.exec(key))) cols.push({ colIndex: colIndex, term: m[1], field: "creditsEnrolled" });
     else if ((m = ENROLLMENT_RE_.exec(key))) cols.push({ colIndex: colIndex, term: m[1], field: "enrollmentStatus" });
     else if ((m = FAILED_RE_.exec(key))) cols.push({ colIndex: colIndex, term: m[1], field: "failedSubjectsCount" });
+    else if ((m = FAILED_DETAIL_RE_.exec(key))) cols.push({ colIndex: colIndex, term: m[1], field: "failedSubjectsDetail" });
   });
-  return cols;
+  return cols.concat(findAcademicStatusColumns_(headerKeys));
 }
 
 function normalizeScholarGeneralInfo_(ss) {
@@ -234,15 +303,20 @@ function normalizeScholarGeneralInfo_(ss) {
 
   var headerKeys = values[headerRowIndex].map(normKey_);
   var idCol = colIndexOf_(headerKeys, "id") !== -1 ? colIndexOf_(headerKeys, "id") : colIndexOf_(headerKeys, "id_becario");
-  var fullNameCol = colIndexOf_(headerKeys, "nombre completo");
-  var countryCol = colIndexOf_(headerKeys, "pais");
-  var cohortCol = colIndexOf_(headerKeys, "cohorte");
-  var universityCol = colIndexOf_(headerKeys, "universidad");
-  var programCol = colIndexOf_(headerKeys, "programa academico");
-  var genderCol = colIndexByPrefix_(headerKeys, "genero");
-  var statusCol = colIndexOf_(headerKeys, "estado actual");
-  var semesterCol = colIndexOf_(headerKeys, "semester") !== -1 ? colIndexOf_(headerKeys, "semester") : colIndexOf_(headerKeys, "semestre");
-  var startDateCol = colIndexOf_(headerKeys, "fecha de inicio");
+  var fullNameCol = colIndexOfAny_(headerKeys, ["nombre completo", "scholars name"]);
+  var countryCol = colIndexOfAny_(headerKeys, ["pais", "country"]);
+  var cohortCol = colIndexOfAny_(headerKeys, ["cohorte", "cohort"]);
+  var universityCol = colIndexOfAny_(headerKeys, ["universidad", "university"]);
+  var programCol = colIndexOfAny_(headerKeys, ["programa academico", "academic program"]);
+  var genderCol = colIndexByPrefixAny_(headerKeys, ["genero", "gender"]);
+  var statusCol = colIndexOfAny_(headerKeys, ["estado actual", "current status"]);
+  // "current semester" (new sheet) is a distinct exact string from "semester"/"semestre" (old
+  // sheet) — not a substring match, so it needs its own alias rather than relying on the prefix.
+  var semesterCol = colIndexOfAny_(headerKeys, ["semester", "semestre", "current semester"]);
+  var startDateCol = colIndexOfAny_(headerKeys, ["fecha de inicio", "started date"]);
+  // No new-sheet equivalent exists for this column (only a bare "Estimated Graduation Year" —
+  // see estimatedGraduationYear) — expectedEndDate is intentionally left null for new-sheet rows
+  // rather than derived from other fields (explicit decision, not an oversight).
   var endDateCol = colIndexOf_(headerKeys, "fecha de finalizacion");
   var termColumns = findTermColumns_(headerKeys);
 
@@ -274,14 +348,20 @@ function normalizeScholarGeneralInfo_(ss) {
     termColumns.forEach(function (col) {
       var bucket = byTerm[col.term];
       if (!bucket) {
-        bucket = { scholarId: scholarId, term: col.term, gpa: "", creditsEnrolled: "", enrollmentStatus: "", failedSubjectsCount: "" };
+        bucket = {
+          scholarId: scholarId, term: col.term, gpa: "", creditsEnrolled: "", enrollmentStatus: "",
+          failedSubjectsCount: "", failedSubjectsDetail: "", academicStatus: "",
+        };
         byTerm[col.term] = bucket;
       }
       bucket[col.field] = row[col.colIndex];
     });
     Object.keys(byTerm).forEach(function (term) {
       var b = byTerm[term];
-      termRows.push([b.scholarId, b.term, b.gpa, b.creditsEnrolled, b.enrollmentStatus, b.failedSubjectsCount]);
+      termRows.push([
+        b.scholarId, b.term, b.gpa, b.creditsEnrolled, b.enrollmentStatus, b.failedSubjectsCount,
+        b.failedSubjectsDetail, b.academicStatus,
+      ]);
     });
   }
 

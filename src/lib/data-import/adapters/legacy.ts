@@ -18,12 +18,24 @@ import { indexRecord, mapCountry, mapStatus, normKey } from "./shared";
 export { mapCountry };
 
 const TERM = String.raw`(\d{4}-\d)`;
+// Keep in sync with apps-script/Normalize.gs's TERM_RE_/CREDITS_RE_/ENROLLMENT_RE_/FAILED_RE_/
+// FAILED_DETAIL_RE_ (Task 5, header-migration plan) — two separate runtimes, no shared source.
+// "gpa" and the bare "materias reprobadas..." prefix are unchanged between the old Spanish and
+// new English sheet headers, so those two need no bilingual alternation.
 const RE = {
   gpa: new RegExp(`^gpa ${TERM}$`),
-  credits: new RegExp(`^creditos ${TERM}$`),
-  enrollment: new RegExp(`^estado matricula ${TERM}$`),
+  credits: new RegExp(`^(?:creditos|credits) ${TERM}$`),
+  enrollment: new RegExp(`^(?:estado matricula|enrollment status) ${TERM}$`),
   failed: new RegExp(`^materias reprobadas.*${TERM}$`),
+  failedDetail: new RegExp(`^mencionar las asignaturas ${TERM}$`),
 };
+// NOTE: unlike Normalize.gs (which reads cells positionally via getValues() arrays), this adapter
+// goes through XLSX.utils.sheet_to_json, which keys each row by its (normalized) header text —
+// duplicate literal header text collapses to one property, silently dropping the others. The new
+// sheet's bare "ESTADO FINAL" column repeats identically up to 4 times, so it CANNOT be resolved
+// here the way Normalize.gs's findAcademicStatusColumns_ resolves it positionally; academicStatus
+// stays unmapped for this (manual-upload) path until legacy.ts's row model is reworked to read
+// positionally too. Flagged, not fixed, in this pass — see Task 8's unmapped-columns list.
 
 /** A general-info header row has an ID column and at least one `GPA <term>` column. */
 function looksLikeGeneralInfoHeader(keys: string[]): boolean {
@@ -85,21 +97,33 @@ function getByKeyPrefix(idx: Map<string, unknown>, prefix: string): unknown {
   return undefined;
 }
 
+/** Bilingual lookup — first present value among several exact normalized keys. */
+function getAny(idx: Map<string, unknown>, keys: string[]): unknown {
+  for (const k of keys) {
+    if (idx.has(k)) return idx.get(k);
+  }
+  return undefined;
+}
+
 function scholarRow(idx: Map<string, unknown>, rowNumber: number): CanonicalRow {
   const c = (v: unknown, t: FieldType) => coerceValue(v, t);
   return {
     rowNumber,
     data: {
       scholarId: c(idx.get("id") ?? idx.get("id_becario"), "string"),
-      fullName: c(idx.get("nombre completo"), "string"),
-      country: mapCountry(idx.get("pais")),
-      cohort: c(idx.get("cohorte"), "string"),
-      university: c(idx.get("universidad"), "string"),
-      academicProgram: c(idx.get("programa academico"), "string"),
-      gender: c(getByKeyPrefix(idx, "genero"), "string"),
-      programStatus: mapStatus(idx.get("estado actual")),
-      currentSemester: c(idx.get("semester") ?? idx.get("semestre"), "int"),
-      startDate: c(idx.get("fecha de inicio"), "date"),
+      fullName: c(getAny(idx, ["nombre completo", "scholars name"]), "string"),
+      country: mapCountry(getAny(idx, ["pais", "country"])),
+      cohort: c(getAny(idx, ["cohorte", "cohort"]), "string"),
+      university: c(getAny(idx, ["universidad", "university"]), "string"),
+      academicProgram: c(getAny(idx, ["programa academico", "academic program"]), "string"),
+      gender: c(getByKeyPrefix(idx, "genero") ?? getByKeyPrefix(idx, "gender"), "string"),
+      programStatus: mapStatus(getAny(idx, ["estado actual", "current status"])),
+      // "current semester" (new sheet) is a distinct exact string, not a substring of
+      // "semester"/"semestre" (old sheet) — needs its own alias, not just the ?? fallback.
+      currentSemester: c(getAny(idx, ["semester", "semestre", "current semester"]), "int"),
+      startDate: c(getAny(idx, ["fecha de inicio", "started date"]), "date"),
+      // No new-sheet equivalent exists (only a bare "Estimated Graduation Year") — intentionally
+      // left null for new-sheet rows rather than derived from other fields.
       expectedEndDate: c(idx.get("fecha de finalizacion"), "date"),
     },
   };
@@ -136,6 +160,7 @@ function generalInfoRows(
       else if ((m = RE.credits.exec(key))) ensure(m[1]).creditsEnrolled = coerceValue(value, "int");
       else if ((m = RE.enrollment.exec(key))) ensure(m[1]).enrollmentStatus = coerceValue(value, "string");
       else if ((m = RE.failed.exec(key))) ensure(m[1]).failedSubjectsCount = coerceValue(value, "int");
+      else if ((m = RE.failedDetail.exec(key))) ensure(m[1]).failedSubjectsDetail = coerceValue(value, "string");
     }
     for (const data of byTerm.values()) terms.push({ rowNumber, data });
   });

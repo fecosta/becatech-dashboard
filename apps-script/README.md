@@ -107,4 +107,27 @@ access to the script itself:
   then inspect the `NORMALIZED_*` tab it wrote to. (The underlying `normalize*_()` functions take a
   required `ss` argument, so the editor can't call them directly with no arguments — always use
   the `*Only` wrapper, or `normalizeAll_`, from the dropdown.)
+- **A column that used to map now shows blank** (e.g. after the source sheet's headers changed):
+  `Normalize.gs` matches most header text bilingually (old Spanish alongside the new English
+  headers — see `colIndexOfAny_`/`colIndexByPrefixAny_`/`colIndexByIncludesAny_` and
+  `TERM_RE_`/`CREDITS_RE_`/`ENROLLMENT_RE_`/`FAILED_RE_`/`FAILED_DETAIL_RE_`), but a header that
+  doesn't match *either* known variant resolves to `-1` and the field is silently blank — check the
+  live header's exact text (casing/punctuation/apostrophes matter less, since `normKey_` strips
+  accents/case/whitespace, but a genuinely different phrase needs a new alias added to the relevant
+  list) against the column-name literals in `normalizeScholarGeneralInfo_`/`normalizeMentorReports_`.
+
+### Manual verification after changing header-matching logic (no automated test runner here)
+
+Apps Script has no local test runner, so any change to `Normalize.gs`'s column matching needs a
+manual pass:
+1. Paste the updated `Normalize.gs` into the Apps Script editor.
+2. Run `normalizeScholarGeneralInfoOnly` (and/or `normalizeMentorReportsOnly`), then unhide and
+   inspect the corresponding `NORMALIZED_*` tab — confirm every column you touched is populated for
+   a few real rows, and that nothing that used to populate now shows blank.
+3. Specifically for `NORMALIZED_ACADEMIC_TERM`'s `academicStatus` column: confirm it's populated
+   for terms with an unambiguous 3-column block (`MATERIAS REPROBADAS` → `MENCIONAR` →
+   `ESTADO FINAL`) and correctly left blank for any term where two such blocks sit back-to-back
+   before a single `ESTADO FINAL` (an intentionally-unresolved ambiguity, not a bug — see
+   `findAcademicStatusColumns_`).
+4. Check the Sync Log tab for any unexpected `WARN`/`ERROR` rows after running `testConnection`.
 - **Want to force a sync right now**: run `testConnection` from the Apps Script editor.
