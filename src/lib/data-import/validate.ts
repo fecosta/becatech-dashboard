@@ -112,6 +112,9 @@ function buildAcademicTerm(row: CanonicalRow): Prisma.AcademicTermUncheckedCreat
     accumulatedGpa: gN(row, "accumulatedGpa"),
     failedSubjectsCount: gN(row, "failedSubjectsCount"),
     failedSubjectsDetail: gS(row, "failedSubjectsDetail"),
+    delayedSubjects: gS(row, "delayedSubjects"),
+    levelingAlternative: gS(row, "levelingAlternative"),
+    maxDeadline: gD(row, "maxDeadline"),
     expectedProgressStatus: gS(row, "expectedProgressStatus") as
       | Prisma.AcademicTermUncheckedCreateInput["expectedProgressStatus"]
       | undefined,

@@ -28,6 +28,25 @@ describe("import validation", () => {
     expect(res.validated.ACADEMIC_TERM).toHaveLength(1);
   });
 
+  it("builds an academic term with the leveling/deadline fields when supplied", () => {
+    const batch = templateAdapter("ACADEMIC_TERM", [
+      {
+        scholarId: "BT-CO-001",
+        term: "2025-1",
+        gpa: "4.1",
+        delayedSubjects: "Cálculo II",
+        levelingAlternative: "Curso de verano",
+        maxDeadline: "2025-12-01",
+      },
+    ]);
+    const res = validateBatch(batch, ctx());
+    expect(res.errorRows).toBe(0);
+    const row = (res.validated.ACADEMIC_TERM ?? [])[0];
+    expect(row.delayedSubjects).toBe("Cálculo II");
+    expect(row.levelingAlternative).toBe("Curso de verano");
+    expect(row.maxDeadline).toBeInstanceOf(Date);
+  });
+
   it("flags a missing required field", () => {
     const batch = templateAdapter("ACADEMIC_TERM", [{ scholarId: "BT-CO-001" }]); // no term
     const res = validateBatch(batch, ctx());

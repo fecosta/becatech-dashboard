@@ -39,4 +39,20 @@ describe("template adapter", () => {
     expect(row.data.isLeveling).toBe(true);
     expect(row.data.bogusColumn).toBeUndefined();
   });
+
+  it("maps the manual-template-only leveling/deadline fields (no header-migration ambiguity here — the analyst supplies them per term deliberately)", () => {
+    const batch = templateAdapter("ACADEMIC_TERM", [
+      {
+        scholarId: "BT-CO-001",
+        term: "2025-1",
+        delayedSubjects: "Cálculo II",
+        levelingAlternative: "Curso de verano",
+        maxDeadline: "2025-12-01",
+      },
+    ]);
+    const row = (batch.ACADEMIC_TERM ?? [])[0];
+    expect(row.data.delayedSubjects).toBe("Cálculo II");
+    expect(row.data.levelingAlternative).toBe("Curso de verano");
+    expect(row.data.maxDeadline).toBeInstanceOf(Date);
+  });
 });

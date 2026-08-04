@@ -238,7 +238,9 @@ function normalizeSupportActivityLogOnly() {
 
 var SCHOLAR_HEADER_ = [
   "scholarId", "fullName", "country", "cohort", "university", "academicProgram", "gender",
-  "programStatus", "currentSemester", "startDate", "expectedEndDate",
+  "programStatus", "currentSemester", "startDate", "expectedEndDate", "ethnicGroup",
+  "departmentOrigin", "municipalityOrigin", "currentDepartment", "currentMunicipality",
+  "driveFolderUrl",
 ];
 var ACADEMIC_TERM_HEADER_ = [
   "scholarId", "term", "gpa", "creditsEnrolled", "enrollmentStatus", "failedSubjectsCount",
@@ -318,6 +320,15 @@ function normalizeScholarGeneralInfo_(ss) {
   // see estimatedGraduationYear) — expectedEndDate is intentionally left null for new-sheet rows
   // rather than derived from other fields (explicit decision, not an oversight).
   var endDateCol = colIndexOf_(headerKeys, "fecha de finalizacion");
+  // These six were never wired to any header (old or new) before this pass — a pre-existing gap,
+  // not something the new sheet broke. The new sheet's English headers are the only known source
+  // text for them, so no bilingual aliasing is needed (there's no prior Spanish mapping to keep).
+  var ethnicGroupCol = colIndexOf_(headerKeys, "ethnic group");
+  var departmentOriginCol = colIndexOf_(headerKeys, "department of origin");
+  var municipalityOriginCol = colIndexOf_(headerKeys, "municipality of origin");
+  var currentDepartmentCol = colIndexOf_(headerKeys, "current department of residence");
+  var currentMunicipalityCol = colIndexOf_(headerKeys, "current municipality of residence");
+  var driveFolderUrlCol = colIndexOf_(headerKeys, "carpeta del becario");
   var termColumns = findTermColumns_(headerKeys);
 
   var scholarRows = [];
@@ -340,6 +351,12 @@ function normalizeScholarGeneralInfo_(ss) {
       semesterCol !== -1 ? parseSemesterCell_(row[semesterCol]) : "",
       startDateCol !== -1 ? normalizeDateCell_(row[startDateCol]) : "",
       endDateCol !== -1 ? normalizeDateCell_(row[endDateCol]) : "",
+      ethnicGroupCol !== -1 ? row[ethnicGroupCol] : "",
+      departmentOriginCol !== -1 ? row[departmentOriginCol] : "",
+      municipalityOriginCol !== -1 ? row[municipalityOriginCol] : "",
+      currentDepartmentCol !== -1 ? row[currentDepartmentCol] : "",
+      currentMunicipalityCol !== -1 ? row[currentMunicipalityCol] : "",
+      driveFolderUrlCol !== -1 ? row[driveFolderUrlCol] : "",
     ]);
 
     // Pivot repeating per-term columns — a term bucket is created whenever ANY matching column
