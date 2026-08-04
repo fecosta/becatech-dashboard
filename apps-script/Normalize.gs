@@ -242,7 +242,7 @@ var SCHOLAR_HEADER_ = [
   "departmentOrigin", "municipalityOrigin", "currentDepartment", "currentMunicipality",
   "driveFolderUrl", "estimatedGraduationYear", "programDurationYears", "highSchoolGraduationYear",
   "motherEducationLevel", "fatherEducationLevel", "email1", "email2", "dateOfBirth",
-  "mobilePhone", "socioeconomicLevel",
+  "mobilePhone", "socioeconomicLevel", "operator",
 ];
 var ACADEMIC_TERM_HEADER_ = [
   "scholarId", "term", "gpa", "creditsEnrolled", "enrollmentStatus", "failedSubjectsCount",
@@ -344,6 +344,10 @@ function normalizeScholarGeneralInfo_(ss) {
   var dateOfBirthCol = colIndexOf_(headerKeys, "date of birth");
   var mobilePhoneCol = colIndexOf_(headerKeys, "mobile phone");
   var socioeconomicLevelCol = colIndexOf_(headerKeys, "socioeconomic level");
+  // Raw operator NAME is passed through as-is — resolution against the Operator catalog (lookup
+  // only, never auto-created) happens on the dashboard side in validate.ts, same division of
+  // responsibility as `university`.
+  var operatorCol = colIndexOf_(headerKeys, "current operator - support services");
   var termColumns = findTermColumns_(headerKeys);
 
   var scholarRows = [];
@@ -382,6 +386,7 @@ function normalizeScholarGeneralInfo_(ss) {
       dateOfBirthCol !== -1 ? normalizeDateCell_(row[dateOfBirthCol]) : "",
       mobilePhoneCol !== -1 ? row[mobilePhoneCol] : "",
       socioeconomicLevelCol !== -1 ? row[socioeconomicLevelCol] : "",
+      operatorCol !== -1 ? row[operatorCol] : "",
     ]);
 
     // Pivot repeating per-term columns — a term bucket is created whenever ANY matching column

@@ -75,13 +75,18 @@ function checkFields(
 }
 
 // --- per-entity builders (mappers; all validation already passed) ---
-function buildScholar(row: CanonicalRow, universityId: string): Prisma.ScholarUncheckedCreateInput {
+function buildScholar(
+  row: CanonicalRow,
+  universityId: string,
+  operatorId?: string,
+): Prisma.ScholarUncheckedCreateInput {
   return {
     scholarId: gS(row, "scholarId")!,
     fullName: gS(row, "fullName")!,
     country: gS(row, "country") as Country,
     cohort: gS(row, "cohort")!,
     universityId,
+    operatorId,
     academicProgram: gS(row, "academicProgram")!,
     gender: gS(row, "gender")!,
     programStatus: gS(row, "programStatus") as ProgramStatus | undefined,
@@ -341,6 +346,7 @@ export function validateBatch(batch: CanonicalBatch, ctx: ValidationContext): Va
       }
 
       let universityId: string | undefined;
+      let operatorId: string | undefined;
       if (entity === "SCHOLAR") {
         const universityName = gS(row, "university");
         universityId = universityName
@@ -355,11 +361,28 @@ export function validateBatch(batch: CanonicalBatch, ctx: ValidationContext): Va
           });
           continue;
         }
+
+        // Unlike university, a blank operator is valid (operatorId is nullable) — only a
+        // non-blank, unmatched name is an error. Lookup-only, same as university: never
+        // auto-created from an unrecognized name.
+        const operatorName = gS(row, "operator");
+        if (operatorName) {
+          operatorId = ctx.operatorsByName.get(operatorName.trim().toLowerCase());
+          if (!operatorId) {
+            errors.push({
+              entity,
+              rowNumber: row.rowNumber,
+              field: "operator",
+              message: `Operador no encontrado en el catálogo: ${operatorName}`,
+            });
+            continue;
+          }
+        }
       }
 
       switch (entity) {
         case "SCHOLAR": {
-          const r = buildScholar(row, universityId!);
+          const r = buildScholar(row, universityId!, operatorId);
           validated.SCHOLAR.push(r);
           scholarIds.add(r.scholarId);
           countryByScholarId.set(r.scholarId, r.country as Country);

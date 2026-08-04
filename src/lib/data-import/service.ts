@@ -21,10 +21,11 @@ import {
 import { validateBatch } from "./validate";
 
 async function loadValidationContext(): Promise<ValidationContext> {
-  const [scholars, controls, universities] = await Promise.all([
+  const [scholars, controls, universities, operators] = await Promise.all([
     prisma.scholar.findMany({ select: { scholarId: true, fullName: true, country: true } }),
     prisma.controlValue.findMany({ where: { isActive: true }, select: { category: true, value: true } }),
     prisma.university.findMany({ select: { id: true, name: true } }),
+    prisma.operator.findMany({ select: { id: true, name: true } }),
   ]);
   const controlMap = new Map<string, Set<string>>();
   for (const c of controls) {
@@ -37,6 +38,8 @@ async function loadValidationContext(): Promise<ValidationContext> {
   }
   const universityMap = new Map<string, string>();
   for (const u of universities) universityMap.set(u.name.trim().toLowerCase(), u.id);
+  const operatorMap = new Map<string, string>();
+  for (const o of operators) operatorMap.set(o.name.trim().toLowerCase(), o.id);
   const scholarIdsByNormalizedName = new Map<string, string[]>();
   for (const s of scholars) {
     const key = normKey(s.fullName);
@@ -50,6 +53,7 @@ async function loadValidationContext(): Promise<ValidationContext> {
     existingScholarIds: new Set(scholars.map((s) => s.scholarId)),
     controls: controlMap,
     universities: universityMap,
+    operatorsByName: operatorMap,
     scholarIdsByNormalizedName,
     countryByScholarId,
   };

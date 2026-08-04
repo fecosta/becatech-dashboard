@@ -10,6 +10,10 @@ export const TEMPLATE_COLUMNS: Record<ImportEntity, FieldDef[]> = {
     { field: "country", type: "string", required: true, enumCategory: "country", example: "COLOMBIA" },
     { field: "cohort", type: "string", required: true, example: "2025" },
     { field: "university", type: "string", required: true, example: "Universidad Nacional de Colombia" },
+    // Delivery partner / operator name (Program Ecosystem) — resolved to Operator.id by name
+    // lookup in validate.ts, same pattern as `university`. Optional: Scholar.operatorId is
+    // nullable, so a blank value is valid; only a non-blank, unmatched name is an error.
+    { field: "operator", type: "string" },
     { field: "academicProgram", type: "string", required: true, example: "Computer Science" },
     { field: "gender", type: "string", required: true, example: "Female" },
     { field: "programStatus", type: "string", enumCategory: "program_status", example: "ACTIVE" },

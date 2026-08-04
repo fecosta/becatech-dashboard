@@ -192,6 +192,7 @@ describe("mentor-reports legacy adapter", () => {
       countryByScholarId: new Map(),
       controls: new Map<string, Set<string>>([["country", new Set(["COLOMBIA", "PERU"])]]),
       universities: new Map(),
+      operatorsByName: new Map(),
     };
     const batch = { MENTOR_REPORT: mentorReportsLegacyAdapter(mentorReportsSheet(sampleRow({ submissionId: null }))) };
     const res = validateBatch(batch, ctx);
@@ -207,6 +208,7 @@ describe("mentor-reports legacy adapter", () => {
       countryByScholarId: new Map(),
       controls: new Map<string, Set<string>>([["country", new Set(["COLOMBIA", "PERU"])]]),
       universities: new Map(),
+      operatorsByName: new Map(),
     };
     // A mentor-shaped ID, not any real scholarId — this is the actual production bug shape.
     const row = sampleRow({ scholarId: "MENTOR-77" });
@@ -224,6 +226,7 @@ describe("mentor-reports legacy adapter", () => {
       countryByScholarId: new Map(),
       controls: new Map<string, Set<string>>([["country", new Set(["COLOMBIA", "PERU"])]]),
       universities: new Map(),
+      operatorsByName: new Map(),
     };
     const row = sampleRow({ scholarName: "Nadie Existe" });
     const batch = { MENTOR_REPORT: mentorReportsLegacyAdapter(mentorReportsSheet(row)) };
@@ -240,6 +243,7 @@ describe("mentor-reports legacy adapter", () => {
       countryByScholarId: new Map(),
       controls: new Map<string, Set<string>>([["country", new Set(["COLOMBIA", "PERU"])]]),
       universities: new Map(),
+      operatorsByName: new Map(),
     };
     const batch = { MENTOR_REPORT: mentorReportsLegacyAdapter(mentorReportsSheet(sampleRow())) };
     const res = validateBatch(batch, ctx);

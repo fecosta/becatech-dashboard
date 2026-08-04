@@ -94,6 +94,7 @@ describe("support-activity-log legacy adapter", () => {
         ],
       ]),
       universities: new Map(),
+      operatorsByName: new Map(),
     };
     const res = validateBatch(batch, ctx);
     expect(res.errorRows).toBe(0);

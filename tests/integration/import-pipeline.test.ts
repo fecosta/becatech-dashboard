@@ -5,7 +5,7 @@ import {
   rollbackImportBatch,
 } from "@/lib/data-import/service";
 import { prisma } from "@/lib/db";
-import { csvBuffer, resetDb, seedFixture, xlsxBuffer } from "./helpers";
+import { csvBuffer, resetDb, seedFixture, seedOperatorFixture, xlsxBuffer } from "./helpers";
 
 let uploaderId: string;
 
@@ -140,6 +140,43 @@ describe("import pipeline (integration)", () => {
     const error = result.errors.find((e) => e.field === "university");
     expect(error?.message).toContain("Universidad Inexistente");
     expect(await prisma.scholar.count({ where: { scholarId: "BT-CO-060" } })).toBe(0);
+  });
+
+  it("resolves a new scholar row's operator by name, end to end", async () => {
+    const { name } = await seedOperatorFixture();
+    const data = csvBuffer(
+      "scholarId,fullName,country,cohort,university,academicProgram,gender,operator\n" +
+        `BT-CO-061,Operator Scholar,COLOMBIA,2026,UNAL,CS,Female,${name}\n`,
+    );
+    const { batchId, result } = await createImportBatch({
+      data,
+      filename: "scholars.csv",
+      sourceType: "TEMPLATE",
+      entity: "SCHOLAR",
+      uploadedById: uploaderId,
+    });
+    expect(result.successRows).toBe(1);
+    await commitImportBatch(batchId);
+    const scholar = await prisma.scholar.findUnique({ where: { scholarId: "BT-CO-061" } });
+    expect(scholar?.operatorId).not.toBeNull();
+  });
+
+  it("rejects a new scholar row with an unrecognized operator name (never auto-created)", async () => {
+    const data = csvBuffer(
+      "scholarId,fullName,country,cohort,university,academicProgram,gender,operator\n" +
+        "BT-CO-062,New Scholar,COLOMBIA,2026,UNAL,CS,Female,Some Unknown Operator\n",
+    );
+    const { result } = await createImportBatch({
+      data,
+      filename: "scholars.csv",
+      sourceType: "TEMPLATE",
+      entity: "SCHOLAR",
+      uploadedById: uploaderId,
+    });
+    expect(result.successRows).toBe(0);
+    const error = result.errors.find((e) => e.field === "operator");
+    expect(error?.message).toContain("Some Unknown Operator");
+    expect(await prisma.scholar.count({ where: { scholarId: "BT-CO-062" } })).toBe(0);
   });
 
   it("rollback deletes the rows the batch created", async () => {

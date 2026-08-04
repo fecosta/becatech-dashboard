@@ -29,6 +29,10 @@ export interface ValidationContext {
   controls: Map<string, Set<string>>;
   /** Lowercased, trimmed University.name → University.id. */
   universities: Map<string, string>;
+  /** Lowercased, trimmed Operator.name → Operator.id. Mirrors `universities`, except a blank
+   *  operator name is valid (Scholar.operatorId is nullable) — only a non-blank, unmatched name
+   *  is a hard error. Lookup-only, same as universities: an unmatched name is never auto-created. */
+  operatorsByName: Map<string, string>;
   /** normKey(fullName) -> matching scholarId(s). Absent key = zero matches. length 1 = resolved,
    *  length > 1 = ambiguous (name collides across scholars) — both are treated as unresolved;
    *  never guess which scholar a report belongs to. Used for MENTOR_REPORT, whose source sheet

@@ -101,6 +101,15 @@ export async function seedAmbiguousNamesake(): Promise<{ scholarId: string }> {
   return { scholarId: scholar.scholarId };
 }
 
+/** A single real-shaped Operator row — opt-in, not part of the shared seedFixture() baseline
+ * (most tests don't need an operator catalog at all). */
+export async function seedOperatorFixture(): Promise<{ operatorId: string; name: string }> {
+  const operator = await prisma.operator.create({
+    data: { name: "Fundación Antivirus para la Deserción", country: "COLOMBIA", track: "EARLY_SUPPORT" },
+  });
+  return { operatorId: operator.id, name: operator.name };
+}
+
 export function csvBuffer(text: string): Uint8Array {
   return new TextEncoder().encode(text);
 }

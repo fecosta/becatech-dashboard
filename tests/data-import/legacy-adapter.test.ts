@@ -165,6 +165,7 @@ describe("legacy wide-Excel adapter", () => {
         ["program_status", new Set(["ACTIVE", "WITHDRAWN", "GRADUATED", "PAUSED"])],
       ]),
       universities: new Map([["universidad nacional de colombia", "uni-unal"]]),
+      operatorsByName: new Map(),
     };
     const res = validateBatch(legacyAdapter(generalInfoSheet()), ctx);
     expect(res.errorRows).toBe(0);

@@ -17,6 +17,7 @@ function ctx(): ValidationContext {
       ["academic_progress_status", new Set(["ON_TRACK", "SLIGHTLY_BEHIND", "BEHIND", "CRITICAL_DELAY"])],
     ]),
     universities: new Map([["u", "uni-test"]]),
+    operatorsByName: new Map(),
   };
 }
 
@@ -62,6 +63,53 @@ describe("import validation", () => {
     const batch = templateAdapter("ACADEMIC_TERM", [{ scholarId: "BT-CO-001" }]); // no term
     const res = validateBatch(batch, ctx());
     expect(res.errors.some((e) => e.field === "term")).toBe(true);
+    expect(res.successRows).toBe(0);
+  });
+
+  it("resolves a scholar's operator by name, lookup-only like university", () => {
+    const context = ctx();
+    context.operatorsByName.set("fundación antivirus para la deserción", "op-antivirus");
+    const batch = templateAdapter("SCHOLAR", [
+      {
+        scholarId: "BT-CO-9",
+        fullName: "X",
+        country: "COLOMBIA",
+        cohort: "2025",
+        university: "U",
+        academicProgram: "CS",
+        gender: "Female",
+        operator: "Fundación Antivirus para la Deserción",
+      },
+    ]);
+    const res = validateBatch(batch, context);
+    expect(res.errorRows).toBe(0);
+    expect((res.validated.SCHOLAR ?? [])[0].operatorId).toBe("op-antivirus");
+  });
+
+  it("leaves operatorId null when no operator is supplied (nullable, unlike university)", () => {
+    const batch = templateAdapter("SCHOLAR", [
+      { scholarId: "BT-CO-9", fullName: "X", country: "COLOMBIA", cohort: "2025", university: "U", academicProgram: "CS", gender: "Female" },
+    ]);
+    const res = validateBatch(batch, ctx());
+    expect(res.errorRows).toBe(0);
+    expect((res.validated.SCHOLAR ?? [])[0].operatorId).toBeUndefined();
+  });
+
+  it("rejects a non-blank operator name not in the catalog (never auto-created)", () => {
+    const batch = templateAdapter("SCHOLAR", [
+      {
+        scholarId: "BT-CO-9",
+        fullName: "X",
+        country: "COLOMBIA",
+        cohort: "2025",
+        university: "U",
+        academicProgram: "CS",
+        gender: "Female",
+        operator: "Some Unknown Operator",
+      },
+    ]);
+    const res = validateBatch(batch, ctx());
+    expect(res.errors.some((e) => e.field === "operator")).toBe(true);
     expect(res.successRows).toBe(0);
   });
 
