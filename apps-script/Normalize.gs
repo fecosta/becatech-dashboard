@@ -435,8 +435,11 @@ function normalizeMentorReports_(ss) {
   if (!sheet) return;
   var values = sheet.getDataRange().getValues();
 
+  // Old sheet's anchor: "numero de id" (the mentor's own ID) + "submission id". New sheet's:
+  // "id of the scholar" (a real, direct scholar ID this time) + "submission id".
   var headerRowIndex = findHeaderRowIndex_(values, function (keys) {
-    return keys.indexOf("numero de id") !== -1 && keys.indexOf("submission id") !== -1;
+    var hasIdColumn = keys.indexOf("numero de id") !== -1 || keys.indexOf("id of the scholar") !== -1;
+    return hasIdColumn && keys.indexOf("submission id") !== -1;
   });
   if (headerRowIndex < 0) {
     logSyncEvent("NORMALIZE", "ERROR", "MENTOR REPORTS: real header not found in first " + HEADER_SCAN_LIMIT_ + " rows.");
@@ -445,12 +448,15 @@ function normalizeMentorReports_(ss) {
 
   var k = values[headerRowIndex].map(normKey_);
   var col = {
-    // scholarId/scholarName/mentorName resolution is identity-critical judgment logic — see Task 3
-    // of the header-migration plan for the "prefer the direct scholar ID" rework. Left unchanged
-    // here; everything below is a mechanical bilingual/new-field wiring pass (Task 4/5).
-    scholarId: colIndexOf_(k, "numero de id"),
-    scholarName: colIndexOf_(k, "nombre del becario"),
-    mentorName: colIndexOf_(k, "soy:"),
+    // Old sheet's "numero de id" is the MENTOR's own ID, not the scholar's — there was no real
+    // scholar-ID column at all, so the dashboard side (validate.ts) had to resolve purely by
+    // scholarName. The new sheet's "id of the scholar" is a genuine, direct scholar ID; both this
+    // and scholarName are now passed through and resolved/cross-checked independently on the
+    // dashboard side (never guessed when they disagree — see validate.ts's MENTOR_REPORT branch).
+    // This mapping stays purely mechanical: read whichever ID column exists into scholarId.
+    scholarId: colIndexOfAny_(k, ["numero de id", "id of the scholar"]),
+    scholarName: colIndexOfAny_(k, ["nombre del becario", "scholar's name"]),
+    mentorName: colIndexOfAny_(k, ["soy:", "mentor's name"]),
     semester: colIndexOf_(k, "semester"),
     country: colIndexOfAny_(k, ["pais", "country"]),
     cohort: colIndexOfAny_(k, ["cohorte del programa:", "cohort"]),
@@ -508,10 +514,10 @@ function normalizeMentorReports_(ss) {
   var rows = [];
   for (var r = headerRowIndex + 1; r < values.length; r++) {
     var row = values[r];
-    // "numero de id" here is the MENTOR's ID, not the scholar's (see the dashboard-side
-    // validate.ts, which resolves the real scholarId by matching scholarName instead, falling
-    // back to this raw value only when scholarName is absent). A decorative/blank row has neither
-    // — skip only when BOTH are blank, so a real row missing just one of the two isn't dropped.
+    // scholarId's source column is the mentor's own ID on the old sheet, or the scholar's real ID
+    // on the new one (see the col mapping above) — either way, the dashboard side (validate.ts)
+    // resolves/cross-checks it against scholarName, never trusting it blindly. A decorative/blank
+    // row has neither — skip only when BOTH are blank, so a real row missing just one isn't dropped.
     var scholarId = get(row, "scholarId");
     var scholarName = get(row, "scholarName");
     if (!scholarId && !scholarName) continue; // skip fully blank rows

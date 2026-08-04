@@ -17,6 +17,27 @@ export function indexRecord(rec: Record<string, unknown>): Map<string, unknown> 
   return idx;
 }
 
+/** Bilingual lookup — first present value among several exact normalized keys (e.g. the old
+ * sheet's Spanish header alongside the new sheet's English one). */
+export function getAny(idx: Map<string, unknown>, keys: string[]): unknown {
+  for (const k of keys) {
+    if (idx.has(k)) return idx.get(k);
+  }
+  return undefined;
+}
+
+/** Bilingual version of a "find by substring, nth occurrence" lookup. */
+export function findByIncludesAny(idx: Map<string, unknown>, substrs: string[], occurrence = 0): unknown {
+  let count = 0;
+  for (const [k, v] of idx) {
+    if (substrs.some((s) => k.includes(s))) {
+      if (count === occurrence) return v;
+      count += 1;
+    }
+  }
+  return undefined;
+}
+
 export function mapCountry(v: unknown): string | undefined {
   const s = normKey(v);
   if (!s) return undefined;

@@ -13,7 +13,7 @@ import type { ParsedSheet } from "../parse";
 import type { CanonicalBatch, CanonicalRow, FieldType, RawRecord } from "../types";
 import { isMentorReportsSheet, mentorReportsLegacyAdapter } from "./legacy-mentor-reports";
 import { isSupportActivityLogSheet, supportActivityLogLegacyAdapter } from "./legacy-support-activity";
-import { indexRecord, mapCountry, mapStatus, normKey } from "./shared";
+import { getAny, indexRecord, mapCountry, mapStatus, normKey } from "./shared";
 
 export { mapCountry };
 
@@ -97,13 +97,6 @@ function getByKeyPrefix(idx: Map<string, unknown>, prefix: string): unknown {
   return undefined;
 }
 
-/** Bilingual lookup — first present value among several exact normalized keys. */
-function getAny(idx: Map<string, unknown>, keys: string[]): unknown {
-  for (const k of keys) {
-    if (idx.has(k)) return idx.get(k);
-  }
-  return undefined;
-}
 
 function scholarRow(idx: Map<string, unknown>, rowNumber: number): CanonicalRow {
   const c = (v: unknown, t: FieldType) => coerceValue(v, t);

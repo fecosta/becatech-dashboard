@@ -59,6 +59,62 @@ describe("import validation", () => {
     expect(row.mentorReportedGlobalStatus).toBe("Estable");
   });
 
+  describe("MENTOR_REPORT scholar identity — direct ID vs. name (new sheet has both)", () => {
+    function identityCtx(): ValidationContext {
+      const context = ctx();
+      context.existingScholarIds = new Set(["BT-CO-001"]);
+      context.scholarIdsByNormalizedName = new Map([["ana perez gomez", ["BT-CO-001"]]]);
+      return context;
+    }
+
+    it("accepts a direct scholarId with no scholarName given (manual-template path, unchanged)", () => {
+      const batch = templateAdapter("MENTOR_REPORT", [{ scholarId: "BT-CO-001" }]);
+      const res = validateBatch(batch, identityCtx());
+      expect(res.errorRows).toBe(0);
+      expect((res.validated.MENTOR_REPORT ?? [])[0].scholarId).toBe("BT-CO-001");
+    });
+
+    it("accepts a direct scholarId and a matching scholarName (both agree)", () => {
+      const batch = templateAdapter("MENTOR_REPORT", [
+        { scholarId: "BT-CO-001", scholarName: "Ana Pérez Gómez" },
+      ]);
+      const res = validateBatch(batch, identityCtx());
+      expect(res.errorRows).toBe(0);
+      expect((res.validated.MENTOR_REPORT ?? [])[0].scholarId).toBe("BT-CO-001");
+    });
+
+    it("rejects a direct scholarId that disagrees with the resolved scholarName (never guesses)", () => {
+      const context = identityCtx();
+      context.existingScholarIds = new Set(["BT-CO-001", "BT-CO-999"]);
+      const batch = templateAdapter("MENTOR_REPORT", [
+        { scholarId: "BT-CO-999", scholarName: "Ana Pérez Gómez" },
+      ]);
+      const res = validateBatch(batch, context);
+      expect(res.errorRows).toBe(1);
+      expect(res.errors[0].field).toBe("scholarId");
+      expect(res.errors[0].message).toContain("BT-CO-999");
+      expect(res.errors[0].message).toContain("BT-CO-001");
+    });
+
+    it("accepts a valid direct scholarId when the given scholarName fails to resolve", () => {
+      const batch = templateAdapter("MENTOR_REPORT", [
+        { scholarId: "BT-CO-001", scholarName: "Nombre Con Error De Tipeo" },
+      ]);
+      const res = validateBatch(batch, identityCtx());
+      expect(res.errorRows).toBe(0);
+      expect((res.validated.MENTOR_REPORT ?? [])[0].scholarId).toBe("BT-CO-001");
+    });
+
+    it("rejects when scholarName fails to resolve and there is no valid direct scholarId", () => {
+      const batch = templateAdapter("MENTOR_REPORT", [
+        { scholarId: "MENTOR-77", scholarName: "Nombre Con Error De Tipeo" },
+      ]);
+      const res = validateBatch(batch, identityCtx());
+      expect(res.errorRows).toBe(1);
+      expect(res.errors[0].field).toBe("scholarName");
+    });
+  });
+
   it("flags a missing required field", () => {
     const batch = templateAdapter("ACADEMIC_TERM", [{ scholarId: "BT-CO-001" }]); // no term
     const res = validateBatch(batch, ctx());

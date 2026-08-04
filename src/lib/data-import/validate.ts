@@ -275,48 +275,69 @@ export function validateBatch(batch: CanonicalBatch, ctx: ValidationContext): Va
       if (errors.length > before) continue;
 
       if (entity === "MENTOR_REPORT") {
-        // MENTOR REPORTS has no real scholar-ID column — "Número de ID" there is the mentor's own
-        // ID, not the scholar's (see legacy-mentor-reports.ts). Resolve by scholarName instead
-        // whenever one is given; only fall back to trusting the raw scholarId when scholarName is
-        // absent (the manual admin-upload template, where an analyst types a real scholarId and
-        // has no reason to supply a name). Never guess: zero or ambiguous name matches are errors.
+        // The old sheet had no real scholar-ID column ("Número de ID" there was the mentor's own
+        // ID — see legacy-mentor-reports.ts) — resolution had to go entirely by scholarName. The
+        // new sheet adds a genuine "ID OF THE SCHOLAR" column, so both signals are now resolved
+        // independently and cross-checked: never guess when they disagree, but a name that fails
+        // to resolve (typo/ambiguous) shouldn't reject a row a valid direct ID already identifies.
         const rawName = gS(row, "scholarName");
+        const rawDirectId = gS(row, "scholarId");
+        // A raw ID that isn't a real scholarId (e.g. the old sheet's mentor-ID-shaped value) is
+        // treated as if absent, not as an error — matches the old sheet's existing behavior.
+        const directId = rawDirectId && scholarIds.has(rawDirectId) ? rawDirectId : undefined;
+
+        let nameResolvedId: string | undefined;
+        let nameError: RowError | undefined;
         if (rawName) {
           const matches = nameIndex.get(normKey(rawName)) ?? [];
           if (matches.length === 0) {
-            errors.push({
+            nameError = {
               entity,
               rowNumber: row.rowNumber,
               field: "scholarName",
               message: `Becario no encontrado por nombre: ${rawName}`,
-            });
-            continue;
-          }
-          if (matches.length > 1) {
-            errors.push({
+            };
+          } else if (matches.length > 1) {
+            nameError = {
               entity,
               rowNumber: row.rowNumber,
               field: "scholarName",
               message: `Nombre de becario ambiguo (coincide con ${matches.length} becarios): ${rawName}`,
-            });
-            continue;
+            };
+          } else {
+            nameResolvedId = matches[0];
           }
-          // Overwrite before buildMentorReport() runs below — it derives a synthetic
-          // submissionId from scholarId when the sheet doesn't supply one, and that must be keyed
-          // on the real scholar, not the mentor's ID.
-          row.data.scholarId = matches[0];
-        } else {
-          const sid = gS(row, "scholarId");
-          if (!sid || !scholarIds.has(sid)) {
-            errors.push({
+        }
+
+        if (nameResolvedId && directId && nameResolvedId !== directId) {
+          errors.push({
+            entity,
+            rowNumber: row.rowNumber,
+            field: "scholarId",
+            message: `El ID directo (${directId}) no coincide con el nombre resuelto (${nameResolvedId}) para "${rawName}"`,
+          });
+          continue;
+        }
+
+        const resolvedId = nameResolvedId ?? directId;
+        if (!resolvedId) {
+          // A given-but-unresolvable name is the more specific, more useful error to surface —
+          // only fall back to the generic "scholarId no existe" when no name was given at all
+          // (the manual-template path, unchanged from before).
+          errors.push(
+            nameError ?? {
               entity,
               rowNumber: row.rowNumber,
               field: "scholarId",
-              message: `scholarId no existe: ${sid ?? ""}`,
-            });
-            continue;
-          }
+              message: `scholarId no existe: ${rawDirectId ?? ""}`,
+            },
+          );
+          continue;
         }
+        // Overwrite before buildMentorReport() runs below — it derives a synthetic submissionId
+        // from scholarId when the sheet doesn't supply one, and that must be keyed on the real
+        // scholar, not an unresolved/mentor's ID.
+        row.data.scholarId = resolvedId;
       } else if (entity !== "SCHOLAR") {
         const sid = gS(row, "scholarId");
         if (!sid || !scholarIds.has(sid)) {

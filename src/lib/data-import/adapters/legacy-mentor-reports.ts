@@ -6,7 +6,7 @@ import * as XLSX from "xlsx";
 import { coerceValue } from "../coerce";
 import type { ParsedSheet } from "../parse";
 import type { CanonicalRow, FieldType } from "../types";
-import { indexRecord, mapCountry, normKey } from "./shared";
+import { findByIncludesAny, getAny, indexRecord, mapCountry, normKey } from "./shared";
 
 const HEADER_SCAN_LIMIT = 20;
 
@@ -28,13 +28,16 @@ function rawRows(sheet: ParsedSheet): unknown[][] {
   });
 }
 
-/** Physical (0-based) row index of the real header (the row carrying both marker columns), or -1. */
+/** Physical (0-based) row index of the real header (the row carrying both marker columns), or -1.
+ * Old sheet's anchor: "numero de id" (the mentor's own ID) + "submission id". New sheet's:
+ * "id of the scholar" (a real, direct scholar ID this time) + "submission id". */
 function findHeaderRowIndex(sheet: ParsedSheet): number {
   const rows = rawRows(sheet);
   const limit = Math.min(rows.length, HEADER_SCAN_LIMIT);
   for (let i = 0; i < limit; i++) {
     const keys = (rows[i] ?? []).map(normKey);
-    if (keys.includes("numero de id") && keys.includes("submission id")) return sheetStartRow(sheet) + i;
+    const hasIdColumn = keys.includes("numero de id") || keys.includes("id of the scholar");
+    if (hasIdColumn && keys.includes("submission id")) return sheetStartRow(sheet) + i;
   }
   return -1;
 }
@@ -74,14 +77,15 @@ export function mentorReportsLegacyAdapter(sheet: ParsedSheet): CanonicalRow[] {
 
   records.forEach((rec, i) => {
     const idx = indexRecord(rec);
-    // "Número de ID" (right after "Soy: ", the mentor's own self-identification question) is the
-    // MENTOR's ID, not the scholar's — MENTOR REPORTS has no real scholar-ID column at all.
-    // validate.ts resolves the real scholarId by matching `scholarName` against Scholar.fullName
-    // instead of trusting this field (falling back to trusting this raw value only when
-    // scholarName is absent). A decorative/blank row has neither — skip only when BOTH are blank,
-    // so a real row missing just one of the two isn't silently dropped before validation sees it.
-    const scholarId = c(idx.get("numero de id"), "string");
-    const scholarName = c(idx.get("nombre del becario"), "string");
+    // Old sheet's "Número de ID" (right after "Soy: ", the mentor's own self-identification
+    // question) is the MENTOR's ID, not the scholar's — that sheet has no real scholar-ID column
+    // at all. The new sheet's "ID OF THE SCHOLAR" is a genuine, direct scholar ID. Both are passed
+    // through as-is; validate.ts resolves/cross-checks scholarId against scholarName centrally
+    // (never guessing when they disagree) — this adapter stays purely mechanical. A decorative/
+    // blank row has neither — skip only when BOTH are blank, so a real row missing just one isn't
+    // silently dropped before validation sees it.
+    const scholarId = c(getAny(idx, ["numero de id", "id of the scholar"]), "string");
+    const scholarName = c(getAny(idx, ["nombre del becario", "scholar's name"]), "string");
     if (!scholarId && !scholarName) return; // skip fully blank rows
 
     out.push({
@@ -89,21 +93,25 @@ export function mentorReportsLegacyAdapter(sheet: ParsedSheet): CanonicalRow[] {
       data: {
         scholarId,
         scholarName,
-        mentorName: c(idx.get("soy:"), "string"),
-        country: mapCountry(idx.get("pais")),
-        cohort: c(idx.get("cohorte del programa:"), "string"),
-        university: c(idx.get("universidad"), "string"),
+        mentorName: c(getAny(idx, ["soy:", "mentor's name"]), "string"),
+        semester: c(idx.get("semester"), "string"),
+        country: mapCountry(getAny(idx, ["pais", "country"])),
+        cohort: c(getAny(idx, ["cohorte del programa:", "cohort"]), "string"),
+        university: c(getAny(idx, ["universidad", "university"]), "string"),
+        // Old sheet's "¿Qué mes reportas?" is still present verbatim on the new sheet; the new
+        // sheet's separate bare "MONTH" column is ambiguous and left unmapped (Task 8).
         reportingMonth: c(idx.get("¿que mes reportas?"), "string"),
+        // No new-sheet equivalent (only a bare "DATE" column, meaning unclear — Task 8).
         registrationDate: c(idx.get("fecha de registro"), "date"),
-        sessionDate: c(idx.get("fecha"), "date"),
-        sessionType: c(idx.get("sesion:"), "string"),
-        sessionSummary: c(idx.get("resumen de lo tratado en la sesion"), "string"),
+        sessionDate: c(getAny(idx, ["fecha", "date of the session"]), "date"),
+        sessionType: c(getAny(idx, ["sesion:", "session"]), "string"),
+        sessionSummary: c(getAny(idx, ["resumen de lo tratado en la sesion", "resume"]), "string"),
         modality: c(idx.get("modalidad del espacio"), "string"),
         permanenceRisk: c(
-          findByIncludes(idx, "identifica senales que puedan poner en riesgo"),
+          findByIncludesAny(idx, ["identifica senales que puedan poner en riesgo", "riesgo de permanencia"]),
           "string",
         ),
-        academicStatus: c(idx.get("estado academico"), "string"),
+        academicStatus: c(getAny(idx, ["estado academico", "academic status"]), "string"),
         academicAlertType: c(findByIncludes(idx, "situacion especifica", 0), "string"),
         approvedCoursesCount: c(idx.get("numero de asignaturas/cursos aprobados"), "int"),
         atRiskCoursesCount: c(
@@ -111,7 +119,7 @@ export function mentorReportsLegacyAdapter(sheet: ParsedSheet): CanonicalRow[] {
           "int",
         ),
         difficultSubjects: c(findByIncludes(idx, "asignaturas con dificultades"), "string"),
-        psychosocialStatus: c(idx.get("estado psicosocial"), "string"),
+        psychosocialStatus: c(getAny(idx, ["estado psicosocial", "psychosocial status"]), "string"),
         psychosocialAlertType: c(findByIncludes(idx, "situacion especifica", 1), "string"),
         accompanimentPlan: c(findByIncludes(idx, "plan de acompanamiento"), "string"),
         estimatedSupportTime: c(findByIncludes(idx, "tiempo estimado del acompanamiento"), "string"),
@@ -122,7 +130,10 @@ export function mentorReportsLegacyAdapter(sheet: ParsedSheet): CanonicalRow[] {
         workshops: c(idx.get("talleres grupales"), "int"),
         highlights: c(findByIncludes(idx, "algo destacado"), "string"),
         academicProgressNotes: c(findByIncludes(idx, "avance academico del becario"), "string"),
+        // The new sheet splits this into three separate columns instead of one — concatenate-vs-
+        // new-fields is an open question (Task 8); stays mapped only to the old sheet's shape.
         nextSteps: c(findByIncludes(idx, "de inicio:"), "string"),
+        mentorReportedGlobalStatus: c(idx.get("global status"), "string"),
         submissionId: c(idx.get("submission id"), "string"),
       },
     });

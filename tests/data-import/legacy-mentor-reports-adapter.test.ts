@@ -228,7 +228,9 @@ describe("mentor-reports legacy adapter", () => {
       universities: new Map(),
       operatorsByName: new Map(),
     };
-    const row = sampleRow({ scholarName: "Nadie Existe" });
+    // scholarId overridden to a non-existent value too — a valid direct ID would now (correctly)
+    // rescue an unresolvable name, so this test's "no fallback available" case needs one.
+    const row = sampleRow({ scholarName: "Nadie Existe", scholarId: "MENTOR-77" });
     const batch = { MENTOR_REPORT: mentorReportsLegacyAdapter(mentorReportsSheet(row)) };
     const res = validateBatch(batch, ctx);
     expect(res.errorRows).toBe(1);
@@ -245,7 +247,10 @@ describe("mentor-reports legacy adapter", () => {
       universities: new Map(),
       operatorsByName: new Map(),
     };
-    const batch = { MENTOR_REPORT: mentorReportsLegacyAdapter(mentorReportsSheet(sampleRow())) };
+    // scholarId overridden to a non-existent value too — a valid direct ID would now (correctly)
+    // rescue an ambiguous name, so this test's "no fallback available" case needs one.
+    const row = sampleRow({ scholarId: "MENTOR-77" });
+    const batch = { MENTOR_REPORT: mentorReportsLegacyAdapter(mentorReportsSheet(row)) };
     const res = validateBatch(batch, ctx);
     expect(res.errorRows).toBe(1);
     expect(res.errors[0].field).toBe("scholarName");
@@ -258,5 +263,36 @@ describe("mentor-reports legacy adapter", () => {
     const batch = mentorReportsLegacyAdapter(mentorReportsSheet(row));
     expect(batch).toHaveLength(1);
     expect(batch[0].data.scholarName).toBe("Ana Pérez Gómez");
+  });
+
+  it("detects and maps the new sheet's English header shape, including a genuine direct scholar ID", () => {
+    const newHeader = [
+      "DATE", "SEMESTER", "MONTH", "COUNTRY", "MENTOR'S NAME", "MENTOR ID", "COHORT",
+      "ID OF THE SCHOLAR", "SCHOLAR'S NAME", "UNIVERSITY", "SESSION", "DATE OF THE SESSION",
+      "RESUME", "Modalidad del espacio", "¿Tiene riesgo de permanencia?", "ACADEMIC STATUS",
+      "GLOBAL STATUS", "Tutorías individuales", "Talleres grupales", "Submission ID",
+    ];
+    const newRow = [
+      "2026-06-01", "5", "Junio", "Colombia", "Mentor English Header", "MTR-99", "2025",
+      "BT-CO-090", "English Header Scholar", "Universidad Nacional de Colombia", "Individual",
+      "2026-06-02", "Fue una buena sesión", "Virtual", "Bajo", "En riesgo", "Estable", 2, 1,
+      "sub-en-001",
+    ];
+    const sheet: ParsedSheet = {
+      sheetName: "MENTOR REPORTS",
+      sheet: XLSX.utils.aoa_to_sheet([newHeader, newRow]),
+      records: [],
+    };
+
+    expect(isMentorReportsSheet(sheet)).toBe(true);
+    const batch = mentorReportsLegacyAdapter(sheet);
+    expect(batch).toHaveLength(1);
+    expect(batch[0].data.scholarId).toBe("BT-CO-090"); // the genuine direct ID, not "MTR-99"
+    expect(batch[0].data.scholarName).toBe("English Header Scholar");
+    expect(batch[0].data.mentorName).toBe("Mentor English Header");
+    expect(batch[0].data.semester).toBe("5");
+    expect(batch[0].data.mentorReportedGlobalStatus).toBe("Estable");
+    expect(batch[0].data.sessionDate).toBeInstanceOf(Date);
+    expect(batch[0].data.submissionId).toBe("sub-en-001");
   });
 });
