@@ -40,6 +40,19 @@ describe("template adapter", () => {
     expect(row.data.bogusColumn).toBeUndefined();
   });
 
+  it("maps the new mentor-report fields (semester, mentorReportedGlobalStatus)", () => {
+    const batch = templateAdapter("MENTOR_REPORT", [
+      {
+        scholarId: "BT-CO-001",
+        semester: "5",
+        mentorReportedGlobalStatus: "Estable",
+      },
+    ]);
+    const row = (batch.MENTOR_REPORT ?? [])[0];
+    expect(row.data.semester).toBe("5");
+    expect(row.data.mentorReportedGlobalStatus).toBe("Estable");
+  });
+
   it("maps the manual-template-only leveling/deadline fields (no header-migration ambiguity here — the analyst supplies them per term deliberately)", () => {
     const batch = templateAdapter("ACADEMIC_TERM", [
       {

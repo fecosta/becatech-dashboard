@@ -153,6 +153,7 @@ function buildMentorReport(row: CanonicalRow): Prisma.MentorReportUncheckedCreat
     submissionId: gS(row, "submissionId") ?? synthSubmissionId("MENTOR_REPORT", row.data),
     scholarName: gS(row, "scholarName"),
     mentorName: gS(row, "mentorName"),
+    semester: gS(row, "semester"),
     registrationDate: gD(row, "registrationDate"),
     sessionDate: gD(row, "sessionDate"),
     sessionType: gS(row, "sessionType"),
@@ -176,6 +177,8 @@ function buildMentorReport(row: CanonicalRow): Prisma.MentorReportUncheckedCreat
     workshops: gN(row, "workshops"),
     highlights: gS(row, "highlights"),
     academicProgressNotes: gS(row, "academicProgressNotes"),
+    // Quarantined by design — never read into risk/derive.ts or recompute.ts's mentor select.
+    mentorReportedGlobalStatus: gS(row, "mentorReportedGlobalStatus"),
     country: gS(row, "country") as Country | undefined,
     cohort: gS(row, "cohort"),
     university: gS(row, "university"),

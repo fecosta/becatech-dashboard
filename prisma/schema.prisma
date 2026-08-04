@@ -301,6 +301,7 @@ model MentorReport {
   scholarId             String
   scholarName           String?
   mentorName            String?
+  semester              String?
   country               Country?
   cohort                String?
   university            String?
@@ -328,6 +329,10 @@ model MentorReport {
   highlights            String?
   academicProgressNotes String?
   nextSteps             String?
+  // The mentor's own self-reported global assessment (GLOBAL STATUS on the sheet). Quarantined by
+  // design: global risk is always derived (src/lib/risk/derive.ts, recompute.ts), never uploaded —
+  // this field must never feed into RiskAssessment.globalRiskValue/globalRiskLevel.
+  mentorReportedGlobalStatus String?
   submissionId          String    @unique
   rawSubmissionId       String?
   importBatchId         String?

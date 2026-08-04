@@ -47,6 +47,17 @@ describe("import validation", () => {
     expect(row.maxDeadline).toBeInstanceOf(Date);
   });
 
+  it("builds a mentor report with semester and the quarantined mentorReportedGlobalStatus field", () => {
+    const batch = templateAdapter("MENTOR_REPORT", [
+      { scholarId: "BT-CO-001", semester: "5", mentorReportedGlobalStatus: "Estable" },
+    ]);
+    const res = validateBatch(batch, ctx());
+    expect(res.errorRows).toBe(0);
+    const row = (res.validated.MENTOR_REPORT ?? [])[0];
+    expect(row.semester).toBe("5");
+    expect(row.mentorReportedGlobalStatus).toBe("Estable");
+  });
+
   it("flags a missing required field", () => {
     const batch = templateAdapter("ACADEMIC_TERM", [{ scholarId: "BT-CO-001" }]); // no term
     const res = validateBatch(batch, ctx());

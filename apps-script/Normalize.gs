@@ -391,12 +391,13 @@ function normalizeScholarGeneralInfo_(ss) {
 // ---------------------------------------------------------------------------
 
 var MENTOR_REPORT_HEADER_ = [
-  "scholarId", "scholarName", "mentorName", "country", "cohort", "university", "reportingMonth",
-  "registrationDate", "sessionDate", "sessionType", "sessionSummary", "modality", "permanenceRisk",
-  "academicStatus", "academicAlertType", "approvedCoursesCount", "atRiskCoursesCount",
-  "difficultSubjects", "psychosocialStatus", "psychosocialAlertType", "accompanimentPlan",
-  "estimatedSupportTime", "individualTutoring", "groupTutoring", "individualMentoring",
-  "groupMentoring", "workshops", "highlights", "academicProgressNotes", "nextSteps", "submissionId",
+  "scholarId", "scholarName", "mentorName", "semester", "country", "cohort", "university",
+  "reportingMonth", "registrationDate", "sessionDate", "sessionType", "sessionSummary", "modality",
+  "permanenceRisk", "academicStatus", "academicAlertType", "approvedCoursesCount",
+  "atRiskCoursesCount", "difficultSubjects", "psychosocialStatus", "psychosocialAlertType",
+  "accompanimentPlan", "estimatedSupportTime", "individualTutoring", "groupTutoring",
+  "individualMentoring", "groupMentoring", "workshops", "highlights", "academicProgressNotes",
+  "nextSteps", "mentorReportedGlobalStatus", "submissionId",
 ];
 
 function normalizeMentorReports_(ss) {
@@ -414,25 +415,38 @@ function normalizeMentorReports_(ss) {
 
   var k = values[headerRowIndex].map(normKey_);
   var col = {
+    // scholarId/scholarName/mentorName resolution is identity-critical judgment logic — see Task 3
+    // of the header-migration plan for the "prefer the direct scholar ID" rework. Left unchanged
+    // here; everything below is a mechanical bilingual/new-field wiring pass (Task 4/5).
     scholarId: colIndexOf_(k, "numero de id"),
     scholarName: colIndexOf_(k, "nombre del becario"),
     mentorName: colIndexOf_(k, "soy:"),
-    country: colIndexOf_(k, "pais"),
-    cohort: colIndexOf_(k, "cohorte del programa:"),
-    university: colIndexOf_(k, "universidad"),
+    semester: colIndexOf_(k, "semester"),
+    country: colIndexOfAny_(k, ["pais", "country"]),
+    cohort: colIndexOfAny_(k, ["cohorte del programa:", "cohort"]),
+    university: colIndexOfAny_(k, ["universidad", "university"]),
+    // Old sheet's "¿Qué mes reportas?" is still present verbatim on the new sheet; the new
+    // sheet's separate bare "MONTH" column is left unmapped (ambiguous relationship to this field
+    // — see Task 8's unmapped-columns list, needs the sheet owner's clarification).
     reportingMonth: colIndexOf_(k, "¿que mes reportas?"),
+    // Old sheet's "Fecha de registro" has no new-sheet equivalent (only a bare "DATE" column,
+    // whose meaning is unclear — also left to Task 8) — intentionally left Spanish-only rather
+    // than guessing "DATE" means registration date.
     registrationDate: colIndexOf_(k, "fecha de registro"),
-    sessionDate: colIndexOf_(k, "fecha"),
-    sessionType: colIndexOf_(k, "sesion:"),
-    sessionSummary: colIndexOf_(k, "resumen de lo tratado en la sesion"),
+    sessionDate: colIndexOfAny_(k, ["fecha", "date of the session"]),
+    sessionType: colIndexOfAny_(k, ["sesion:", "session"]),
+    sessionSummary: colIndexOfAny_(k, ["resumen de lo tratado en la sesion", "resume"]),
     modality: colIndexOf_(k, "modalidad del espacio"),
-    permanenceRisk: colIndexByIncludes_(k, "identifica senales que puedan poner en riesgo", 0),
-    academicStatus: colIndexOf_(k, "estado academico"),
+    permanenceRisk: colIndexByIncludesAny_(k, ["identifica senales que puedan poner en riesgo", "riesgo de permanencia"], 0),
+    academicStatus: colIndexOfAny_(k, ["estado academico", "academic status"]),
+    // Substring still present verbatim in the new sheet's academic/psychosocial questions — the
+    // new sheet's separate "ACADEMIC CAUSE"/"PSYCHOSOCIAL CAUSE" columns are a different, as-yet-
+    // unmapped concept (Task 8) rather than a replacement for this.
     academicAlertType: colIndexByIncludes_(k, "situacion especifica", 0),
     approvedCoursesCount: colIndexOf_(k, "numero de asignaturas/cursos aprobados"),
     atRiskCoursesCount: colIndexByIncludes_(k, "numero de asignaturas/cursos en riesgo", 0),
     difficultSubjects: colIndexByIncludes_(k, "asignaturas con dificultades", 0),
-    psychosocialStatus: colIndexOf_(k, "estado psicosocial"),
+    psychosocialStatus: colIndexOfAny_(k, ["estado psicosocial", "psychosocial status"]),
     psychosocialAlertType: colIndexByIncludes_(k, "situacion especifica", 1),
     accompanimentPlan: colIndexByIncludes_(k, "plan de acompanamiento", 0),
     estimatedSupportTime: colIndexByIncludes_(k, "tiempo estimado del acompanamiento", 0),
@@ -443,7 +457,12 @@ function normalizeMentorReports_(ss) {
     workshops: colIndexOf_(k, "talleres grupales"),
     highlights: colIndexByIncludes_(k, "algo destacado", 0),
     academicProgressNotes: colIndexByIncludes_(k, "avance academico del becario", 0),
+    // The new sheet splits this into three separate "plan"/"materias rezagadas" columns instead
+    // of one — concatenate-vs-new-fields is an open question (Task 8), so this stays mapped only
+    // to the old sheet's single "de inicio:" column for now; the new sheet's three columns are
+    // left unmapped rather than guessed into this field.
     nextSteps: colIndexByIncludes_(k, "de inicio:", 0),
+    mentorReportedGlobalStatus: colIndexOf_(k, "global status"),
     submissionId: colIndexOf_(k, "submission id"),
   };
 
@@ -471,6 +490,7 @@ function normalizeMentorReports_(ss) {
       scholarId,
       scholarName,
       get(row, "mentorName"),
+      get(row, "semester"),
       mapCountry_(get(row, "country")),
       get(row, "cohort"),
       get(row, "university"),
@@ -498,6 +518,7 @@ function normalizeMentorReports_(ss) {
       get(row, "highlights"),
       get(row, "academicProgressNotes"),
       get(row, "nextSteps"),
+      get(row, "mentorReportedGlobalStatus"),
       get(row, "submissionId"),
     ]);
   }

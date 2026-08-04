@@ -69,6 +69,7 @@ export const TEMPLATE_COLUMNS: Record<ImportEntity, FieldDef[]> = {
     { field: "submissionId", type: "string" },
     { field: "scholarName", type: "string" },
     { field: "mentorName", type: "string" },
+    { field: "semester", type: "string" },
     { field: "registrationDate", type: "date" },
     { field: "sessionDate", type: "date" },
     { field: "sessionType", type: "string" },
@@ -92,6 +93,9 @@ export const TEMPLATE_COLUMNS: Record<ImportEntity, FieldDef[]> = {
     { field: "workshops", type: "int" },
     { field: "highlights", type: "string" },
     { field: "academicProgressNotes", type: "string" },
+    // The mentor's own self-reported global assessment (GLOBAL STATUS on the sheet) — quarantined
+    // by design, never consulted by src/lib/risk/derive.ts or recompute.ts.
+    { field: "mentorReportedGlobalStatus", type: "string" },
     { field: "country", type: "string", enumCategory: "country" },
     { field: "cohort", type: "string" },
     { field: "university", type: "string" },
