@@ -101,7 +101,7 @@ async function recomputeOneScholar(scholarId: string, batchPeriods: string[]): P
     periods.sort();
 
     for (const period of periods) {
-      const [checkin, mentor, agg] = await Promise.all([
+      const [checkin, mentor, activityAgg] = await Promise.all([
         prisma.monthlyCheckin.findFirst({
           where: { scholarId, reportingMonth: period },
           orderBy: { submissionDate: "desc" },
@@ -112,11 +112,19 @@ async function recomputeOneScholar(scholarId: string, batchPeriods: string[]): P
           orderBy: { sessionDate: "desc" },
           select: { permanenceRisk: true, psychosocialStatus: true },
         }),
-        prisma.supportActivity.aggregate({
-          where: { scholarId, period },
-          // _count distinguishes "no support-activity rows for this period" (missing data → null →
-          // participation not assessed) from "rows exist summing to 0" (a real zero → risk 4).
-          _sum: { activityCount: true },
+        // Participation now comes from the mentor reports' activity counts (the current data
+        // source) — the standalone SUPPORT ACTIVITY LOG is deprecated. _count distinguishes "no
+        // mentor report for this period" (missing data → participation not assessed → null, never
+        // inflated to CRITICO) from "a report exists with zero logged activities" (a real 0 → 4).
+        prisma.mentorReport.aggregate({
+          where: { scholarId, reportingMonth: period },
+          _sum: {
+            individualTutoring: true,
+            groupTutoring: true,
+            individualMentoring: true,
+            groupMentoring: true,
+            workshops: true,
+          },
           _count: { _all: true },
         }),
       ]);
@@ -126,8 +134,15 @@ async function recomputeOneScholar(scholarId: string, batchPeriods: string[]): P
         mentorPermanenceRisk: mentor?.permanenceRisk,
         mentorPsychosocialStatus: mentor?.psychosocialStatus,
       });
+      const a = activityAgg._sum;
+      const totalActivities =
+        (a.individualTutoring ?? 0) +
+        (a.groupTutoring ?? 0) +
+        (a.individualMentoring ?? 0) +
+        (a.groupMentoring ?? 0) +
+        (a.workshops ?? 0);
       const participation = deriveParticipationRiskValue(
-        agg._count._all > 0 ? (agg._sum.activityCount ?? 0) : null,
+        activityAgg._count._all > 0 ? totalActivities : null,
       );
       const global = computeGlobalRiskValue(academic, psychosocial, participation);
       const { assessmentComplete, missingInputs } = computeAssessmentCompleteness(

@@ -231,6 +231,33 @@ function writeNormalizedTab_(ss, tabName, header, rows, textColumns) {
   sheet.getRange(1, 1, data.length, header.length).setValues(data);
 }
 
+/**
+ * Resolve a source tab by trying, in priority order, an optional Script-Property override
+ * (`propKey`) then the given candidate names — matched case/accent/whitespace-insensitively via
+ * normKey_ against the spreadsheet's ACTUAL tabs. Prefers the first candidate that exists even if
+ * an older-named tab is also present, so a stale leftover tab (e.g. an old "SCHOLAR GENERAL INFO")
+ * never shadows the renamed current one. Logs which tab it read (INFO) so the sync is auditable —
+ * "am I reading the right sheet?" — and returns null if none match (caller logs a clear ERROR).
+ *
+ * To point at a differently-named tab without editing code, set the Script Property, e.g.
+ * SCHOLAR_SOURCE_TAB = "1- SEMESTER - SCHOLAR GENERAL INFO".
+ */
+function resolveSourceSheet_(ss, entityLabel, propKey, candidateNames) {
+  var configured = PropertiesService.getScriptProperties().getProperty(propKey);
+  var candidates = configured ? [configured] : candidateNames;
+  var sheets = ss.getSheets();
+  for (var c = 0; c < candidates.length; c++) {
+    var want = normKey_(candidates[c]);
+    for (var i = 0; i < sheets.length; i++) {
+      if (normKey_(sheets[i].getName()) === want) {
+        logSyncEvent("NORMALIZE", "INFO", entityLabel + ': reading source tab "' + sheets[i].getName() + '"');
+        return sheets[i];
+      }
+    }
+  }
+  return null;
+}
+
 /** Runs all three normalizers. Call this before exporting/syncing. */
 function normalizeAll_() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -344,8 +371,17 @@ function findTermColumns_(headerKeys) {
 }
 
 function normalizeScholarGeneralInfo_(ss) {
-  var sheet = ss.getSheetByName("SCHOLAR GENERAL INFO");
-  if (!sheet) return;
+  // Read the CURRENT scholar tab (new name first, legacy name as fallback; override via the
+  // SCHOLAR_SOURCE_TAB Script Property). Fixes the sync silently reading a stale old tab.
+  var sheet = resolveSourceSheet_(ss, "SCHOLAR GENERAL INFO", "SCHOLAR_SOURCE_TAB", [
+    "1- SEMESTER - SCHOLAR GENERAL INFO",
+    "SEMESTER - SCHOLAR GENERAL INFO",
+    "SCHOLAR GENERAL INFO",
+  ]);
+  if (!sheet) {
+    logSyncEvent("NORMALIZE", "ERROR", "SCHOLAR GENERAL INFO: source tab not found — set the SCHOLAR_SOURCE_TAB Script Property to the exact tab name.");
+    return;
+  }
   var values = sheet.getDataRange().getValues();
 
   var headerRowIndex = findHeaderRowIndex_(values, function (keys) {
@@ -532,8 +568,17 @@ var MENTOR_REPORT_UNMAPPED_HEADERS_ = [
 ];
 
 function normalizeMentorReports_(ss) {
-  var sheet = ss.getSheetByName("MENTOR REPORTS");
-  if (!sheet) return;
+  // Read the CURRENT mentor-reports tab (new name first, legacy fallback; override via
+  // MENTOR_SOURCE_TAB Script Property).
+  var sheet = resolveSourceSheet_(ss, "MENTOR REPORTS", "MENTOR_SOURCE_TAB", [
+    "2- MONTHLY STATUS EARLY SUPPORT - MENTOR REPORTS",
+    "MONTHLY STATUS EARLY SUPPORT - MENTOR REPORTS",
+    "MENTOR REPORTS",
+  ]);
+  if (!sheet) {
+    logSyncEvent("NORMALIZE", "ERROR", "MENTOR REPORTS: source tab not found — set the MENTOR_SOURCE_TAB Script Property to the exact tab name.");
+    return;
+  }
   var values = sheet.getDataRange().getValues();
 
   // Old sheet's anchor: "numero de id" (the mentor's own ID) + "submission id". New sheet's:
@@ -695,7 +740,13 @@ function findActivityColumns_(subHeaderKeys) {
 }
 
 function normalizeSupportActivityLog_(ss) {
-  var sheet = ss.getSheetByName("SUPPORT ACTIVITY LOG");
+  // DEPRECATED source: participation risk is now derived from the MENTOR REPORTS activity counts
+  // (see src/lib/risk/recompute.ts), not this standalone log. Kept for backward compatibility — if
+  // the tab still exists it's normalized as before; if it's gone (the current structure), this is
+  // a no-op, not an error. Override via the SUPPORT_ACTIVITY_SOURCE_TAB Script Property.
+  var sheet = resolveSourceSheet_(ss, "SUPPORT ACTIVITY LOG", "SUPPORT_ACTIVITY_SOURCE_TAB", [
+    "SUPPORT ACTIVITY LOG",
+  ]);
   if (!sheet) return;
   var values = sheet.getDataRange().getValues();
 

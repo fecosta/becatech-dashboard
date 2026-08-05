@@ -76,6 +76,29 @@ describe("import pipeline (integration)", () => {
     expect(summary.distribution.CRITICO).toBe(0);
   });
 
+  it("derives participation risk from mentor-report activity counts (not the deprecated log)", async () => {
+    // A mentor report with 6 logged activities (3+1+0+0+2) → participation risk 0. Proves
+    // participation now comes from mentor-report counts and is assessed (not the old zero-support
+    // path). No academic term / psychosocial signal → those stay not-assessed.
+    const data = csvBuffer(
+      "scholarId,reportingMonth,submissionId,individualTutoring,groupTutoring,individualMentoring,groupMentoring,workshops\n" +
+        "BT-CO-001,2026-06,sub-part-1,3,1,0,0,2\n",
+    );
+    const { batchId } = await createImportBatch({
+      data,
+      filename: "mentor.csv",
+      sourceType: "TEMPLATE",
+      entity: "MENTOR_REPORT",
+      uploadedById: uploaderId,
+    });
+    await commitImportBatch(batchId);
+    const risk = await prisma.riskAssessment.findUnique({
+      where: { scholarId_period: { scholarId: "BT-CO-001", period: "2026-06" } },
+    });
+    expect(risk?.participationRiskValue).toBe(0);
+    expect(risk?.missingInputs).not.toContain("participation");
+  });
+
   it("legacy wide .xlsx: normalizes into scholar + academic terms", async () => {
     const data = xlsxBuffer([
       ["ID", "PAÍS", "COHORTE", "UNIVERSIDAD", "PROGRAMA ACADÉMICO", "NOMBRE COMPLETO", "GÉNERO", "ESTADO ACTUAL", "GPA 2024-1", "GPA 2024-2"],
