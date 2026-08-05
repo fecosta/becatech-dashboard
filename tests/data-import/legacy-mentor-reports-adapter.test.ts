@@ -254,7 +254,7 @@ describe("mentor-reports legacy adapter", () => {
     const res = validateBatch(batch, ctx);
     expect(res.errorRows).toBe(1);
     expect(res.errors[0].field).toBe("scholarName");
-    expect(res.errors[0].message).toContain("ambiguo");
+    expect(res.errors[0].message).toContain("Ambiguous");
     expect(res.errors[0].message).toContain("2");
   });
 

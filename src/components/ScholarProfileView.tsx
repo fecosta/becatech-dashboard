@@ -18,6 +18,7 @@ import type {
 import type { ActivityType } from "@/generated/prisma/enums";
 import type { CurrentUser } from "@/lib/auth/authorization";
 import { getScholarProfile } from "@/lib/dashboard/queries";
+import { displaySourceValue } from "@/lib/display/source-values";
 import { fmtDate, fmtGpa } from "@/lib/format";
 import {
   ACTIVITY_TYPE_LABEL,
@@ -87,7 +88,7 @@ export async function ScholarProfileView({
 
   const termCols: Column<AcademicTerm>[] = [
     { header: "Term", cell: (t) => t.term },
-    { header: "Enrollment", cell: (t) => t.enrollmentStatus ?? "—" },
+    { header: "Enrollment", cell: (t) => displaySourceValue("enrollmentStatus", t.enrollmentStatus) },
     { header: "Credits", cell: (t) => `${t.creditsCompleted ?? "—"} / ${t.creditsEnrolled ?? "—"}` },
     { header: "Progress", cell: (t) => (t.progressPercentage != null ? `${t.progressPercentage}%` : "—") },
     { header: "Status", cell: (t) => (t.expectedProgressStatus ? PROGRESS_STATUS_LABEL[t.expectedProgressStatus] : "—") },
@@ -106,12 +107,12 @@ export async function ScholarProfileView({
     { header: "Month", cell: (c) => c.reportingMonth },
     { header: "Academic", cell: (c) => c.academicLevel ?? "—" },
     { header: "Emotional", cell: (c) => c.psychosocialLevel ?? "—" },
-    { header: "Status", cell: (c) => c.finalStatus ?? "—" },
+    { header: "Status", cell: (c) => displaySourceValue("checkinStatus", c.finalStatus) },
   ];
   const mentorCols: Column<MentorReport>[] = [
     { header: "Month", cell: (m) => m.reportingMonth ?? "—" },
     { header: "Session", cell: (m) => m.sessionType ?? "—" },
-    { header: "Permanence", cell: (m) => m.permanenceRisk ?? "—" },
+    { header: "Permanence", cell: (m) => displaySourceValue("riskWord", m.permanenceRisk) },
     { header: "Approved", cell: (m) => m.approvedCoursesCount ?? "—" },
     { header: "At risk", cell: (m) => m.atRiskCoursesCount ?? "—" },
     { header: "Next steps", cell: (m) => m.nextSteps ?? "—" },

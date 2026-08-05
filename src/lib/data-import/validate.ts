@@ -54,21 +54,21 @@ function checkFields(
   for (const col of TEMPLATE_COLUMNS[entity]) {
     const v = row.data[col.field];
     if (v == null) {
-      if (col.required) push(col.field, "Requerido");
+      if (col.required) push(col.field, "Required");
       continue;
     }
     if ((col.type === "int" || col.type === "float") && isBadNumber(v)) {
-      push(col.field, "Debe ser numérico");
+      push(col.field, "Must be a number");
       continue;
     }
     if (col.type === "date" && isBadDate(v)) {
-      push(col.field, "Fecha inválida");
+      push(col.field, "Invalid date");
       continue;
     }
     if (col.enumCategory) {
       const allowed = ctx.controls.get(col.enumCategory);
       if (allowed && allowed.size > 0 && !allowed.has(String(v))) {
-        push(col.field, `Valor no permitido para ${col.enumCategory}: ${String(v)}`);
+        push(col.field, `Value not allowed for ${col.enumCategory}: ${String(v)}`);
       }
     }
   }
@@ -295,14 +295,14 @@ export function validateBatch(batch: CanonicalBatch, ctx: ValidationContext): Va
               entity,
               rowNumber: row.rowNumber,
               field: "scholarName",
-              message: `Becario no encontrado por nombre: ${rawName}`,
+              message: `Scholar not found by name: ${rawName}`,
             };
           } else if (matches.length > 1) {
             nameError = {
               entity,
               rowNumber: row.rowNumber,
               field: "scholarName",
-              message: `Nombre de becario ambiguo (coincide con ${matches.length} becarios): ${rawName}`,
+              message: `Ambiguous scholar name (matches ${matches.length} scholars): ${rawName}`,
             };
           } else {
             nameResolvedId = matches[0];
@@ -314,7 +314,7 @@ export function validateBatch(batch: CanonicalBatch, ctx: ValidationContext): Va
             entity,
             rowNumber: row.rowNumber,
             field: "scholarId",
-            message: `El ID directo (${directId}) no coincide con el nombre resuelto (${nameResolvedId}) para "${rawName}"`,
+            message: `Direct scholar ID (${directId}) does not match the name-resolved scholar (${nameResolvedId}) for "${rawName}"`,
           });
           continue;
         }
@@ -322,14 +322,14 @@ export function validateBatch(batch: CanonicalBatch, ctx: ValidationContext): Va
         const resolvedId = nameResolvedId ?? directId;
         if (!resolvedId) {
           // A given-but-unresolvable name is the more specific, more useful error to surface —
-          // only fall back to the generic "scholarId no existe" when no name was given at all
+          // only fall back to the generic "scholarId does not exist" when no name was given at all
           // (the manual-template path, unchanged from before).
           errors.push(
             nameError ?? {
               entity,
               rowNumber: row.rowNumber,
               field: "scholarId",
-              message: `scholarId no existe: ${rawDirectId ?? ""}`,
+              message: `scholarId does not exist: ${rawDirectId ?? ""}`,
             },
           );
           continue;
@@ -345,7 +345,7 @@ export function validateBatch(batch: CanonicalBatch, ctx: ValidationContext): Va
             entity,
             rowNumber: row.rowNumber,
             field: "scholarId",
-            message: `scholarId no existe: ${sid ?? ""}`,
+            message: `scholarId does not exist: ${sid ?? ""}`,
           });
           continue;
         }
@@ -359,7 +359,7 @@ export function validateBatch(batch: CanonicalBatch, ctx: ValidationContext): Va
           for (const f of ["gpa", "accumulatedGpa"]) {
             const n = gN(row, f);
             if (n !== undefined && (n < 0 || n > max)) {
-              errors.push({ entity, rowNumber: row.rowNumber, field: f, message: `GPA fuera de rango 0–${max}` });
+              errors.push({ entity, rowNumber: row.rowNumber, field: f, message: `GPA out of range 0–${max}` });
             }
           }
           if (errors.length > before2) continue;
@@ -378,7 +378,7 @@ export function validateBatch(batch: CanonicalBatch, ctx: ValidationContext): Va
             entity,
             rowNumber: row.rowNumber,
             field: "university",
-            message: `Universidad no encontrada en el catálogo: ${universityName ?? ""}`,
+            message: `University not found in the catalog: ${universityName ?? ""}`,
           });
           continue;
         }
@@ -394,7 +394,7 @@ export function validateBatch(batch: CanonicalBatch, ctx: ValidationContext): Va
               entity,
               rowNumber: row.rowNumber,
               field: "operator",
-              message: `Operador no encontrado en el catálogo: ${operatorName}`,
+              message: `Operator not found in the catalog: ${operatorName}`,
             });
             continue;
           }
