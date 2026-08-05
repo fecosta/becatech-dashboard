@@ -12,6 +12,7 @@ import type {
   SelectionStage,
   UniversityType,
 } from "../../generated/prisma/enums";
+import type { GpaSummary } from "../academic/gpa-summary";
 import type { ProgramStage } from "../academic/program-stage";
 import type { NormalizedGender } from "./gender";
 
@@ -75,7 +76,8 @@ export interface ExecutiveOverview {
   pausedScholars: number;
   /** retained (active + paused + graduated) / total */
   retentionRate: number;
-  averageGpa: number;
+  /** Country-split GPA (Colombia /5, Peru /20) plus a scale-agnostic index — never a blended mean. */
+  gpaSummary: GpaSummary;
   /** share of active scholars actively participating (> 3 support activities in scope) */
   participationRate: number;
   scholarsNeedingAttention: number;
@@ -155,10 +157,10 @@ export interface GpaDistribution {
 }
 
 export interface AcademicProgressResult {
-  averageGpa: number;
-  gpaByCohort: GpaGroupStat[];
+  /** Country-split GPA (Colombia /5, Peru /20) plus a scale-agnostic index — never a blended mean. */
+  gpaSummary: GpaSummary;
+  /** Per-country averages, each on its own native scale (single-country groups, safe to average). */
   gpaByCountry: GpaGroupStat[];
-  gpaByUniversity: GpaGroupStat[];
   progressStatusDistribution: ProgressDistribution;
   academicRiskDistribution: RiskDistribution;
   scholarsBehind: BehindRow[];

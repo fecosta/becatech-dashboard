@@ -4,6 +4,7 @@ import { BulletTrackGoal } from "@/components/BulletTrackGoal";
 import { FactStrip } from "@/components/FactStrip";
 import { PaceBarChart } from "@/components/PaceBarChart";
 import { AccessDenied, Card, KpiCard, PageHeader, ProxyBadge, StatChip } from "@/components/ui";
+import { gpaSummaryKpi } from "@/lib/academic/gpa-summary";
 import { Permission } from "@/lib/auth/authorization";
 import { requirePermission } from "@/lib/auth/guard";
 import { parseFilters, type SearchParams } from "@/lib/dashboard/filters";
@@ -14,7 +15,7 @@ import {
   getHomeOverview,
   getRiskAlerts,
 } from "@/lib/dashboard/queries";
-import { fmtGpa, fmtInt, fmtPct } from "@/lib/format";
+import { fmtInt, fmtPct } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -50,6 +51,10 @@ export default async function HomePage({
     getRiskAlerts(filters),
     getFilterOptions(),
   ]);
+
+  // GPA is reported per country (Colombia /5, Peru /20) and, for a mixed-country scope, as a
+  // scale-agnostic Academic Performance Index — never a blended raw mean (see gpa-summary.ts).
+  const gpaKpi = gpaSummaryKpi(ap.gpaSummary);
 
   const criticalCount = alerts.attentionList.filter((r) => r.globalRiskValue >= 3).length;
   const missingReportsCount = alerts.attentionList.filter(
@@ -209,7 +214,7 @@ export default async function HomePage({
           <div className="mb-3.5 flex flex-wrap items-baseline justify-between gap-1.5">
             <div className="text-[13.5px] font-bold text-surface-dark">Academic Progress</div>
             <div className="text-xs text-muted">
-              Average GPA <b className="text-sm text-surface-dark">{fmtGpa(ap.averageGpa)}/5</b>
+              {gpaKpi.label} <b className="text-sm text-surface-dark">{gpaKpi.value}</b>
             </div>
           </div>
           <PaceBarChart

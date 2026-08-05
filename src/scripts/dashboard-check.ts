@@ -34,7 +34,7 @@ async function main() {
 
   const acad = await getAcademicProgress();
   console.log("\n=== Academic progress ===");
-  console.log("averageGpa:", acad.averageGpa);
+  console.log("gpaSummary:", acad.gpaSummary);
   console.log("gpaByCountry:", acad.gpaByCountry);
   console.log("progressStatusDistribution:", acad.progressStatusDistribution);
   console.log("academicRiskDistribution:", acad.academicRiskDistribution);
@@ -72,7 +72,7 @@ async function main() {
 
   const colombia = await getExecutiveOverview({ country: "COLOMBIA" });
   console.log("\n=== Executive overview (filter: Colombia) ===");
-  console.log({ total: colombia.totalScholars, active: colombia.activeScholars, avgGpa: colombia.averageGpa });
+  console.log({ total: colombia.totalScholars, active: colombia.activeScholars, gpa: colombia.gpaSummary.colombia });
 }
 
 main()

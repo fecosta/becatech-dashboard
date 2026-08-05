@@ -1,6 +1,7 @@
 import { BulletTrackGoal } from "@/components/BulletTrackGoal";
 import { PaceBarChart } from "@/components/PaceBarChart";
 import { AccessDenied, Card, PageHeader, SectionTitle, StatChip } from "@/components/ui";
+import { gpaSummaryKpi } from "@/lib/academic/gpa-summary";
 import { Permission } from "@/lib/auth/authorization";
 import { requirePermission } from "@/lib/auth/guard";
 import { parseFilters, type SearchParams } from "@/lib/dashboard/filters";
@@ -64,6 +65,8 @@ export default async function CareerReadinessPage({
   const retention = home.retentionByYear.find((r) => r.year === 3);
 
   const gpaDist = pace.gpaDistribution;
+  // Country-aware GPA header (Colombia /5, Peru /20, or a scale-agnostic index for a mixed scope).
+  const gpaKpi = gpaSummaryKpi(pace.gpaSummary);
   const gpaTotal = gpaDist.below3_5 + gpaDist.from3_5To3_9 + gpaDist.from4_0To5_0;
   const gpaPct = (n: number) => (gpaTotal ? Math.round((n / gpaTotal) * 100) : 0);
 
@@ -158,7 +161,7 @@ export default async function CareerReadinessPage({
             <div className="mb-3.5 flex flex-wrap items-baseline justify-between gap-1.5">
               <div className="text-[13.5px] font-bold text-surface-dark">GPA distribution</div>
               <div className="text-xs text-muted">
-                Average <b className="text-sm text-surface-dark">{pace.averageGpa.toFixed(1)}/5</b>
+                {gpaKpi.label} <b className="text-sm text-surface-dark">{gpaKpi.value}</b>
               </div>
             </div>
             <div className="flex flex-wrap gap-4">

@@ -2,6 +2,7 @@
 // Aggregation is done in JS over Prisma results: the dataset is small (~100 scholars) and
 // this keeps the logic readable and testable. Optimize with SQL only if data volume grows.
 import { bucketGpa } from "../academic/gpa-bucket";
+import { summarizeGpa } from "../academic/gpa-summary";
 import { deriveExpectedProgressStatus } from "../academic/progress";
 import { YEARS_1_2_MAX_SEMESTER } from "../academic/program-stage";
 import { programYearFromSemester } from "../academic/program-year";
@@ -221,11 +222,12 @@ export async function getExecutiveOverview(
   const total = scholars.length;
   const retained = counts.ACTIVE + counts.PAUSED + counts.GRADUATED;
 
-  // Average GPA from each scholar's latest accumulated GPA.
+  // GPA summary from each scholar's latest accumulated GPA, kept country-aware (Colombia 0–5 vs
+  // Peru 0–20 are never blended into one raw mean — see lib/academic/gpa-summary.ts).
   const latestTerms = await latestTermByScholar(ids);
-  const gpas = [...latestTerms.values()]
-    .map((t) => t.accumulatedGpa)
-    .filter((g): g is number => g !== null);
+  const gpaSummary = summarizeGpa(
+    scholars.map((s) => ({ gpa: latestTerms.get(s.scholarId)?.accumulatedGpa, country: s.country })),
+  );
 
   // Risk distribution + scholars needing attention.
   const riskDistribution = emptyRiskDistribution();
@@ -270,7 +272,7 @@ export async function getExecutiveOverview(
     graduatedScholars: counts.GRADUATED,
     pausedScholars: counts.PAUSED,
     retentionRate: total ? round2(retained / total) : 0,
-    averageGpa: mean(gpas),
+    gpaSummary,
     participationRate: round2(participationRate),
     scholarsNeedingAttention: needingAttention,
     riskDistribution,
@@ -617,24 +619,21 @@ export async function getAcademicProgress(
   const ids = scholars.map((s) => s.scholarId);
   const latestTerms = await latestTermByScholar(ids);
 
-  const gpaByCohort = new Map<string, number[]>();
   const gpaByCountry = new Map<string, number[]>();
-  const gpaByUniversity = new Map<string, number[]>();
   const progressStatusDistribution = emptyProgressDistribution();
   const academicRiskDistribution = emptyRiskDistribution();
   const scholarsBehind: AcademicProgressResult["scholarsBehind"] = [];
-  const allGpas: number[] = [];
+  // Country-aware GPA rows for the summary (Colombia 0–5 vs Peru 0–20, never blended).
+  const gpaRows: { gpa: number | null | undefined; country: (typeof scholars)[number]["country"] }[] = [];
   const gpaDistribution = { below3_5: 0, from3_5To3_9: 0, from4_0To5_0: 0 };
   let scholarsWithFailedSubjects = 0;
 
   for (const s of scholars) {
     const term = latestTerms.get(s.scholarId);
+    gpaRows.push({ gpa: term?.accumulatedGpa, country: s.country });
     if (term?.accumulatedGpa != null) {
       const g = term.accumulatedGpa;
-      allGpas.push(g);
-      pushTo(gpaByCohort, s.cohort, g);
       pushTo(gpaByCountry, s.country, g);
-      pushTo(gpaByUniversity, s.university.name, g);
       const bucket = bucketGpa(g, s.country);
       if (bucket === "BELOW_3_5") gpaDistribution.below3_5 += 1;
       else if (bucket === "GPA_3_5_TO_3_9") gpaDistribution.from3_5To3_9 += 1;
@@ -676,10 +675,8 @@ export async function getAcademicProgress(
   scholarsBehind.sort((a, b) => (a.progressPercentage ?? 0) - (b.progressPercentage ?? 0));
 
   return {
-    averageGpa: mean(allGpas),
-    gpaByCohort: toGroupStats(gpaByCohort),
+    gpaSummary: summarizeGpa(gpaRows),
     gpaByCountry: toGroupStats(gpaByCountry),
-    gpaByUniversity: toGroupStats(gpaByUniversity),
     progressStatusDistribution,
     academicRiskDistribution,
     scholarsBehind,
