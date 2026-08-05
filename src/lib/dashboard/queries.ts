@@ -41,6 +41,7 @@ import type {
   UniversityRiskRow,
 } from "./types";
 import { latestCohort } from "./cohort";
+import { describeFreshness, type Freshness, syncAutomationPaused } from "./freshness";
 import { normalizeGender, type NormalizedGender } from "./gender";
 
 // ------------------------------------------------------------------
@@ -116,6 +117,20 @@ function financialWhere(filters: DashboardFilters): Prisma.FinancialInputWhereIn
 async function getCurrentPeriod(): Promise<string> {
   const latest = await prisma.riskAssessment.aggregate({ _max: { period: true } });
   return latest._max.period ?? "2026-06";
+}
+
+/**
+ * Data-freshness for the dashboard header: how long ago the most recent import/sync committed
+ * (excluding rolled-back batches), plus whether automatic sync is paused. `now` is passed in so
+ * the query stays a thin DB read over the pure formatter in ./freshness.
+ */
+export async function getDataFreshness(now: Date): Promise<Freshness> {
+  const batch = await prisma.dataImportBatch.findFirst({
+    where: { status: "COMMITTED", rolledBackAt: null },
+    orderBy: { uploadedAt: "desc" },
+    select: { uploadedAt: true },
+  });
+  return describeFreshness(batch?.uploadedAt ?? null, now, { automationPaused: syncAutomationPaused() });
 }
 
 /** Distinct values that populate the dashboard filter dropdowns. */

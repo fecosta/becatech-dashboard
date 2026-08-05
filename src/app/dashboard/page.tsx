@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { BulletTrackGoal } from "@/components/BulletTrackGoal";
 import { FactStrip } from "@/components/FactStrip";
+import { FreshnessBadge } from "@/components/FreshnessBadge";
 import { PaceBarChart } from "@/components/PaceBarChart";
 import { AccessDenied, Card, KpiCard, PageHeader, ProxyBadge, StatChip } from "@/components/ui";
 import { gpaSummaryKpi } from "@/lib/academic/gpa-summary";
@@ -10,6 +11,7 @@ import { requirePermission } from "@/lib/auth/guard";
 import { parseFilters, type SearchParams } from "@/lib/dashboard/filters";
 import {
   getAcademicProgress,
+  getDataFreshness,
   getExecutiveOverview,
   getFilterOptions,
   getHomeOverview,
@@ -44,12 +46,13 @@ export default async function HomePage({
   }
 
   const filters = parseFilters(await searchParams);
-  const [o, home, ap, alerts, filterOptions] = await Promise.all([
+  const [o, home, ap, alerts, filterOptions, freshness] = await Promise.all([
     getExecutiveOverview(filters),
     getHomeOverview(filters),
     getAcademicProgress(filters, user),
     getRiskAlerts(filters, user),
     getFilterOptions(),
+    getDataFreshness(new Date()),
   ]);
 
   // GPA is reported per country (Colombia /5, Peru /20) and, for a mixed-country scope, as a
@@ -78,9 +81,12 @@ export default async function HomePage({
 
   return (
     <div>
-      {/* "Data as of" is derived from the latest data month (getCurrentPeriod), not a real
-          sync timestamp — flagged as an open decision in the redesign plan. */}
+      {/* "Data as of {period}" is the latest data MONTH; the freshness badge below is the real
+          last-sync time (last committed import/sync) plus paused/stale operational states. */}
       <PageHeader title="Beca Tech+" tag={`Data as of ${o.currentPeriod}`} />
+      <div className="-mt-3 mb-5">
+        <FreshnessBadge freshness={freshness} />
+      </div>
 
       {/* Narrative intro — the ten-second answer for a board member. */}
       <div className="mb-6 rounded-[20px] border-[1.5px] border-purple bg-lavender/40 p-6">
