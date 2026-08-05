@@ -128,11 +128,10 @@ export async function commitValidated(
           rows,
         );
         for (const r of results) if (r.wasInserted) recordCreate("SupportActivity", r.id);
-        for (const a of validated.SUPPORT_ACTIVITY) {
-          riskScholars.add(a.scholarId);
-          riskPeriods.add(a.period);
-        }
-        touchedRiskEntities = true;
+        // SUPPORT ACTIVITY LOG is deprecated and no longer feeds the risk engine (participation is
+        // sourced from MENTOR REPORTS counts). Rows are still upserted for backward compatibility,
+        // but importing them must NOT trigger a risk recompute: its `MES` date-cell `period` values
+        // are not real months and previously rewrote risk into junk (non-YYYY-MM) periods.
         successRows += validated.SUPPORT_ACTIVITY.length;
       }
 

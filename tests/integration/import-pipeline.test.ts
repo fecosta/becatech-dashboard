@@ -148,6 +148,70 @@ describe("import pipeline (integration)", () => {
     expect(await prisma.academicTerm.count({ where: { scholarId: "BT-CO-001", term: "2025-1" } })).toBe(1);
   });
 
+  it("does not recompute risk when importing the deprecated support-activity log", async () => {
+    // The SUPPORT ACTIVITY LOG is still accepted for backward compatibility but no longer feeds
+    // risk — importing it must neither flag a risk touch nor create a risk row (its `MES`-shaped
+    // periods previously corrupted the risk period space).
+    const data = csvBuffer(
+      "scholarId,period,activityType,activityCount\nBT-CO-001,MES 7,INDIVIDUAL_TUTORING,3\n",
+    );
+    const { batchId } = await createImportBatch({
+      data,
+      filename: "support.csv",
+      sourceType: "TEMPLATE",
+      entity: "SUPPORT_ACTIVITY",
+      uploadedById: uploaderId,
+    });
+    const { commit, recomputed } = await commitImportBatch(batchId);
+    expect(commit.touchedRiskEntities).toBe(false);
+    expect(recomputed).toBe(0);
+    expect(await prisma.supportActivity.count({ where: { scholarId: "BT-CO-001" } })).toBe(1); // still upserted
+    expect(await prisma.riskAssessment.count()).toBe(0); // but risk untouched
+  });
+
+  it("recompute fallback targets the latest real month, never a legacy junk period", async () => {
+    // Seed a corrupted legacy period ("MES 7") alongside a real month ("2026-06"). "MES 7" sorts
+    // lexically ABOVE "2026-06" ('M' > '2'), so a naive max(period) fallback would resurrect it.
+    const base = {
+      academicRiskLevel: "SIN_RIESGO" as const,
+      academicRiskValue: 0,
+      psychosocialRiskLevel: "SIN_RIESGO" as const,
+      psychosocialRiskValue: 0,
+      participationRiskLevel: "SIN_RIESGO" as const,
+      participationRiskValue: 0,
+      globalRiskLevel: "SIN_RIESGO" as const,
+      globalRiskValue: 0,
+      source: "seed",
+    };
+    await prisma.riskAssessment.createMany({
+      data: [
+        { scholarId: "BT-CO-001", period: "MES 7", ...base },
+        { scholarId: "BT-CO-001", period: "2026-06", ...base },
+      ],
+    });
+
+    // An academic-term import contributes no period of its own → recompute falls back to the
+    // scholar's latest existing period, which must be the real month, not the junk label.
+    const data = csvBuffer("scholarId,term,gpa,failedSubjectsCount\nBT-CO-001,2025-1,2.0,2\n");
+    const { batchId } = await createImportBatch({
+      data,
+      filename: "terms.csv",
+      sourceType: "TEMPLATE",
+      entity: "ACADEMIC_TERM",
+      uploadedById: uploaderId,
+    });
+    await commitImportBatch(batchId);
+
+    const real = await prisma.riskAssessment.findUnique({
+      where: { scholarId_period: { scholarId: "BT-CO-001", period: "2026-06" } },
+    });
+    const junk = await prisma.riskAssessment.findUnique({
+      where: { scholarId_period: { scholarId: "BT-CO-001", period: "MES 7" } },
+    });
+    expect(real?.source).toBe("import-recompute"); // real month recomputed
+    expect(junk?.source).toBe("seed"); // junk period left untouched — never resurrected
+  });
+
   it("does not recompute risk for financial-only batches", async () => {
     const data = csvBuffer("scholarId,period,costCategory,costAmount,currency\nBT-CO-001,2026,Tuition,5000000,COP\n");
     const { batchId } = await createImportBatch({

@@ -88,13 +88,19 @@ async function recomputeOneScholar(scholarId: string, batchPeriods: string[]): P
       periods = [...set];
     }
     if (periods.length === 0) {
-      const latest = await prisma.riskAssessment.findFirst({
+      // Fall back to the scholar's most recent *real* month. We must not pick a plain max(period):
+      // legacy junk periods ("MES 7") sort lexically above a real month ("2026-08"), so a naive max
+      // would resurrect a corrupted period. Filter to YYYY-MM and take the latest (fixed-width, so
+      // lexical sort == chronological). No real month yet ⇒ nothing to recompute.
+      const existing = await prisma.riskAssessment.findMany({
         where: { scholarId },
-        orderBy: { period: "desc" },
         select: { period: true },
+        distinct: ["period"],
       });
-      if (!latest) return count;
-      periods = [latest.period];
+      const months = existing.map((r) => r.period).filter((p) => /^\d{4}-\d{2}$/.test(p));
+      if (months.length === 0) return count;
+      months.sort();
+      periods = [months[months.length - 1]];
     }
     periods.sort();
 
