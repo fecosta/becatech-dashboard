@@ -322,7 +322,7 @@ var SCHOLAR_UNMAPPED_HEADERS_ = [
   // Live-sheet Spanish forms of the above (confirmed from the production sync's WARN) + the
   // academic-summary singles and the "año de graduación"/nivel/estado columns we don't map.
   "puntaje", "total de creditos", "gpa acumulado", "% de avance - estudios",
-  "estado avance (act semestral)", "estado final", "edad", "nivel - 2026-1",
+  "estado avance (act semestral)", "estado final", "edad", "age", "nivel - 2026-1",
   // Per-period activity/alert summary blocks embedded in the scholar sheet (the real source is
   // SUPPORT ACTIVITY LOG) + the Growth-track operator flags — deferred, redundant here.
   "talleres", "sesiones individuales", "tutorias", "psicosocial", "total", "total alertas",
@@ -601,8 +601,11 @@ function normalizeMentorReports_(ss) {
     // dashboard side (never guessed when they disagree — see validate.ts's MENTOR_REPORT branch).
     // This mapping stays purely mechanical: read whichever ID column exists into scholarId.
     scholarId: colIndexOfAny_(k, ["numero de id", "id of the scholar"]),
-    scholarName: colIndexOfAny_(k, ["nombre del becario", "scholar's name"]),
-    mentorName: colIndexOfAny_(k, ["soy:", "mentor's name"]),
+    // The live headers have irregular apostrophe spacing ("SCHOLAR'NAME", "MENTOR' S NAME") that
+    // normKey_ doesn't reconcile with the tidy forms — list both. (Identity still resolves via the
+    // direct "id of the scholar" even if the name misses, but we want the name captured too.)
+    scholarName: colIndexOfAny_(k, ["nombre del becario", "scholar's name", "scholar'name"]),
+    mentorName: colIndexOfAny_(k, ["soy:", "mentor's name", "mentor' s name"]),
     semester: colIndexOf_(k, "semester"),
     country: colIndexOfAny_(k, ["pais", "country"]),
     cohort: colIndexOfAny_(k, ["cohorte del programa:", "cohort"]),
