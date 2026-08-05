@@ -57,12 +57,16 @@ function checkFields(
       if (col.required) push(col.field, "Required");
       continue;
     }
+    // A malformed value in a REQUIRED numeric/date field rejects the row; in an OPTIONAL field it
+    // is dropped to null (gN/gD already coerce NaN / Invalid Date to undefined) rather than losing
+    // an otherwise-valid record over one bad secondary cell — e.g. a stray "N/A" in a graduation
+    // year or a malformed date of birth. Same resilience principle as operator resolution.
     if ((col.type === "int" || col.type === "float") && isBadNumber(v)) {
-      push(col.field, "Must be a number");
+      if (col.required) push(col.field, "Must be a number");
       continue;
     }
     if (col.type === "date" && isBadDate(v)) {
-      push(col.field, "Invalid date");
+      if (col.required) push(col.field, "Invalid date");
       continue;
     }
     if (col.enumCategory) {

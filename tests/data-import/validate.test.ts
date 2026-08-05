@@ -48,6 +48,35 @@ describe("import validation", () => {
     expect(row.maxDeadline).toBeInstanceOf(Date);
   });
 
+  it("keeps a scholar when an OPTIONAL numeric/date field is malformed (dropped to null, not rejected)", () => {
+    const batch = templateAdapter("SCHOLAR", [
+      {
+        scholarId: "BT-CO-9",
+        fullName: "X",
+        country: "COLOMBIA",
+        cohort: "2025",
+        university: "U",
+        academicProgram: "CS",
+        gender: "Female",
+        estimatedGraduationYear: "N/A", // optional int, junk value
+        dateOfBirth: "not a date", // optional date, junk value
+      },
+    ]);
+    const res = validateBatch(batch, ctx());
+    expect(res.errorRows).toBe(0);
+    const row = (res.validated.SCHOLAR ?? [])[0];
+    expect(row.estimatedGraduationYear).toBeUndefined();
+    expect(row.dateOfBirth).toBeUndefined();
+  });
+
+  it("still rejects a REQUIRED field that is malformed (e.g. a required numeric cost)", () => {
+    const batch = templateAdapter("FINANCIAL_INPUT", [
+      { scholarId: "BT-CO-001", period: "2026", costCategory: "Tuition", costAmount: "abc", currency: "COP" },
+    ]);
+    const res = validateBatch(batch, ctx());
+    expect(res.errors.some((e) => e.field === "costAmount")).toBe(true);
+  });
+
   it("builds a mentor report with semester and the quarantined mentorReportedGlobalStatus field", () => {
     const batch = templateAdapter("MENTOR_REPORT", [
       { scholarId: "BT-CO-001", semester: "5", mentorReportedGlobalStatus: "Estable" },
