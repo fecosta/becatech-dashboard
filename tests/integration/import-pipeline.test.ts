@@ -197,22 +197,26 @@ describe("import pipeline (integration)", () => {
     expect(scholar?.operatorId).toBe(operatorId);
   });
 
-  it("rejects a new scholar row with an unrecognized operator name (never auto-created)", async () => {
+  it("keeps a scholar whose operator is unrecognized (operatorId null, never auto-created)", async () => {
     const data = csvBuffer(
       "scholarId,fullName,country,cohort,university,academicProgram,gender,operator\n" +
         "BT-CO-062,New Scholar,COLOMBIA,2026,UNAL,CS,Female,Some Unknown Operator\n",
     );
-    const { result } = await createImportBatch({
+    const { batchId, result } = await createImportBatch({
       data,
       filename: "scholars.csv",
       sourceType: "TEMPLATE",
       entity: "SCHOLAR",
       uploadedById: uploaderId,
     });
-    expect(result.successRows).toBe(0);
-    const error = result.errors.find((e) => e.field === "operator");
-    expect(error?.message).toContain("Some Unknown Operator");
-    expect(await prisma.scholar.count({ where: { scholarId: "BT-CO-062" } })).toBe(0);
+    expect(result.successRows).toBe(1);
+    expect(result.errors.some((e) => e.field === "operator")).toBe(false);
+    await commitImportBatch(batchId);
+    const scholar = await prisma.scholar.findUnique({ where: { scholarId: "BT-CO-062" } });
+    expect(scholar).not.toBeNull();
+    expect(scholar?.operatorId).toBeNull();
+    // Still never auto-creates an operator from the unknown label.
+    expect(await prisma.operator.count({ where: { name: "Some Unknown Operator" } })).toBe(0);
   });
 
   it("rollback deletes the rows the batch created", async () => {

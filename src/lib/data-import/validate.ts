@@ -383,11 +383,12 @@ export function validateBatch(batch: CanonicalBatch, ctx: ValidationContext): Va
           continue;
         }
 
-        // Unlike university, a blank operator is valid (operatorId is nullable) — only a
-        // non-blank, unmatched name is an error. Lookup-only, same as university: never
-        // auto-created from an unrecognized name. "Not applicable" / "No aplica" is an explicit
-        // "no operator" and resolves to null (not an error). Aliases (e.g. FATV) are registered in
-        // operatorsByName by service.ts.
+        // Operator is an optional, secondary attribute — resolved by name against the catalog
+        // (aliases like FATV registered in operatorsByName by service.ts; "Not applicable" / "No
+        // aplica" / blank → no operator). An UNRECOGNIZED operator must NOT reject the scholar
+        // (that once dropped ~224 otherwise-valid rows): leave operatorId unset and keep the
+        // scholar. It's still visible — the scholar shows with no operator in Program Ecosystem —
+        // and never auto-creates an operator. Identity/university (required) still reject as before.
         const operatorRaw = gS(row, "operator");
         const operatorName =
           operatorRaw && !/^(not applicable|no aplica)$/i.test(operatorRaw.trim())
@@ -395,15 +396,6 @@ export function validateBatch(batch: CanonicalBatch, ctx: ValidationContext): Va
             : undefined;
         if (operatorName) {
           operatorId = ctx.operatorsByName.get(operatorName.trim().toLowerCase());
-          if (!operatorId) {
-            errors.push({
-              entity,
-              rowNumber: row.rowNumber,
-              field: "operator",
-              message: `Operator not found in the catalog: ${operatorName}`,
-            });
-            continue;
-          }
         }
       }
 

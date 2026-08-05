@@ -151,7 +151,9 @@ describe("import validation", () => {
     expect((res.validated.SCHOLAR ?? [])[0].operatorId).toBeUndefined();
   });
 
-  it("rejects a non-blank operator name not in the catalog (never auto-created)", () => {
+  it("does NOT reject a scholar for an unrecognized operator — keeps the scholar, operatorId unset", () => {
+    // Operator is optional/secondary; an unknown label must never lose an otherwise-valid scholar
+    // (mapping the wrong column once dropped ~224 rows). Never auto-creates an operator either.
     const batch = templateAdapter("SCHOLAR", [
       {
         scholarId: "BT-CO-9",
@@ -165,8 +167,9 @@ describe("import validation", () => {
       },
     ]);
     const res = validateBatch(batch, ctx());
-    expect(res.errors.some((e) => e.field === "operator")).toBe(true);
-    expect(res.successRows).toBe(0);
+    expect(res.errors.some((e) => e.field === "operator")).toBe(false);
+    expect(res.successRows).toBe(1);
+    expect((res.validated.SCHOLAR ?? [])[0].operatorId).toBeUndefined();
   });
 
   it("treats 'Not applicable' / 'No aplica' as no operator (null, not an error)", () => {

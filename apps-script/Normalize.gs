@@ -300,6 +300,10 @@ var SCHOLAR_UNMAPPED_HEADERS_ = [
   // SUPPORT ACTIVITY LOG) + the Growth-track operator flags — deferred, redundant here.
   "talleres", "sesiones individuales", "tutorias", "psicosocial", "total", "total alertas",
   "resumen alertas", "confident english", "makers",
+  // "Acompañamiento Actual" is the category label, NOT the operator-name column — mapping it to
+  // operator rejected scholars en masse. Operator comes only from "Current Operator - Support
+  // Services". Left unmapped here so it doesn't warn.
+  "acompanamiento actual",
 ];
 
 /** Positionally resolve bare "ESTADO FINAL" columns (no term in the header text — it repeats
@@ -400,8 +404,11 @@ function normalizeScholarGeneralInfo_(ss) {
   var socioeconomicLevelCol = colIndexOfAny_(headerKeys, ["socioeconomic level", "nivel socioeconomico"]);
   // Raw operator NAME is passed through as-is — resolution + alias handling (FATV → canonical,
   // "Not applicable" → none) happens on the dashboard side in validate.ts/service.ts, same
-  // division of responsibility as `university`. Bilingual header per the live sheet's WARN.
-  var operatorCol = colIndexOfAny_(headerKeys, ["current operator - support services", "acompanamiento actual"]);
+  // division of responsibility as `university`. Matched ONLY via the authoritative English header
+  // from the dataset (context/data), whose values are a clean set {FATV, ESCALO, MAKERS, Not
+  // applicable}. The Spanish category label "Acompañamiento Actual" is NOT the operator column
+  // (it's a different column that fails the lookup) — it stays unmapped, see the list above.
+  var operatorCol = colIndexOf_(headerKeys, "current operator - support services");
   var termColumns = findTermColumns_(headerKeys);
 
   var scholarRows = [];
