@@ -432,6 +432,13 @@ model RiskAssessment {
   participationRiskValue  Int
   globalRiskLevel         RiskLevel
   globalRiskValue         Int
+  // Assessment completeness (a risk dimension is "not assessed" when its source data is absent —
+  // e.g. no support-activity rows for the period). A not-assessed dimension contributes nothing to
+  // globalRiskValue (max over the dimensions that DO have data) and is listed in missingInputs, so
+  // missing data reads as "Insufficient Data", never as inferred CRITICO. The 0–4 / five-level
+  // taxonomy is unchanged.
+  assessmentComplete      Boolean          @default(true)
+  missingInputs           String[]         @default([])
   previousGlobalRiskValue Int?
   riskChange              Int?
   riskChangeLabel         RiskChangeLabel?

@@ -9,6 +9,7 @@ import {
 } from "./derive";
 import {
   computeAlertType,
+  computeAssessmentCompleteness,
   computeGlobalRiskValue,
   computeRiskChange,
   riskChangeLabel,
@@ -113,7 +114,10 @@ async function recomputeOneScholar(scholarId: string, batchPeriods: string[]): P
         }),
         prisma.supportActivity.aggregate({
           where: { scholarId, period },
+          // _count distinguishes "no support-activity rows for this period" (missing data → null →
+          // participation not assessed) from "rows exist summing to 0" (a real zero → risk 4).
           _sum: { activityCount: true },
+          _count: { _all: true },
         }),
       ]);
 
@@ -122,8 +126,15 @@ async function recomputeOneScholar(scholarId: string, batchPeriods: string[]): P
         mentorPermanenceRisk: mentor?.permanenceRisk,
         mentorPsychosocialStatus: mentor?.psychosocialStatus,
       });
-      const participation = deriveParticipationRiskValue(agg._sum.activityCount ?? 0);
+      const participation = deriveParticipationRiskValue(
+        agg._count._all > 0 ? (agg._sum.activityCount ?? 0) : null,
+      );
       const global = computeGlobalRiskValue(academic, psychosocial, participation);
+      const { assessmentComplete, missingInputs } = computeAssessmentCompleteness(
+        academic,
+        psychosocial,
+        participation,
+      );
 
       const prev = await prisma.riskAssessment.findFirst({
         where: { scholarId, period: { lt: period } },
@@ -133,15 +144,19 @@ async function recomputeOneScholar(scholarId: string, batchPeriods: string[]): P
       const previousGlobal = prev?.globalRiskValue ?? null;
       const change = computeRiskChange(global, previousGlobal);
 
+      // A not-assessed (null) dimension is stored as 0 (it contributed nothing to the global max)
+      // and named in missingInputs — never inflated to a risk band. See computeGlobalRiskValue.
       const fields = {
-        academicRiskValue: academic,
-        academicRiskLevel: riskLevelFromValue(academic),
-        psychosocialRiskValue: psychosocial,
-        psychosocialRiskLevel: riskLevelFromValue(psychosocial),
-        participationRiskValue: participation,
-        participationRiskLevel: riskLevelFromValue(participation),
+        academicRiskValue: academic ?? 0,
+        academicRiskLevel: riskLevelFromValue(academic ?? 0),
+        psychosocialRiskValue: psychosocial ?? 0,
+        psychosocialRiskLevel: riskLevelFromValue(psychosocial ?? 0),
+        participationRiskValue: participation ?? 0,
+        participationRiskLevel: riskLevelFromValue(participation ?? 0),
         globalRiskValue: global,
         globalRiskLevel: riskLevelFromValue(global),
+        assessmentComplete,
+        missingInputs,
         previousGlobalRiskValue: previousGlobal,
         riskChange: change,
         riskChangeLabel: riskChangeLabel(change),

@@ -11,7 +11,10 @@ describe("risk derivation (default heuristic)", () => {
     expect(deriveAcademicRiskValue({ gpa: 2.0 })).toBe(4);
     expect(deriveAcademicRiskValue({ gpa: 4.5, failedSubjectsCount: 3 })).toBe(3);
     expect(deriveAcademicRiskValue({ gpa: 4.5, expectedProgressStatus: "CRITICAL_DELAY" })).toBe(3);
-    expect(deriveAcademicRiskValue({})).toBe(0);
+    // A present-but-zero signal is a real 0, not absence.
+    expect(deriveAcademicRiskValue({ failedSubjectsCount: 0 })).toBe(0);
+    // No academic signal at all → not assessed (null), NOT a fabricated low-risk 0.
+    expect(deriveAcademicRiskValue({})).toBeNull();
   });
 
   it("scales the GPA band to the scholar's own country (Colombia 0-5 vs Peru 0-20)", () => {
@@ -30,14 +33,18 @@ describe("risk derivation (default heuristic)", () => {
     expect(derivePsychosocialRiskValue({ checkinFinalStatus: "Estable" })).toBe(0);
     expect(derivePsychosocialRiskValue({ mentorPermanenceRisk: "Alto" })).toBe(3);
     expect(derivePsychosocialRiskValue({ mentorPsychosocialStatus: "En observación" })).toBe(2);
-    expect(derivePsychosocialRiskValue({})).toBe(0);
+    // No psychosocial signal at all → not assessed (null), NOT a fabricated low-risk 0.
+    expect(derivePsychosocialRiskValue({})).toBeNull();
   });
 
   it("derives participation risk inversely from activity count", () => {
+    // A present zero (the month happened, nothing attended) is a real 4.
     expect(deriveParticipationRiskValue(0)).toBe(4);
     expect(deriveParticipationRiskValue(1)).toBe(3);
     expect(deriveParticipationRiskValue(3)).toBe(2);
     expect(deriveParticipationRiskValue(5)).toBe(1);
     expect(deriveParticipationRiskValue(8)).toBe(0);
+    // No support-activity rows at all → not assessed (null), NEVER 0→4→CRITICO. This is the fix.
+    expect(deriveParticipationRiskValue(null)).toBeNull();
   });
 });

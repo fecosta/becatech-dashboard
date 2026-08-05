@@ -32,7 +32,15 @@ const PROGRESS_BAND: Record<AcademicProgressStatus, number> = {
   CRITICAL_DELAY: 3,
 };
 
-export function deriveAcademicRiskValue(a: AcademicInputs): number {
+/**
+ * Academic risk (0–4), or null when the scholar has NO academic signal at all (no GPA, no failed-
+ * subject count, no expected-progress status) — a "not assessed" dimension, distinct from a real
+ * low-risk 0. A present-but-zero value (e.g. failedSubjectsCount = 0) is a real signal, not absence.
+ */
+export function deriveAcademicRiskValue(a: AcademicInputs): number | null {
+  if (a.gpa == null && a.failedSubjectsCount == null && a.expectedProgressStatus == null) {
+    return null;
+  }
   const scaleMax = a.country ? GPA_SCALE_MAX[a.country] : GPA_SCALE_MAX.COLOMBIA;
   const gpaFraction = a.gpa == null ? null : a.gpa / scaleMax;
   // Thresholds are Colombia's original absolute cutoffs (4/5, 3.5/5, 3/5, 2.5/5) expressed as
@@ -62,7 +70,17 @@ export interface PsychosocialInputs {
   mentorPsychosocialStatus?: string | null;
 }
 
-export function derivePsychosocialRiskValue(p: PsychosocialInputs): number {
+/**
+ * Psychosocial risk (0–4), or null when there is NO psychosocial signal at all (no check-in final
+ * status and no mentor permanence/psychosocial status) — "not assessed", distinct from a real 0.
+ */
+export function derivePsychosocialRiskValue(p: PsychosocialInputs): number | null {
+  const hasSignal =
+    (p.checkinFinalStatus ?? "") !== "" ||
+    (p.mentorPermanenceRisk ?? "") !== "" ||
+    (p.mentorPsychosocialStatus ?? "") !== "";
+  if (!hasSignal) return null;
+
   const status = norm(p.checkinFinalStatus);
   const checkinBand = status.includes("riesgo") ? 3 : status.includes("seguimiento") ? 2 : 0;
 
@@ -75,8 +93,15 @@ export function derivePsychosocialRiskValue(p: PsychosocialInputs): number {
   return clamp(Math.max(checkinBand, permBand, psBand));
 }
 
-/** Fewer support activities in the period ⇒ higher participation risk. */
-export function deriveParticipationRiskValue(totalActivities: number): number {
+/**
+ * Fewer support activities in the period ⇒ higher participation risk. Returns null when
+ * `totalActivities` is null — i.e. the scholar has NO support-activity rows for the period at all,
+ * which is missing data, NOT zero participation. This is the fix for the bug where a scholar with
+ * no activity rows was silently scored 0 → 4 → CRITICO. A present zero (an activity row that
+ * exists and sums to 0 — the month happened and nothing was attended) is a real 4, not absence.
+ */
+export function deriveParticipationRiskValue(totalActivities: number | null): number | null {
+  if (totalActivities == null) return null;
   if (totalActivities >= 6) return 0;
   if (totalActivities >= 4) return 1;
   if (totalActivities >= 2) return 2;

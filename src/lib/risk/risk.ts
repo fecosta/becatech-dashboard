@@ -34,15 +34,39 @@ export function riskValueFromLevel(level: RiskLevel): number {
 }
 
 /**
- * Global risk = the worst of the three dimensions (brief §6):
- *   globalRiskValue = max(academic, psychosocial, participation)
+ * Global risk = the worst of the dimensions that HAVE data (brief §6):
+ *   globalRiskValue = max(present dimensions)
+ * A null dimension is "not assessed" and contributes nothing — so missing data can never inflate
+ * global risk. When every dimension is null (nothing assessed), global is 0 (SIN_RIESGO); callers
+ * pair that with `assessmentComplete: false` + `missingInputs` so it reads as "Insufficient Data",
+ * never as an inferred CRITICO. Plain numbers (no nulls) reduce to the original max, unchanged.
  */
 export function computeGlobalRiskValue(
-  academic: number,
-  psychosocial: number,
-  participation: number,
+  academic: number | null,
+  psychosocial: number | null,
+  participation: number | null,
 ): number {
-  return Math.max(academic, psychosocial, participation);
+  const present = [academic, psychosocial, participation].filter((v): v is number => v != null);
+  return present.length ? Math.max(...present) : 0;
+}
+
+export type RiskDimension = "academic" | "psychosocial" | "participation";
+
+/**
+ * Assessment completeness from the three (possibly-null) dimension values. `missingInputs` names
+ * the not-assessed dimensions in a stable order; `assessmentComplete` is true only when all three
+ * have data. Used to distinguish real risk from missing data without changing the risk taxonomy.
+ */
+export function computeAssessmentCompleteness(
+  academic: number | null,
+  psychosocial: number | null,
+  participation: number | null,
+): { assessmentComplete: boolean; missingInputs: RiskDimension[] } {
+  const missingInputs: RiskDimension[] = [];
+  if (academic == null) missingInputs.push("academic");
+  if (psychosocial == null) missingInputs.push("psychosocial");
+  if (participation == null) missingInputs.push("participation");
+  return { assessmentComplete: missingInputs.length === 0, missingInputs };
 }
 
 /** riskChange = current − previous. Returns null when there is no previous value. */
@@ -71,17 +95,18 @@ export function riskChangeLabel(change: number | null | undefined): RiskChangeLa
  * NONE when there is no risk; COMBINED when two or more dimensions tie for the max.
  */
 export function computeAlertType(
-  academic: number,
-  psychosocial: number,
-  participation: number,
+  academic: number | null,
+  psychosocial: number | null,
+  participation: number | null,
 ): AlertType {
-  const max = Math.max(academic, psychosocial, participation);
+  const max = computeGlobalRiskValue(academic, psychosocial, participation);
   if (max <= 0) return AlertType.NONE;
 
+  // A not-assessed (null) dimension can never be a driver.
   const drivers: AlertType[] = [];
-  if (academic === max) drivers.push(AlertType.ACADEMIC);
-  if (psychosocial === max) drivers.push(AlertType.PSYCHOSOCIAL);
-  if (participation === max) drivers.push(AlertType.PARTICIPATION);
+  if (academic != null && academic === max) drivers.push(AlertType.ACADEMIC);
+  if (psychosocial != null && psychosocial === max) drivers.push(AlertType.PSYCHOSOCIAL);
+  if (participation != null && participation === max) drivers.push(AlertType.PARTICIPATION);
 
   return drivers.length > 1 ? AlertType.COMBINED : drivers[0];
 }

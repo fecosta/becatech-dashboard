@@ -57,6 +57,17 @@ describe("import pipeline (integration)", () => {
     });
     expect(risk?.source).toBe("import-recompute");
     expect(risk?.psychosocialRiskValue).toBe(3); // "En riesgo" → 3
+
+    // The seed scholar has NO support-activity rows and NO academic term for this period, so both
+    // dimensions are "not assessed" (null) — they must NOT be inferred as 0→4→CRITICO. Global risk
+    // is driven only by the present psychosocial signal (3 = RIESGO_ALTO), never CRITICO, and the
+    // assessment is flagged incomplete so the UI can show "Insufficient Data" instead of a fake 0.
+    expect(risk?.globalRiskValue).toBe(3);
+    expect(risk?.globalRiskLevel).toBe("RIESGO_ALTO");
+    expect(risk?.participationRiskValue).toBe(0); // stored as 0 = did not contribute to the max
+    expect(risk?.assessmentComplete).toBe(false);
+    expect(risk?.missingInputs).toEqual(expect.arrayContaining(["academic", "participation"]));
+    expect(risk?.missingInputs).not.toContain("psychosocial");
   });
 
   it("legacy wide .xlsx: normalizes into scholar + academic terms", async () => {
