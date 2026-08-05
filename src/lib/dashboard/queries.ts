@@ -261,19 +261,34 @@ export async function getExecutiveOverview(
     if (highRisk || missing) needingAttention += 1;
   }
 
-  // Participation: active scholars with meaningful engagement (> 3 support activities), in scope.
+  // Participation: active scholars with meaningful engagement (> 3 logged activities), in scope.
+  // Sourced from MENTOR REPORTS activity counts (same signal the risk engine uses) — the deprecated
+  // SUPPORT ACTIVITY LOG is no longer synced and must not be read here.
   const activeIds = scholars
     .filter((s) => s.programStatus === ProgramStatus.ACTIVE)
     .map((s) => s.scholarId);
-  const supportRows = activeIds.length
-    ? await prisma.supportActivity.findMany({
+  const mentorRows = activeIds.length
+    ? await prisma.mentorReport.findMany({
         where: { scholarId: { in: activeIds } },
-        select: { scholarId: true, activityCount: true },
+        select: {
+          scholarId: true,
+          individualTutoring: true,
+          groupTutoring: true,
+          individualMentoring: true,
+          groupMentoring: true,
+          workshops: true,
+        },
       })
     : [];
   const activityTotals = new Map<string, number>();
-  for (const r of supportRows) {
-    activityTotals.set(r.scholarId, (activityTotals.get(r.scholarId) ?? 0) + r.activityCount);
+  for (const r of mentorRows) {
+    const n =
+      r.individualTutoring +
+      r.groupTutoring +
+      r.individualMentoring +
+      r.groupMentoring +
+      r.workshops;
+    activityTotals.set(r.scholarId, (activityTotals.get(r.scholarId) ?? 0) + n);
   }
   const participatingActive = activeIds.filter((id) => (activityTotals.get(id) ?? 0) > 3).length;
   const participationRate = activeIds.length ? participatingActive / activeIds.length : 0;
@@ -734,27 +749,59 @@ export async function getSupportParticipation(
     .filter((s) => s.programStatus === ProgramStatus.ACTIVE)
     .map((s) => s.scholarId);
 
-  const activities = ids.length
-    ? await prisma.supportActivity.findMany({ where: { scholarId: { in: ids } } })
+  // Participation is sourced from MENTOR REPORTS activity counts (the same signal the risk engine
+  // and the Home KPI use). The deprecated SUPPORT ACTIVITY LOG is no longer synced and must not be
+  // read here. Each report's five count columns map onto the first five ActivityType kinds; the
+  // period is the report's real reporting month (YYYY-MM).
+  const reports = ids.length
+    ? await prisma.mentorReport.findMany({
+        where: { scholarId: { in: ids } },
+        select: {
+          scholarId: true,
+          reportingMonth: true,
+          individualTutoring: true,
+          groupTutoring: true,
+          individualMentoring: true,
+          groupMentoring: true,
+          workshops: true,
+        },
+      })
     : [];
 
-  const byType = new Map<ActivityType, number>(
-    Object.values(ActivityType).map((t) => [t, 0]),
-  );
+  const byType = new Map<ActivityType, number>([
+    [ActivityType.INDIVIDUAL_TUTORING, 0],
+    [ActivityType.GROUP_TUTORING, 0],
+    [ActivityType.INDIVIDUAL_MENTORING, 0],
+    [ActivityType.GROUP_MENTORING, 0],
+    [ActivityType.WORKSHOP, 0],
+  ]);
   const byMonth = new Map<string, number>();
   const scholarsByMonth = new Map<string, Set<string>>();
   const totalByScholar = new Map<string, number>();
-  for (const a of activities) {
-    byType.set(a.activityType, (byType.get(a.activityType) ?? 0) + a.activityCount);
-    byMonth.set(a.period, (byMonth.get(a.period) ?? 0) + a.activityCount);
-    totalByScholar.set(a.scholarId, (totalByScholar.get(a.scholarId) ?? 0) + a.activityCount);
-    if (a.activityCount > 0) {
-      let set = scholarsByMonth.get(a.period);
-      if (!set) {
-        set = new Set<string>();
-        scholarsByMonth.set(a.period, set);
+  for (const r of reports) {
+    const perType: [ActivityType, number][] = [
+      [ActivityType.INDIVIDUAL_TUTORING, r.individualTutoring],
+      [ActivityType.GROUP_TUTORING, r.groupTutoring],
+      [ActivityType.INDIVIDUAL_MENTORING, r.individualMentoring],
+      [ActivityType.GROUP_MENTORING, r.groupMentoring],
+      [ActivityType.WORKSHOP, r.workshops],
+    ];
+    let rowTotal = 0;
+    for (const [t, c] of perType) {
+      byType.set(t, (byType.get(t) ?? 0) + c);
+      rowTotal += c;
+    }
+    totalByScholar.set(r.scholarId, (totalByScholar.get(r.scholarId) ?? 0) + rowTotal);
+    if (r.reportingMonth) {
+      byMonth.set(r.reportingMonth, (byMonth.get(r.reportingMonth) ?? 0) + rowTotal);
+      if (rowTotal > 0) {
+        let set = scholarsByMonth.get(r.reportingMonth);
+        if (!set) {
+          set = new Set<string>();
+          scholarsByMonth.set(r.reportingMonth, set);
+        }
+        set.add(r.scholarId);
       }
-      set.add(a.scholarId);
     }
   }
 

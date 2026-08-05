@@ -258,12 +258,13 @@ function resolveSourceSheet_(ss, entityLabel, propKey, candidateNames) {
   return null;
 }
 
-/** Runs all three normalizers. Call this before exporting/syncing. */
+/** Runs the active normalizers. Call this before exporting/syncing.
+ *  SUPPORT ACTIVITY LOG is deprecated (participation/risk come from MENTOR REPORTS counts) and is no
+ *  longer normalized or synced — normalizeSupportActivityLog_ / …Only remain for manual/legacy use. */
 function normalizeAll_() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   normalizeScholarGeneralInfo_(ss);
   normalizeMentorReports_(ss);
-  normalizeSupportActivityLog_(ss);
 }
 
 // The three normalize*_() functions above take a required `ss` parameter, so they can't be run

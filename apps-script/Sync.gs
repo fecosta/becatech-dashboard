@@ -15,11 +15,13 @@
  */
 
 // FK-safe order: SCHOLAR must land before anything that references scholarId.
+// SUPPORT_ACTIVITY is intentionally omitted — the SUPPORT ACTIVITY LOG is deprecated; participation
+// and risk are sourced from MENTOR REPORTS activity counts. Its `MES` date cells produced
+// timestamp-shaped risk periods, so it is no longer normalized or POSTed.
 var ENTITY_TABS = [
   { entity: "SCHOLAR", tab: "NORMALIZED_SCHOLAR" },
   { entity: "ACADEMIC_TERM", tab: "NORMALIZED_ACADEMIC_TERM" },
   { entity: "MENTOR_REPORT", tab: "NORMALIZED_MENTOR_REPORT" },
-  { entity: "SUPPORT_ACTIVITY", tab: "NORMALIZED_SUPPORT_ACTIVITY" },
 ];
 var SYNC_LOG_SHEET_NAME = "Sync Log";
 var DIRTY_PROPERTY = "dirty";
