@@ -16,6 +16,7 @@ import type {
   ScholarRequest,
 } from "@/generated/prisma/client";
 import type { ActivityType } from "@/generated/prisma/enums";
+import type { CurrentUser } from "@/lib/auth/authorization";
 import { getScholarProfile } from "@/lib/dashboard/queries";
 import { fmtDate, fmtGpa } from "@/lib/format";
 import {
@@ -32,8 +33,16 @@ const money = (amount: unknown, currency: string) =>
     Number(amount),
   );
 
-export async function ScholarProfileView({ scholarId }: { scholarId: string }) {
-  const p = await getScholarProfile(scholarId);
+export async function ScholarProfileView({
+  scholarId,
+  user,
+}: {
+  scholarId: string;
+  user?: CurrentUser | null;
+}) {
+  // Pass the user so the fetch is server-side access-scoped (a mentor can't load an unassigned
+  // scholar even by direct id) — not just UI-gated by the caller.
+  const p = await getScholarProfile(scholarId, user ?? null);
   if (!p) notFound();
 
   const latestTerm = p.academicTerms.at(-1) ?? null;

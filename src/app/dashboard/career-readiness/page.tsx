@@ -32,7 +32,7 @@ export default async function CareerReadinessPage({
 }: {
   searchParams: Promise<SearchParams>;
 }) {
-  const { allowed } = await requirePermission(Permission.VIEW_SCHOLAR_TRACKING);
+  const { user, allowed } = await requirePermission(Permission.VIEW_SCHOLAR_TRACKING);
   if (!allowed) {
     return (
       <div>
@@ -46,7 +46,7 @@ export default async function CareerReadinessPage({
   const filters = parseFilters(await searchParams);
   const stageFilters = { ...filters, programStage: "YEARS_3_5" as const };
   const [pace, stageOverview, overallOverview, home, support] = await Promise.all([
-    getAcademicProgress(stageFilters),
+    getAcademicProgress(stageFilters, user),
     getExecutiveOverview(stageFilters),
     getExecutiveOverview(filters),
     getHomeOverview(stageFilters),

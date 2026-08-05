@@ -7,6 +7,7 @@ import {
   canViewSensitiveNotes,
   canViewUnitEconomics,
   type CurrentUser,
+  scholarAccessWhere,
 } from "@/lib/auth/authorization";
 
 function user(role: UserRole, assignedScholarIds: string[] = []): CurrentUser {
@@ -47,5 +48,27 @@ describe("authorization", () => {
   it("only analyst/admin can manage data", () => {
     expect(canManageData(user("ANALYST_ADMIN"))).toBe(true);
     expect(canManageData(user("PROGRAM_MANAGER"))).toBe(false);
+  });
+
+  describe("scholarAccessWhere (server-side query scoping)", () => {
+    it("restricts a mentor to exactly their assigned scholars", () => {
+      expect(scholarAccessWhere(user("MENTOR", ["BT-CO-001", "BT-CO-002"]))).toEqual({
+        scholarId: { in: ["BT-CO-001", "BT-CO-002"] },
+      });
+    });
+
+    it("a mentor with no assignments matches NO scholars (never everyone)", () => {
+      expect(scholarAccessWhere(user("MENTOR", []))).toEqual({ scholarId: { in: [] } });
+    });
+
+    it("does not restrict non-mentor roles", () => {
+      expect(scholarAccessWhere(user("PROGRAM_MANAGER"))).toEqual({});
+      expect(scholarAccessWhere(user("EXECUTIVE"))).toEqual({});
+      expect(scholarAccessWhere(user("ANALYST_ADMIN"))).toEqual({});
+    });
+
+    it("applies no restriction when there is no resolved user (non-request caller)", () => {
+      expect(scholarAccessWhere(null)).toEqual({});
+    });
   });
 });

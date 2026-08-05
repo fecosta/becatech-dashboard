@@ -43,7 +43,7 @@ export default async function EarlySupportPage({
 }: {
   searchParams: Promise<SearchParams>;
 }) {
-  const { allowed } = await requirePermission(Permission.VIEW_SCHOLAR_TRACKING);
+  const { user, allowed } = await requirePermission(Permission.VIEW_SCHOLAR_TRACKING);
   if (!allowed) {
     return (
       <div>
@@ -60,7 +60,7 @@ export default async function EarlySupportPage({
     await Promise.all([
       getRiskStageSummary(stageFilters),
       getSupportParticipation(stageFilters),
-      getAcademicProgress(stageFilters),
+      getAcademicProgress(stageFilters, user),
       getExecutiveOverview(stageFilters),
       getExecutiveOverview(filters),
       getHomeOverview(stageFilters),

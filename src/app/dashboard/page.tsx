@@ -33,7 +33,7 @@ export default async function HomePage({
 }: {
   searchParams: Promise<SearchParams>;
 }) {
-  const { allowed } = await requirePermission(Permission.VIEW_DASHBOARD);
+  const { user, allowed } = await requirePermission(Permission.VIEW_DASHBOARD);
   if (!allowed) {
     return (
       <div>
@@ -47,8 +47,8 @@ export default async function HomePage({
   const [o, home, ap, alerts, filterOptions] = await Promise.all([
     getExecutiveOverview(filters),
     getHomeOverview(filters),
-    getAcademicProgress(filters),
-    getRiskAlerts(filters),
+    getAcademicProgress(filters, user),
+    getRiskAlerts(filters, user),
     getFilterOptions(),
   ]);
 

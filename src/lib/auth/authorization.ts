@@ -68,6 +68,19 @@ export function canAccessScholar(user: CurrentUser, scholarId: string): boolean 
   return true;
 }
 
+/**
+ * Server-side scholar-visibility filter, as a Prisma `Scholar` where-fragment. A MENTOR is
+ * restricted to their assigned scholars (an empty assignment list matches NO scholars — a mentor
+ * with no assignments sees nothing, never everything); every other role is unrestricted. This is
+ * the enforcement primitive for scholar-level list/detail queries — UI hiding is not sufficient.
+ * `null` (no resolved user, e.g. a dev script) applies no restriction; page requests always pass
+ * the real user, so production is always scoped.
+ */
+export function scholarAccessWhere(user: CurrentUser | null): { scholarId?: { in: string[] } } {
+  if (user?.role === "MENTOR") return { scholarId: { in: user.assignedScholarIds } };
+  return {};
+}
+
 export const canViewSensitiveNotes = (user: CurrentUser) => can(user, P.VIEW_SENSITIVE_NOTES);
 export const canViewUnitEconomics = (user: CurrentUser) => can(user, P.VIEW_UNIT_ECONOMICS);
 export const canViewSelectionPipeline = (user: CurrentUser) => can(user, P.VIEW_SELECTION_PIPELINE);

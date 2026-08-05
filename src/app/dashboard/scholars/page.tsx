@@ -90,14 +90,14 @@ async function ScholarResults({
   sp: SearchParams;
   user: CurrentUser;
 }) {
-  const results = await getScholarDirectory(filters, q);
+  const results = await getScholarDirectory(filters, q, user);
 
   if (results.length === 1) {
     const scholarId = results[0].scholarId;
     if (!canAccessScholar(user, scholarId)) {
       return <AccessDenied message="You don't have access to this scholar." />;
     }
-    return <ScholarProfileView scholarId={scholarId} />;
+    return <ScholarProfileView scholarId={scholarId} user={user} />;
   }
 
   return (

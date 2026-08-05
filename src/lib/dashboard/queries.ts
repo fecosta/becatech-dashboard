@@ -3,6 +3,7 @@
 // this keeps the logic readable and testable. Optimize with SQL only if data volume grows.
 import { bucketGpa } from "../academic/gpa-bucket";
 import { summarizeGpa } from "../academic/gpa-summary";
+import { type CurrentUser, scholarAccessWhere } from "../auth/authorization";
 import { deriveExpectedProgressStatus } from "../academic/progress";
 import { YEARS_1_2_MAX_SEMESTER } from "../academic/program-stage";
 import { programYearFromSemester } from "../academic/program-year";
@@ -184,11 +185,15 @@ async function latestTermByScholar(scholarIds: string[]) {
   return map;
 }
 
-/** Shared scope: filtered scholars (incl. riskLevel), their current risk, and report sets. */
-async function loadScope(filters: DashboardFilters) {
+/**
+ * Shared scope: filtered scholars (incl. riskLevel), their current risk, and report sets.
+ * `access` is a server-side visibility fragment (e.g. a mentor's assigned-scholars restriction);
+ * it is ANDed into the scholar query so scholar-level views can never return out-of-scope rows.
+ */
+async function loadScope(filters: DashboardFilters, access: Prisma.ScholarWhereInput = {}) {
   const currentPeriod = filters.period ?? (await getCurrentPeriod());
   let scholars = await prisma.scholar.findMany({
-    where: scholarWhere(filters),
+    where: { AND: [scholarWhere(filters), access] },
     include: { university: true, operator: true },
     orderBy: { scholarId: "asc" },
   });
@@ -372,8 +377,14 @@ export async function getHomeOverview(filters: DashboardFilters = {}): Promise<H
 // ------------------------------------------------------------------
 // 9.2 Risk & alerts
 // ------------------------------------------------------------------
-export async function getRiskAlerts(filters: DashboardFilters = {}): Promise<RiskAlertsResult> {
-  const { currentPeriod, scholars, riskMap, checkinSet, mentorSet } = await loadScope(filters);
+export async function getRiskAlerts(
+  filters: DashboardFilters = {},
+  user: CurrentUser | null = null,
+): Promise<RiskAlertsResult> {
+  const { currentPeriod, scholars, riskMap, checkinSet, mentorSet } = await loadScope(
+    filters,
+    scholarAccessWhere(user),
+  );
 
   const distribution = emptyRiskDistribution();
   const attentionList: RiskAlertRow[] = [];
@@ -553,8 +564,9 @@ export async function getMonthlyRiskTrend(
 export async function getScholarDirectory(
   filters: DashboardFilters = {},
   search?: string,
+  user: CurrentUser | null = null,
 ): Promise<ScholarDirectoryRow[]> {
-  const { scholars, riskMap } = await loadScope(filters);
+  const { scholars, riskMap } = await loadScope(filters, scholarAccessWhere(user));
   const q = search?.trim().toLowerCase();
   const list = q
     ? scholars.filter(
@@ -582,7 +594,11 @@ export async function getScholarDirectory(
 // ------------------------------------------------------------------
 // 9.3 Scholar profile
 // ------------------------------------------------------------------
-export async function getScholarProfile(scholarId: string) {
+export async function getScholarProfile(scholarId: string, user: CurrentUser | null = null) {
+  // Server-side access enforcement: a mentor may only open a scholar they are assigned to. An
+  // out-of-scope id returns null (indistinguishable from "not found") so no data can leak. A null
+  // user (dev script) is unrestricted; page requests always pass the real user.
+  if (user?.role === "MENTOR" && !user.assignedScholarIds.includes(scholarId)) return null;
   const scholar = await prisma.scholar.findUnique({
     where: { scholarId },
     include: {
@@ -614,8 +630,9 @@ export type ScholarProfile = NonNullable<Awaited<ReturnType<typeof getScholarPro
 // ------------------------------------------------------------------
 export async function getAcademicProgress(
   filters: DashboardFilters = {},
+  user: CurrentUser | null = null,
 ): Promise<AcademicProgressResult> {
-  const { scholars, riskMap } = await loadScope(filters);
+  const { scholars, riskMap } = await loadScope(filters, scholarAccessWhere(user));
   const ids = scholars.map((s) => s.scholarId);
   const latestTerms = await latestTermByScholar(ids);
 
