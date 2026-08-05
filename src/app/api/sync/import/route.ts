@@ -8,6 +8,7 @@ import { DataImportEntity } from "@/generated/prisma/enums";
 import { commitImportBatch, createImportBatch } from "@/lib/data-import/service";
 import type { ImportEntity } from "@/lib/data-import/types";
 import { prisma } from "@/lib/db";
+import { blockMutationInUnsafeEnvironment } from "@/lib/env/mutation-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +30,9 @@ export async function POST(req: Request) {
   if (!isAuthorized(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  // Preview shares the production database — never let a Preview deployment write to prod.
+  const blocked = blockMutationInUnsafeEnvironment();
+  if (blocked) return blocked;
 
   let text: string;
   try {

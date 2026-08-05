@@ -5,6 +5,7 @@ import { requirePermission } from "@/lib/auth/guard";
 import { createImportBatch, listImportBatches } from "@/lib/data-import/service";
 import type { ImportEntity } from "@/lib/data-import/types";
 import { prisma } from "@/lib/db";
+import { blockMutationInUnsafeEnvironment } from "@/lib/env/mutation-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,8 @@ export async function GET() {
 export async function POST(req: Request) {
   const { user, allowed } = await requirePermission(Permission.MANAGE_IMPORTS);
   if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const blocked = blockMutationInUnsafeEnvironment();
+  if (blocked) return blocked;
 
   let form: FormData;
   try {

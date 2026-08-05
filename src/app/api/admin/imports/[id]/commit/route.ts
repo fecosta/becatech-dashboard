@@ -2,12 +2,15 @@ import { NextResponse } from "next/server";
 import { Permission } from "@/lib/auth/authorization";
 import { requirePermission } from "@/lib/auth/guard";
 import { commitImportBatch } from "@/lib/data-import/service";
+import { blockMutationInUnsafeEnvironment } from "@/lib/env/mutation-guard";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { allowed } = await requirePermission(Permission.MANAGE_IMPORTS);
   if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const blocked = blockMutationInUnsafeEnvironment();
+  if (blocked) return blocked;
 
   const { id } = await ctx.params;
   try {
