@@ -17,6 +17,7 @@ export async function resetDb(): Promise<void> {
   await prisma.rawJotformSubmission.deleteMany();
   await prisma.dataImportBatch.deleteMany();
   await prisma.controlValue.deleteMany();
+  await prisma.syncLock.deleteMany();
   await prisma.appUser.deleteMany();
   await prisma.scholar.deleteMany();
   await prisma.university.deleteMany();

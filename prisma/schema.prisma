@@ -565,6 +565,17 @@ model DataQualityIssue {
   @@index([status])
 }
 
+// Database-backed mutual-exclusion lock so two imports/syncs never run concurrently against the
+// shared database (in-memory locks don't work across serverless instances). One row per lock name;
+// `expiresAt` bounds a crashed holder so the lock self-heals. Acquire/release live in
+// src/lib/data-import/sync-lock.ts via an atomic conditional upsert.
+model SyncLock {
+  name       String    @id
+  holder     String?
+  acquiredAt DateTime?
+  expiresAt  DateTime?
+}
+
 model ControlValue {
   id        String   @id @default(cuid())
   category  String

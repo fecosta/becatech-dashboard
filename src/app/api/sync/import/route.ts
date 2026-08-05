@@ -6,6 +6,7 @@ import { timingSafeEqual } from "crypto";
 import { NextResponse } from "next/server";
 import { DataImportEntity } from "@/generated/prisma/enums";
 import { commitImportBatch, createImportBatch } from "@/lib/data-import/service";
+import { acquireSyncLock, releaseSyncLock, SYNC_LOCK_NAME } from "@/lib/data-import/sync-lock";
 import type { ImportEntity } from "@/lib/data-import/types";
 import { prisma } from "@/lib/db";
 import { blockMutationInUnsafeEnvironment } from "@/lib/env/mutation-guard";
@@ -67,6 +68,17 @@ export async function POST(req: Request) {
   }
   const entity = entityHeader as ImportEntity | undefined;
 
+  // Database-backed lock: never let two syncs/imports run concurrently against the shared database
+  // (in-memory locks don't span serverless instances). If another sync holds it, return 409 so the
+  // caller (Apps Script) retries on its next tick rather than double-processing.
+  const lockHolder = `sync:${filename}:${Date.now()}`;
+  if (!(await acquireSyncLock(lockHolder))) {
+    return NextResponse.json(
+      { error: `Another sync is already in progress (lock: ${SYNC_LOCK_NAME}). Try again shortly.` },
+      { status: 409 },
+    );
+  }
+
   try {
     // Without x-entity: every raw tab (SCHOLAR GENERAL INFO / MENTOR REPORTS /
     // SUPPORT ACTIVITY LOG) self-detects from its own header shape — the caller never needs to
@@ -99,5 +111,7 @@ export async function POST(req: Request) {
       { error: error instanceof Error ? error.message : String(error) },
       { status: 422 },
     );
+  } finally {
+    await releaseSyncLock(lockHolder);
   }
 }
