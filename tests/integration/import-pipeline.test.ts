@@ -178,6 +178,25 @@ describe("import pipeline (integration)", () => {
     expect(scholar?.operatorId).not.toBeNull();
   });
 
+  it("resolves an approved operator alias (FATV → Fundación Antivirus para la Deserción)", async () => {
+    const { operatorId } = await seedOperatorFixture(); // seeds "Fundación Antivirus para la Deserción"
+    const data = csvBuffer(
+      "scholarId,fullName,country,cohort,university,academicProgram,gender,operator\n" +
+        "BT-CO-063,Alias Scholar,COLOMBIA,2026,UNAL,CS,Female,FATV\n",
+    );
+    const { batchId, result } = await createImportBatch({
+      data,
+      filename: "scholars.csv",
+      sourceType: "TEMPLATE",
+      entity: "SCHOLAR",
+      uploadedById: uploaderId,
+    });
+    expect(result.successRows).toBe(1);
+    await commitImportBatch(batchId);
+    const scholar = await prisma.scholar.findUnique({ where: { scholarId: "BT-CO-063" } });
+    expect(scholar?.operatorId).toBe(operatorId);
+  });
+
   it("rejects a new scholar row with an unrecognized operator name (never auto-created)", async () => {
     const data = csvBuffer(
       "scholarId,fullName,country,cohort,university,academicProgram,gender,operator\n" +

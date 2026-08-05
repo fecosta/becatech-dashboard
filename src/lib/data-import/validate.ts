@@ -385,8 +385,14 @@ export function validateBatch(batch: CanonicalBatch, ctx: ValidationContext): Va
 
         // Unlike university, a blank operator is valid (operatorId is nullable) — only a
         // non-blank, unmatched name is an error. Lookup-only, same as university: never
-        // auto-created from an unrecognized name.
-        const operatorName = gS(row, "operator");
+        // auto-created from an unrecognized name. "Not applicable" / "No aplica" is an explicit
+        // "no operator" and resolves to null (not an error). Aliases (e.g. FATV) are registered in
+        // operatorsByName by service.ts.
+        const operatorRaw = gS(row, "operator");
+        const operatorName =
+          operatorRaw && !/^(not applicable|no aplica)$/i.test(operatorRaw.trim())
+            ? operatorRaw
+            : undefined;
         if (operatorName) {
           operatorId = ctx.operatorsByName.get(operatorName.trim().toLowerCase());
           if (!operatorId) {

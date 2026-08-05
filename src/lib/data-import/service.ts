@@ -2,6 +2,7 @@
 // then commit it (transactional upsert → data-quality scan → risk recompute).
 import type { Prisma } from "../../generated/prisma/client";
 import type { DataImportSourceType } from "../../generated/prisma/enums";
+import { OPERATOR_NAMES } from "../academic/operator-assignment";
 import { runDataQualityScan } from "../data-quality/checks";
 import { prisma } from "../db";
 import { recomputeRiskForScholars } from "../risk/recompute";
@@ -19,6 +20,12 @@ import {
   type ValidationResult,
 } from "./types";
 import { validateBatch } from "./validate";
+
+/** Approved operator name aliases (source label → canonical Operator.name). The sheet uses short
+ *  codes; only explicitly-approved aliases resolve, never a fuzzy/auto-created match. */
+const OPERATOR_ALIASES: Record<string, string> = {
+  FATV: OPERATOR_NAMES.EARLY_SUPPORT_COLOMBIA, // "Fundación Antivirus para la Deserción"
+};
 
 async function loadValidationContext(): Promise<ValidationContext> {
   const [scholars, controls, universities, operators] = await Promise.all([
@@ -40,6 +47,13 @@ async function loadValidationContext(): Promise<ValidationContext> {
   for (const u of universities) universityMap.set(u.name.trim().toLowerCase(), u.id);
   const operatorMap = new Map<string, string>();
   for (const o of operators) operatorMap.set(o.name.trim().toLowerCase(), o.id);
+  // Approved operator aliases: the source sheet uses short codes that don't equal the seeded
+  // canonical name (e.g. "FATV" for "Fundación Antivirus para la Deserción"). Register each alias
+  // pointing at the same Operator id — a controlled mapping, never an auto-created operator.
+  for (const [alias, canonical] of Object.entries(OPERATOR_ALIASES)) {
+    const id = operatorMap.get(canonical.trim().toLowerCase());
+    if (id) operatorMap.set(alias.trim().toLowerCase(), id);
+  }
   const scholarIdsByNormalizedName = new Map<string, string[]>();
   for (const s of scholars) {
     const key = normKey(s.fullName);

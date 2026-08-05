@@ -169,6 +169,26 @@ describe("import validation", () => {
     expect(res.successRows).toBe(0);
   });
 
+  it("treats 'Not applicable' / 'No aplica' as no operator (null, not an error)", () => {
+    for (const value of ["Not applicable", "No aplica"]) {
+      const batch = templateAdapter("SCHOLAR", [
+        {
+          scholarId: "BT-CO-9",
+          fullName: "X",
+          country: "COLOMBIA",
+          cohort: "2025",
+          university: "U",
+          academicProgram: "CS",
+          gender: "Female",
+          operator: value,
+        },
+      ]);
+      const res = validateBatch(batch, ctx());
+      expect(res.errors.some((e) => e.field === "operator")).toBe(false);
+      expect((res.validated.SCHOLAR ?? [])[0].operatorId).toBeUndefined();
+    }
+  });
+
   it("flags an invalid controlled value", () => {
     const batch = templateAdapter("SCHOLAR", [
       { scholarId: "BT-CO-9", fullName: "X", country: "BRAZIL", cohort: "2025", university: "U", academicProgram: "CS", gender: "Female" },

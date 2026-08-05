@@ -292,6 +292,14 @@ var SCHOLAR_UNMAPPED_HEADERS_ = [
   // SelectionCandidate/FinancialInput than the Scholar profile; flagged, not decided.
   "lb: academico", "icfes col", "notas (puntaje ib - peru)", "lb: socioeconomico", "sisben col",
   "nivel economico (peru)", "nivel de priorizacion", "monto", "observacion", "puntaje seleccion",
+  // Live-sheet Spanish forms of the above (confirmed from the production sync's WARN) + the
+  // academic-summary singles and the "año de graduación"/nivel/estado columns we don't map.
+  "puntaje", "total de creditos", "gpa acumulado", "% de avance - estudios",
+  "estado avance (act semestral)", "estado final", "edad", "nivel - 2026-1",
+  // Per-period activity/alert summary blocks embedded in the scholar sheet (the real source is
+  // SUPPORT ACTIVITY LOG) + the Growth-track operator flags — deferred, redundant here.
+  "talleres", "sesiones individuales", "tutorias", "psicosocial", "total", "total alertas",
+  "resumen alertas", "confident english", "makers",
 ];
 
 /** Positionally resolve bare "ESTADO FINAL" columns (no term in the header text — it repeats
@@ -367,32 +375,33 @@ function normalizeScholarGeneralInfo_(ss) {
   // see estimatedGraduationYear) — expectedEndDate is intentionally left null for new-sheet rows
   // rather than derived from other fields (explicit decision, not an oversight).
   var endDateCol = colIndexOf_(headerKeys, "fecha de finalizacion");
-  // These six were never wired to any header (old or new) before this pass — a pre-existing gap,
-  // not something the new sheet broke. The new sheet's English headers are the only known source
-  // text for them, so no bilingual aliasing is needed (there's no prior Spanish mapping to keep).
-  var ethnicGroupCol = colIndexOf_(headerKeys, "ethnic group");
-  var departmentOriginCol = colIndexOf_(headerKeys, "department of origin");
-  var municipalityOriginCol = colIndexOf_(headerKeys, "municipality of origin");
-  var currentDepartmentCol = colIndexOf_(headerKeys, "current department of residence");
-  var currentMunicipalityCol = colIndexOf_(headerKeys, "current municipality of residence");
+  // Demographic/profile fields — bilingual: the English header from the target structure
+  // (context/data reference exports) AND the Spanish header the current live sheet actually uses
+  // (confirmed from the production sync's unrecognized-column WARN). Either works, so the sheet can
+  // migrate to English on its own timeline without breaking.
+  var ethnicGroupCol = colIndexOfAny_(headerKeys, ["ethnic group", "grupo etnico"]);
+  var departmentOriginCol = colIndexOfAny_(headerKeys, ["department of origin", "depto de procedencia"]);
+  var municipalityOriginCol = colIndexOfAny_(headerKeys, ["municipality of origin", "municipio de procedencia"]);
+  var currentDepartmentCol = colIndexOfAny_(headerKeys, ["current department of residence", "departamento de residencia (actual)"]);
+  var currentMunicipalityCol = colIndexOfAny_(headerKeys, ["current municipality of residence", "municipio de residencia (actual)"]);
   var driveFolderUrlCol = colIndexOf_(headerKeys, "carpeta del becario");
-  // New-sheet-only columns, no prior mapping to preserve — a bare 4-digit year isn't one of
-  // Sheets' auto-date-detection patterns (unlike "2024-1"), so estimatedGraduationYear needs no
-  // setNumberFormat("@") text-forcing in writeNormalizedTab_'s textColumns list.
-  var estimatedGraduationYearCol = colIndexOf_(headerKeys, "estimated graduation year");
-  var programDurationYearsCol = colIndexOf_(headerKeys, "program duration (years)");
-  var highSchoolGraduationYearCol = colIndexOf_(headerKeys, "high school graduation year");
-  var motherEducationLevelCol = colIndexOf_(headerKeys, "mother's education level");
-  var fatherEducationLevelCol = colIndexOf_(headerKeys, "father's education level");
-  var email1Col = colIndexOf_(headerKeys, "email 1");
-  var email2Col = colIndexOf_(headerKeys, "email 2");
-  var dateOfBirthCol = colIndexOf_(headerKeys, "date of birth");
-  var mobilePhoneCol = colIndexOf_(headerKeys, "mobile phone");
-  var socioeconomicLevelCol = colIndexOf_(headerKeys, "socioeconomic level");
-  // Raw operator NAME is passed through as-is — resolution against the Operator catalog (lookup
-  // only, never auto-created) happens on the dashboard side in validate.ts, same division of
-  // responsibility as `university`.
-  var operatorCol = colIndexOf_(headerKeys, "current operator - support services");
+  // A bare 4-digit year isn't one of Sheets' auto-date-detection patterns (unlike "2024-1"), so
+  // estimatedGraduationYear needs no setNumberFormat("@") text-forcing.
+  var estimatedGraduationYearCol = colIndexOfAny_(headerKeys, ["estimated graduation year", "ano estimado de graduacion"]);
+  var programDurationYearsCol = colIndexOfAny_(headerKeys, ["program duration (years)", "duracion carrera(anos)"]);
+  // "año de graduación" (the past event — high-school graduation year) vs the "estimated" one above.
+  var highSchoolGraduationYearCol = colIndexOfAny_(headerKeys, ["high school graduation year", "ano de graduacion"]);
+  var motherEducationLevelCol = colIndexOfAny_(headerKeys, ["mother's education level", "nivel educativo madre"]);
+  var fatherEducationLevelCol = colIndexOfAny_(headerKeys, ["father's education level", "nivel educativo padre"]);
+  var email1Col = colIndexOfAny_(headerKeys, ["email 1", "correo 1"]);
+  var email2Col = colIndexOfAny_(headerKeys, ["email 2", "correo 2"]);
+  var dateOfBirthCol = colIndexOfAny_(headerKeys, ["date of birth", "fecha de nacimiento"]);
+  var mobilePhoneCol = colIndexOfAny_(headerKeys, ["mobile phone", "celular"]);
+  var socioeconomicLevelCol = colIndexOfAny_(headerKeys, ["socioeconomic level", "nivel socioeconomico"]);
+  // Raw operator NAME is passed through as-is — resolution + alias handling (FATV → canonical,
+  // "Not applicable" → none) happens on the dashboard side in validate.ts/service.ts, same
+  // division of responsibility as `university`. Bilingual header per the live sheet's WARN.
+  var operatorCol = colIndexOfAny_(headerKeys, ["current operator - support services", "acompanamiento actual"]);
   var termColumns = findTermColumns_(headerKeys);
 
   var scholarRows = [];
@@ -498,16 +507,19 @@ var MENTOR_REPORT_UNMAPPED_HEADERS_ = [
   "mentor id",
   // Ambiguous relationship to reportingMonth/registrationDate/sessionDate — the sheet has both a
   // structural bare column and the original free-text question already mapped; unclear which (if
-  // either) is authoritative without checking the sheet owner.
-  "month", "date",
+  // either) is authoritative without checking the sheet owner. ("mes" is the live-sheet form.)
+  "month", "date", "mes",
   // New, unclear relationship to the existing academicAlertType/psychosocialAlertType mapping
   // (which still targets the "situación específica" free-text questions).
   "academic cause", "psychosocial cause",
   // The new sheet splits one "plan y fecha de inicio" question (old sheet's nextSteps) into three
-  // — concatenate-vs-new-fields is an open question, not resolved here.
+  // — concatenate-vs-new-fields is an open question, not resolved here. Both the short forms and
+  // the live sheet's full "ejemplo:" phrasings (from the production WARN) are listed.
   "cuentanos cual es el plan y la fecha de inicio (materias rezagadas — plan 1)",
   "escribe que materias estan rezagadas, semestre y numero de veces cursadas",
   "cuentanos cual es el plan y la fecha de inicio (plan 2 — creditos/intersemestral)",
+  "escribe que materias estan rezagadas, semestre y numero de veces cursadas, ejemplo para ponerlo: (calculo, primer semestre, segunda vez).",
+  "cuentanos cual es el plan y la fecha de inicio, ejemplo: (calculo, intersemestral en 2026-2; fisica, creditos adicionales en 2026-2...)",
   // Genuinely new, no clear destination field yet.
   "¿participo en actividades?",
 ];
