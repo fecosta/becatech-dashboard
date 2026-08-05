@@ -69,7 +69,10 @@ async function recomputeOneScholar(scholarId: string, batchPeriods: string[]): P
 
     let periods: string[] = [];
     if (batchPeriods.length > 0) {
-      const [checkins, mentors, supports] = await Promise.all([
+      // Risk periods are real reporting months (YYYY-MM) sourced from monthly check-ins and mentor
+      // reports. The deprecated SUPPORT ACTIVITY LOG is intentionally NOT a period source — its
+      // `MES` date cells produced timestamp-shaped periods that corrupted the current-period logic.
+      const [checkins, mentors] = await Promise.all([
         prisma.monthlyCheckin.findMany({
           where: { scholarId, reportingMonth: { in: batchPeriods } },
           select: { reportingMonth: true },
@@ -78,15 +81,10 @@ async function recomputeOneScholar(scholarId: string, batchPeriods: string[]): P
           where: { scholarId, reportingMonth: { in: batchPeriods } },
           select: { reportingMonth: true },
         }),
-        prisma.supportActivity.findMany({
-          where: { scholarId, period: { in: batchPeriods } },
-          select: { period: true },
-        }),
       ]);
       const set = new Set<string>();
       for (const x of checkins) if (x.reportingMonth) set.add(x.reportingMonth);
       for (const x of mentors) if (x.reportingMonth) set.add(x.reportingMonth);
-      for (const x of supports) set.add(x.period);
       periods = [...set];
     }
     if (periods.length === 0) {

@@ -42,6 +42,29 @@ const gB = (row: CanonicalRow, f: string): boolean | undefined => {
   return typeof v === "boolean" ? v : undefined;
 };
 
+/**
+ * Coerce a mentor-report reporting month to a real `YYYY-MM` key.
+ *
+ * The sheet's own "month" field is a free-text label ("MES 1", "Mes 2"…) that cannot serve as a
+ * risk period — it broke the current-period logic. Prefer an already-month-shaped raw value
+ * (`2026-02` or `2026-02-15` → `2026-02`); otherwise fall back to the session date's month; if
+ * neither is usable, return `undefined` (the report simply has no risk period rather than a
+ * fabricated one). UTC getters match the adapter's `new Date("YYYY-MM-DD")` (UTC-midnight) parsing.
+ */
+export function toReportingMonth(
+  raw: string | undefined,
+  sessionDate: Date | undefined,
+): string | undefined {
+  if (raw) {
+    const m = /^(\d{4})-(\d{1,2})(?:\D|$)/.exec(raw.trim());
+    if (m) return `${m[1]}-${m[2].padStart(2, "0")}`;
+  }
+  if (sessionDate && !Number.isNaN(sessionDate.getTime())) {
+    return `${sessionDate.getUTCFullYear()}-${String(sessionDate.getUTCMonth() + 1).padStart(2, "0")}`;
+  }
+  return undefined;
+}
+
 function checkFields(
   entity: ImportEntity,
   row: CanonicalRow,
@@ -168,7 +191,8 @@ function buildMonthlyCheckin(row: CanonicalRow): Prisma.MonthlyCheckinUncheckedC
 function buildMentorReport(row: CanonicalRow): Prisma.MentorReportUncheckedCreateInput {
   return {
     scholarId: gS(row, "scholarId")!,
-    reportingMonth: gS(row, "reportingMonth"),
+    // Real month (YYYY-MM) for risk periods — derived from the session date, never the "MES n" label.
+    reportingMonth: toReportingMonth(gS(row, "reportingMonth"), gD(row, "sessionDate")),
     submissionId: gS(row, "submissionId") ?? synthSubmissionId("MENTOR_REPORT", row.data),
     scholarName: gS(row, "scholarName"),
     mentorName: gS(row, "mentorName"),
