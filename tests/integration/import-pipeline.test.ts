@@ -4,6 +4,7 @@ import {
   createImportBatch,
   rollbackImportBatch,
 } from "@/lib/data-import/service";
+import { getRiskStageSummary } from "@/lib/dashboard/queries";
 import { prisma } from "@/lib/db";
 import { csvBuffer, resetDb, seedFixture, seedOperatorFixture, xlsxBuffer } from "./helpers";
 
@@ -68,6 +69,11 @@ describe("import pipeline (integration)", () => {
     expect(risk?.assessmentComplete).toBe(false);
     expect(risk?.missingInputs).toEqual(expect.arrayContaining(["academic", "participation"]));
     expect(risk?.missingInputs).not.toContain("psychosocial");
+
+    // The stage summary surfaces this as "Insufficient data", kept out of the critical/high count.
+    const summary = await getRiskStageSummary({});
+    expect(summary.insufficientDataCount).toBeGreaterThanOrEqual(1);
+    expect(summary.distribution.CRITICO).toBe(0);
   });
 
   it("legacy wide .xlsx: normalizes into scholar + academic terms", async () => {

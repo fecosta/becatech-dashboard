@@ -143,6 +143,13 @@ export default async function EarlySupportPage({
           value={fmtInt(risk.criticalHighCount)}
           note="Need attention this month"
         />
+        {risk.insufficientDataCount > 0 ? (
+          <p className="mt-2 text-xs text-amber-700">
+            {fmtInt(risk.insufficientDataCount)} scholar
+            {risk.insufficientDataCount === 1 ? " has" : "s have"} insufficient data this month
+            (a risk dimension was not reported) — shown separately and not counted as high risk.
+          </p>
+        ) : null}
       </div>
 
       <div className="mt-6">

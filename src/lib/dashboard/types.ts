@@ -109,6 +109,11 @@ export interface RiskAlertRow {
   reviewStatus: ReviewStatus;
   missingCheckin: boolean;
   missingMentorReport: boolean;
+  /** False when a risk dimension had no data (see RiskAssessment.assessmentComplete) — the global
+   *  level is then based only on the dimensions that were assessed, and should read as partial. */
+  assessmentComplete: boolean;
+  /** Risk dimensions with no data this period (e.g. ["participation"]) — for an "Insufficient data" note. */
+  missingInputs: string[];
 }
 
 export interface RiskAlertsResult {
@@ -129,6 +134,9 @@ export interface RiskStageSummary {
   worsened: number;
   /** Alert-type counts among at-risk scholars (globalRiskValue ≥ 2). */
   alertTypeCounts: Record<AlertType, number>;
+  /** Scholars whose latest risk assessment is incomplete (a dimension had no data) — surfaced as
+   *  "Insufficient data", kept distinct from the actual risk levels so missing data ≠ high risk. */
+  insufficientDataCount: number;
 }
 
 export interface GpaGroupStat {

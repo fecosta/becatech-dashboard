@@ -97,7 +97,22 @@ export async function ScholarProfileView({
   ];
   const riskCols: Column<RiskAssessment>[] = [
     { header: "Period", cell: (r) => r.period },
-    { header: "Global", cell: (r) => <RiskBadge level={r.globalRiskLevel} /> },
+    {
+      header: "Global",
+      cell: (r) => (
+        <span className="inline-flex items-center gap-1.5">
+          <RiskBadge level={r.globalRiskLevel} />
+          {!r.assessmentComplete ? (
+            <span
+              className="text-[11px] text-amber-700"
+              title={`Insufficient data: ${r.missingInputs.join(", ") || "some dimensions not reported"}`}
+            >
+              partial
+            </span>
+          ) : null}
+        </span>
+      ),
+    },
     { header: "Alert", cell: (r) => ALERT_TYPE_LABEL[r.alertType] },
     { header: "Change", cell: (r) => (r.riskChangeLabel ? RISK_CHANGE_LABEL[r.riskChangeLabel] : "—") },
     { header: "Review", cell: (r) => REVIEW_STATUS_LABEL[r.reviewStatus] },

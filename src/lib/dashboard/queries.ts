@@ -437,6 +437,8 @@ export async function getRiskAlerts(
       reviewStatus: cur.reviewStatus,
       missingCheckin,
       missingMentorReport,
+      assessmentComplete: cur.assessmentComplete,
+      missingInputs: cur.missingInputs,
     });
   }
 
@@ -472,11 +474,13 @@ export async function getRiskStageSummary(
   const alertTypeCounts = emptyAlertTypeCounts();
   let improved = 0;
   let worsened = 0;
+  let insufficientDataCount = 0;
 
   for (const s of scholars) {
     const cur = riskMap.get(s.scholarId);
     if (!cur) continue;
     distribution[cur.globalRiskLevel] += 1;
+    if (!cur.assessmentComplete) insufficientDataCount += 1;
     if (cur.riskChange != null) {
       if (cur.riskChange < 0) improved += 1;
       else if (cur.riskChange > 0) worsened += 1;
@@ -491,6 +495,7 @@ export async function getRiskStageSummary(
     improved,
     worsened,
     alertTypeCounts,
+    insufficientDataCount,
   };
 }
 
