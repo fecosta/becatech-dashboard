@@ -163,6 +163,29 @@ describe("import pipeline (integration)", () => {
     expect(await prisma.riskAssessment.count()).toBe(0);
   });
 
+  it("resolves a university naming variant via the alias map (Universidad Nacional → UNAL)", async () => {
+    // seedFixture() seeds a "UNAL" university; the sheet spells it "Universidad Nacional".
+    const data = csvBuffer(
+      "scholarId,fullName,country,cohort,university,academicProgram,gender\n" +
+        "BT-CO-064,Alias Uni Scholar,COLOMBIA,2026,Universidad Nacional,CS,Female\n",
+    );
+    const { batchId, result } = await createImportBatch({
+      data,
+      filename: "scholars.csv",
+      sourceType: "TEMPLATE",
+      entity: "SCHOLAR",
+      uploadedById: uploaderId,
+    });
+    expect(result.errors.some((e) => e.field === "university")).toBe(false);
+    expect(result.successRows).toBe(1);
+    await commitImportBatch(batchId);
+    const scholar = await prisma.scholar.findUnique({
+      where: { scholarId: "BT-CO-064" },
+      include: { university: true },
+    });
+    expect(scholar?.university.name).toBe("UNAL");
+  });
+
   it("rejects a new scholar row with an unrecognized university", async () => {
     const data = csvBuffer(
       "scholarId,fullName,country,cohort,university,academicProgram,gender\n" +

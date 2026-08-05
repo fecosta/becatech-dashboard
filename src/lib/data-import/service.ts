@@ -27,6 +27,16 @@ const OPERATOR_ALIASES: Record<string, string> = {
   FATV: OPERATOR_NAMES.EARLY_SUPPORT_COLOMBIA, // "Fundación Antivirus para la Deserción"
 };
 
+/** Approved university name aliases (source label → canonical University.name already in the
+ *  catalog). The catalog was hand-seeded with abbreviations (UDEA, UNAL) while the sheet spells the
+ *  full names — map them so a naming variant resolves to the existing row instead of rejecting the
+ *  scholar (university is a required FK). Controlled list only; never fuzzy-matched or auto-created.
+ *  Add a line here when a new sheet spelling appears rather than duplicating a catalog row. */
+const UNIVERSITY_ALIASES: Record<string, string> = {
+  "Universidad de Antioquia": "UDEA",
+  "Universidad Nacional": "UNAL",
+};
+
 async function loadValidationContext(): Promise<ValidationContext> {
   const [scholars, controls, universities, operators] = await Promise.all([
     prisma.scholar.findMany({ select: { scholarId: true, fullName: true, country: true } }),
@@ -45,6 +55,11 @@ async function loadValidationContext(): Promise<ValidationContext> {
   }
   const universityMap = new Map<string, string>();
   for (const u of universities) universityMap.set(u.name.trim().toLowerCase(), u.id);
+  // Register approved aliases → the same catalog id (e.g. "Universidad de Antioquia" → UDEA row).
+  for (const [alias, canonical] of Object.entries(UNIVERSITY_ALIASES)) {
+    const id = universityMap.get(canonical.trim().toLowerCase());
+    if (id) universityMap.set(alias.trim().toLowerCase(), id);
+  }
   const operatorMap = new Map<string, string>();
   for (const o of operators) operatorMap.set(o.name.trim().toLowerCase(), o.id);
   // Approved operator aliases: the source sheet uses short codes that don't equal the seeded
