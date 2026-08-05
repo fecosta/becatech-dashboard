@@ -41,6 +41,19 @@ export default async function ImportDetailPage({ params }: { params: Promise<{ i
     (!user || canManageImports(user)) && batch.status === "COMMITTED" && !batch.rolledBackAt;
   const errors = Array.isArray(batch.errorReport) ? (batch.errorReport as StoredError[]) : [];
 
+  // Inserted vs updated is derived from insertedRefs (the ids of rows this batch created — every
+  // commit path records inserts there): inserted = its total length, updated = the rest of the
+  // applied rows. Zero for a not-yet-committed batch, which is accurate (nothing applied yet).
+  const insertedRefs =
+    batch.insertedRefs && typeof batch.insertedRefs === "object" && !Array.isArray(batch.insertedRefs)
+      ? (batch.insertedRefs as Record<string, unknown>)
+      : {};
+  const insertedCount = Object.values(insertedRefs).reduce<number>(
+    (sum, ids) => sum + (Array.isArray(ids) ? ids.length : 0),
+    0,
+  );
+  const updatedCount = Math.max(0, batch.successRows - insertedCount);
+
   return (
     <div>
       <Link href="/dashboard/admin/imports" className="text-xs text-muted hover:underline">
@@ -63,10 +76,12 @@ export default async function ImportDetailPage({ params }: { params: Promise<{ i
         {batch.triggeredRiskRecompute ? <Badge tone="green">Risk recomputed</Badge> : null}
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <KpiCard label="Total rows" value={batch.totalRows} />
-        <KpiCard label="Applied" value={batch.successRows} />
-        <KpiCard label="With errors" value={batch.errorRows} />
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <KpiCard label="Rows received" value={batch.totalRows} />
+        <KpiCard label="Inserted" value={insertedCount} />
+        <KpiCard label="Updated" value={updatedCount} />
+        <KpiCard label="Rejected" value={batch.errorRows} />
+        <KpiCard label="Risk recompute" value={batch.triggeredRiskRecompute ? "Yes" : "No"} />
         <KpiCard label="Status" value={batch.rolledBackAt ? "Rolled back" : IMPORT_STATUS_LABEL[batch.status] ?? batch.status} />
       </div>
 
