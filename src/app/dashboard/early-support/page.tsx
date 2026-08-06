@@ -73,7 +73,11 @@ export default async function EarlySupportPage({
   const behind = pace.progressStatusDistribution.SLIGHTLY_BEHIND + pace.progressStatusDistribution.BEHIND;
   const critical = pace.progressStatusDistribution.CRITICAL_DELAY;
 
-  const riskTotal = RISK_ORDER.reduce((sum, l) => sum + risk.distribution[l], 0);
+  // Denominator for the level percentages = active, ≠Cohorte-2024 scholars (the program's official
+  // denominator), so "No risk" reads e.g. 63% of all eligible scholars — not 63% of only the
+  // classified ones. `riskClassified` (levels sum) just gates whether there's a donut to show.
+  const riskTotal = risk.assessedScholarCount;
+  const riskClassified = RISK_ORDER.reduce((sum, l) => sum + risk.distribution[l], 0);
   const donutData = RISK_ORDER.map((l) => ({
     name: RISK_LEVEL_LABEL[l],
     value: risk.distribution[l],
@@ -155,7 +159,7 @@ export default async function EarlySupportPage({
       <div className="mt-6">
         <SectionTitle>Scholars Status</SectionTitle>
         <Card>
-          {riskTotal === 0 ? (
+          {riskClassified === 0 ? (
             <p className="text-sm text-muted">No risk data for the current selection.</p>
           ) : (
             <div className="flex flex-wrap items-center gap-6">

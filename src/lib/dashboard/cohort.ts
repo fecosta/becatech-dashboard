@@ -8,3 +8,11 @@ export function latestCohort(cohorts: (string | null | undefined)[]): string | n
   if (cleaned.length === 0) return null;
   return cleaned.reduce((a, b) => (a.localeCompare(b, undefined, { numeric: true }) >= 0 ? a : b));
 }
+
+/**
+ * Cohort 2024 is excluded from the program's official risk/retention denominators (per the sheet's
+ * `<>Cohorte 2024` filter). Matches any cohort value carrying "2024" ("Cohorte 2024 COL", "2024", …).
+ */
+export function isCohort2024(cohort: string | null | undefined): boolean {
+  return !!cohort && cohort.includes("2024");
+}

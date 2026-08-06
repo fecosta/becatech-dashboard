@@ -40,7 +40,8 @@ import type {
   UnitEconomicsResult,
   UniversityRiskRow,
 } from "./types";
-import { latestCohort } from "./cohort";
+import { isCohort2024, latestCohort } from "./cohort";
+import { latestProgramMonth, programMonthNumber } from "./program-month";
 import { describeFreshness, type Freshness, syncAutomationPaused } from "./freshness";
 import { normalizeGender, type NormalizedGender } from "./gender";
 
@@ -114,9 +115,20 @@ function financialWhere(filters: DashboardFilters): Prisma.FinancialInputWhereIn
   };
 }
 
+// The "current period" is the latest PROGRAM month (MES n) on record — ordered by number, not
+// lexically ("MES 10" > "MES 9"). Risk is stored per program month; there is no calendar period.
 async function getCurrentPeriod(): Promise<string> {
-  const latest = await prisma.riskAssessment.aggregate({ _max: { period: true } });
-  return latest._max.period ?? "2026-06";
+  const rows = await prisma.riskAssessment.findMany({ select: { period: true }, distinct: ["period"] });
+  return latestProgramMonth(rows.map((r) => r.period)) ?? "MES 1";
+}
+
+/**
+ * Whether a scholar counts toward the program's official risk/retention denominators: ACTIVE and
+ * NOT in Cohorte 2024 (the sheet's `BECARIO(A) ACTIVO` + `<>Cohorte 2024`). Distribution KPIs count
+ * only these; the directory/profile still show every scholar.
+ */
+function riskEligible(s: { programStatus: ProgramStatus; cohort: string }): boolean {
+  return s.programStatus === ProgramStatus.ACTIVE && !isCohort2024(s.cohort);
 }
 
 /**
@@ -152,7 +164,9 @@ export async function getFilterOptions(): Promise<FilterOptions> {
   };
 }
 
-/** Each scholar's current risk = latest assessment with period <= currentPeriod. */
+// Each scholar's current risk = their classification for EXACTLY the selected program month —
+// matching the sheet, which counts the chosen month's column (a scholar with no report that month
+// is simply unclassified that month, not carried forward from an earlier one).
 async function currentRiskByScholar(
   scholarIds: string[],
   currentPeriod: string,
@@ -160,10 +174,9 @@ async function currentRiskByScholar(
   const map = new Map<string, RiskAssessment>();
   if (scholarIds.length === 0) return map;
   const rows = await prisma.riskAssessment.findMany({
-    where: { scholarId: { in: scholarIds }, period: { lte: currentPeriod } },
-    orderBy: { period: "asc" },
+    where: { scholarId: { in: scholarIds }, period: currentPeriod },
   });
-  for (const row of rows) map.set(row.scholarId, row); // ascending → last write is latest
+  for (const row of rows) map.set(row.scholarId, row);
   return map;
 }
 
@@ -249,12 +262,17 @@ export async function getExecutiveOverview(
     scholars.map((s) => ({ gpa: latestTerms.get(s.scholarId)?.accumulatedGpa, country: s.country })),
   );
 
-  // Risk distribution + scholars needing attention.
+  // Risk distribution (over active, ≠Cohorte-2024 scholars — the sheet's denominator) + scholars
+  // needing attention. `assessedScholars` is that denominator; percentages are level/denominator.
   const riskDistribution = emptyRiskDistribution();
+  let assessedScholars = 0;
   let needingAttention = 0;
   for (const s of scholars) {
     const cur = riskMap.get(s.scholarId);
-    if (cur) riskDistribution[cur.globalRiskLevel] += 1;
+    if (riskEligible(s)) {
+      assessedScholars += 1;
+      if (cur) riskDistribution[cur.globalRiskLevel] += 1;
+    }
     const active = s.programStatus === ProgramStatus.ACTIVE;
     const highRisk = (cur?.globalRiskValue ?? 0) >= 2;
     const missing = active && (!checkinSet.has(s.scholarId) || !mentorSet.has(s.scholarId));
@@ -311,6 +329,7 @@ export async function getExecutiveOverview(
     participationRate: round2(participationRate),
     scholarsNeedingAttention: needingAttention,
     riskDistribution,
+    assessedScholars,
     totalDirectCostUsd,
     costPerActiveScholarUsd: counts.ACTIVE ? round2(totalDirectCostUsd / counts.ACTIVE) : 0,
     costPerRetainedScholarUsd: retained ? round2(totalDirectCostUsd / retained) : 0,
@@ -421,7 +440,7 @@ export async function getRiskAlerts(
 
   for (const s of scholars) {
     const cur = riskMap.get(s.scholarId);
-    if (cur) distribution[cur.globalRiskLevel] += 1;
+    if (cur && riskEligible(s)) distribution[cur.globalRiskLevel] += 1;
 
     const active = s.programStatus === ProgramStatus.ACTIVE;
     const missingCheckin = active && !checkinSet.has(s.scholarId);
@@ -490,8 +509,13 @@ export async function getRiskStageSummary(
   let improved = 0;
   let worsened = 0;
   let insufficientDataCount = 0;
+  // Denominator = active, ≠Cohorte-2024 scholars in scope (the sheet's denominator). Percentages
+  // are level/assessedScholarCount; the unclassified remainder is implicit ("no report this month").
+  let assessedScholarCount = 0;
 
   for (const s of scholars) {
+    if (!riskEligible(s)) continue;
+    assessedScholarCount += 1;
     const cur = riskMap.get(s.scholarId);
     if (!cur) continue;
     distribution[cur.globalRiskLevel] += 1;
@@ -506,6 +530,7 @@ export async function getRiskStageSummary(
   return {
     currentPeriod,
     distribution,
+    assessedScholarCount,
     criticalHighCount: distribution.RIESGO_ALTO + distribution.CRITICO,
     improved,
     worsened,
@@ -531,6 +556,7 @@ export async function getUniversityRiskBreakdown(
     }
   >();
   for (const s of scholars) {
+    if (!riskEligible(s)) continue; // per-university mix over active, ≠Cohorte-2024 scholars
     let entry = byUniversity.get(s.universityId);
     if (!entry) {
       entry = {
@@ -570,7 +596,8 @@ export async function getMonthlyRiskTrend(
   filters: DashboardFilters = {},
 ): Promise<MonthlyRiskTrendPoint[]> {
   const { scholars } = await loadScope(filters);
-  const scholarIds = scholars.map((s) => s.scholarId);
+  // Trend over active, ≠Cohorte-2024 scholars (the risk denominator).
+  const scholarIds = scholars.filter(riskEligible).map((s) => s.scholarId);
   if (scholarIds.length === 0) return [];
 
   const rows = await prisma.riskAssessment.findMany({
@@ -592,7 +619,8 @@ export async function getMonthlyRiskTrend(
       period,
       mediumPlusPct: total ? round2((mediumPlusByPeriod.get(period) ?? 0) / total) : 0,
     }))
-    .sort((a, b) => a.period.localeCompare(b.period));
+    // Program months order by number, not lexically ("MES 2" before "MES 10").
+    .sort((a, b) => (programMonthNumber(a.period) ?? 0) - (programMonthNumber(b.period) ?? 0));
 }
 
 /** Scholar list for the directory/search page (current risk + latest GPA). */

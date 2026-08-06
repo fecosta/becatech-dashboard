@@ -82,6 +82,10 @@ export interface ExecutiveOverview {
   participationRate: number;
   scholarsNeedingAttention: number;
   riskDistribution: RiskDistribution;
+  /** Active, ≠Cohorte-2024 scholars in scope — the denominator for risk-distribution percentages
+   *  (the sheet's `BECARIO(A) ACTIVO` + `<>Cohorte 2024`). Levels sum to ≤ this; the rest is
+   *  unclassified this month. */
+  assessedScholars: number;
   totalDirectCostUsd: number;
   costPerActiveScholarUsd: number;
   costPerRetainedScholarUsd: number;
@@ -127,6 +131,9 @@ export interface RiskAlertsResult {
 export interface RiskStageSummary {
   currentPeriod: string;
   distribution: RiskDistribution;
+  /** Active, ≠Cohorte-2024 scholars in scope — the denominator for the distribution percentages
+   *  (the sheet's official denominator). Levels sum to ≤ this; the remainder is unclassified. */
+  assessedScholarCount: number;
   /** High + Critical scholars (globalRiskValue ≥ 3) — the dark-callout number. */
   criticalHighCount: number;
   /** Scholars whose current risk improved (riskChange < 0) vs. worsened (> 0), month over month. */
