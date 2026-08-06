@@ -18,6 +18,14 @@ export function latestProgramMonth(periods: (string | null | undefined)[]): stri
   return best == null ? null : `MES ${best}`;
 }
 
+/** Compare two period labels chronologically: program months by number, else by string. */
+export function comparePeriods(a: string, b: string): number {
+  const na = programMonthNumber(a);
+  const nb = programMonthNumber(b);
+  if (na != null && nb != null) return na - nb;
+  return a.localeCompare(b);
+}
+
 /** Sort program-month labels ascending by number (non-MES values sort last, stably). */
 export function sortProgramMonths(periods: string[]): string[] {
   return [...periods].sort((a, b) => {

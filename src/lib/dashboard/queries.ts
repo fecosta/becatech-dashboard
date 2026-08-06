@@ -41,7 +41,7 @@ import type {
   UniversityRiskRow,
 } from "./types";
 import { isCohort2024, latestCohort } from "./cohort";
-import { latestProgramMonth, programMonthNumber } from "./program-month";
+import { comparePeriods, latestProgramMonth, programMonthNumber } from "./program-month";
 import { describeFreshness, type Freshness, syncAutomationPaused } from "./freshness";
 import { normalizeGender, type NormalizedGender } from "./gender";
 
@@ -166,19 +166,22 @@ export async function getFilterOptions(): Promise<FilterOptions> {
   };
 }
 
-// Each scholar's current risk = their classification for EXACTLY the selected program month —
-// matching the sheet, which counts the chosen month's column (a scholar with no report that month
-// is simply unclassified that month, not carried forward from an earlier one).
+// Each scholar's current risk = their most recent classification at or before the selected period.
+// Mentor reports are spread across months, so "latest ≤ current" shows every scholar's standing
+// (not just those who happened to report in the newest month). Period ordering is program-month
+// aware (MES n by number; calendar months as strings).
 async function currentRiskByScholar(
   scholarIds: string[],
   currentPeriod: string,
 ): Promise<Map<string, RiskAssessment>> {
   const map = new Map<string, RiskAssessment>();
   if (scholarIds.length === 0) return map;
-  const rows = await prisma.riskAssessment.findMany({
-    where: { scholarId: { in: scholarIds }, period: currentPeriod },
-  });
-  for (const row of rows) map.set(row.scholarId, row);
+  const rows = await prisma.riskAssessment.findMany({ where: { scholarId: { in: scholarIds } } });
+  for (const row of rows) {
+    if (comparePeriods(row.period, currentPeriod) > 0) continue; // later than the selected period
+    const cur = map.get(row.scholarId);
+    if (!cur || comparePeriods(row.period, cur.period) > 0) map.set(row.scholarId, row);
+  }
   return map;
 }
 

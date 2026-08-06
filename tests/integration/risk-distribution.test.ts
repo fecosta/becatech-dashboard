@@ -73,8 +73,8 @@ describe("risk distribution (MES period + active-≠Cohorte-2024 denominator)", 
     expect(summary.criticalHighCount).toBe(1); // High + Critical = the one RIESGO_ALTO
   });
 
-  it("counts a scholar's EXACT selected-month classification, not a carried-forward one", async () => {
-    // BT-CO-001 has a MES 1 classification but no MES 2 → at MES 2 it's unclassified (not counted).
+  it("carries each scholar's most recent classification forward to a later current period", async () => {
+    // BT-CO-001 has a MES 1 classification but no MES 2 → at MES 2 its latest (MES 1) still counts.
     await addRisk("BT-CO-001", "MES 1", "RIESGO_ALTO");
     await addScholar("BT-CO-003", "2025", "ACTIVE");
     await addRisk("BT-CO-003", "MES 2", "SIN_RIESGO"); // makes MES 2 the current period
@@ -83,7 +83,7 @@ describe("risk distribution (MES period + active-≠Cohorte-2024 denominator)", 
     expect(summary.currentPeriod).toBe("MES 2");
     expect(summary.assessedScholarCount).toBe(2); // both active non-2024
     expect(summary.distribution.SIN_RIESGO).toBe(1); // BT-CO-003 at MES 2
-    expect(summary.distribution.RIESGO_ALTO).toBe(0); // BT-CO-001's MES 1 is NOT carried into MES 2
+    expect(summary.distribution.RIESGO_ALTO).toBe(1); // BT-CO-001's MES 1 carried forward
   });
 });
 
