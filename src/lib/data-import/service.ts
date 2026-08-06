@@ -5,7 +5,6 @@ import type { DataImportSourceType } from "../../generated/prisma/enums";
 import { OPERATOR_NAMES } from "../academic/operator-assignment";
 import { runDataQualityScan } from "../data-quality/checks";
 import { prisma } from "../db";
-import { recomputeRiskForScholars } from "../risk/recompute";
 import { legacyAdapter } from "./adapters/legacy";
 import { normKey } from "./adapters/shared";
 import { templateAdapter } from "./adapters/template";
@@ -154,10 +153,10 @@ export async function commitImportBatch(batchId: string): Promise<CommitOutcome>
     const commit = await commitValidated(validated, batchId);
     await runDataQualityScan({ persist: true });
 
-    let recomputed = 0;
-    if (commit.touchedRiskEntities) {
-      recomputed = await recomputeRiskForScholars(commit.riskScholarIds, commit.riskPeriods);
-    }
+    // Risk is no longer derived — global risk is INGESTED from the SUPPORT ACTIVITY LOG
+    // (MONTHLY_STATUS → RiskAssessment). No import recomputes risk anymore; the derive engine
+    // (src/lib/risk/derive.ts, recompute.ts) is retained but intentionally unwired here.
+    const recomputed = 0;
 
     await prisma.dataImportBatch.update({
       where: { id: batchId },
@@ -165,7 +164,7 @@ export async function commitImportBatch(batchId: string): Promise<CommitOutcome>
         status: "COMMITTED",
         successRows: commit.successRows,
         insertedRefs: commit.insertedRefs as Prisma.InputJsonValue,
-        triggeredRiskRecompute: commit.touchedRiskEntities,
+        triggeredRiskRecompute: false,
       },
     });
 

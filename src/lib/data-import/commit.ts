@@ -10,6 +10,8 @@
 // three entities (MONTHLY_CHECKIN/SCHOLAR_REQUEST/FINANCIAL_INPUT) aren't part of that sync and
 // haven't shown this problem at their typical volumes, so they keep the simpler per-row logic.
 import { randomUUID } from "crypto";
+import type { Prisma } from "../../generated/prisma/client";
+import { mentorReportToRisk } from "../risk/from-mentor-report";
 import { bulkUpsert } from "./bulk-upsert";
 import { prisma } from "../db";
 import type { ImportEntity, ValidatedBatch } from "./types";
@@ -104,12 +106,44 @@ export async function commitValidated(
         }));
         const results = await bulkUpsert(tx, "MentorReport", "id", ["submissionId"], rows);
         for (const r of results) if (r.wasInserted) recordCreate("MentorReport", r.id);
+
+        // Ingest the authoritative risk from each report's GLOBAL STATUS (col Y) → RiskAssessment,
+        // keyed by the program month (MES n). Dedupe by [scholarId, period] — a scholar may have >1
+        // report in a MES; keep the last, since bulkUpsert can't touch the same conflict key twice
+        // in one statement. Unclassified reports (blank/unparseable GLOBAL STATUS, non-MES month)
+        // map to null and are skipped.
+        const riskByKey = new Map<string, Prisma.RiskAssessmentUncheckedCreateInput>();
         for (const m of validated.MENTOR_REPORT) {
-          riskScholars.add(m.scholarId);
-          if (m.reportingMonth) riskPeriods.add(m.reportingMonth);
+          const risk = mentorReportToRisk(m);
+          if (risk) riskByKey.set(`${risk.scholarId}::${risk.period}`, risk);
         }
-        touchedRiskEntities = true;
+        if (riskByKey.size > 0) {
+          const riskRows = [...riskByKey.values()].map((r) => ({
+            ...r,
+            id: randomUUID(),
+            updatedAt: new Date(),
+          }));
+          const riskRes = await bulkUpsert(tx, "RiskAssessment", "id", ["scholarId", "period"], riskRows);
+          for (const r of riskRes) if (r.wasInserted) recordCreate("RiskAssessment", r.id);
+        }
         successRows += validated.MENTOR_REPORT.length;
+      }
+
+      if (validated.MONTHLY_STATUS.length > 0) {
+        // Manual risk-classification import → RiskAssessment. Upsert on the natural key
+        // [scholarId, period]; dedupe first (bulkUpsert can't touch the same conflict key twice in
+        // one statement). RiskAssessment has no importBatchId, so these rows aren't
+        // insert-rollback-tracked (acceptable: they're a mirror of the sheet, re-set on next sync).
+        const byKey = new Map<string, (typeof validated.MONTHLY_STATUS)[number]>();
+        for (const r of validated.MONTHLY_STATUS) byKey.set(`${r.scholarId}::${r.period}`, r);
+        const rows = [...byKey.values()].map((r) => ({
+          ...r,
+          id: randomUUID(),
+          updatedAt: new Date(),
+        }));
+        const results = await bulkUpsert(tx, "RiskAssessment", "id", ["scholarId", "period"], rows);
+        for (const r of results) if (r.wasInserted) recordCreate("RiskAssessment", r.id);
+        successRows += rows.length;
       }
 
       if (validated.SUPPORT_ACTIVITY.length > 0) {

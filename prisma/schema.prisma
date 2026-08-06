@@ -128,6 +128,10 @@ enum DataImportEntity {
   ACADEMIC_TERM
   MONTHLY_CHECKIN
   MENTOR_REPORT
+  // Per-scholar per-program-month risk classification ingested from the SUPPORT ACTIVITY LOG's
+  // stored (sheet-computed) values → RiskAssessment. This is the authoritative risk source; global
+  // risk is no longer derived. See src/lib/data-import/validate.ts (buildMonthlyStatus).
+  MONTHLY_STATUS
   SUPPORT_ACTIVITY
   SCHOLAR_REQUEST
   FINANCIAL_INPUT
@@ -342,9 +346,10 @@ model MentorReport {
   highlights                 String?
   academicProgressNotes      String?
   nextSteps                  String?
-  // The mentor's own self-reported global assessment (GLOBAL STATUS on the sheet). Quarantined by
-  // design: global risk is always derived (src/lib/risk/derive.ts, recompute.ts), never uploaded —
-  // this field must never feed into RiskAssessment.globalRiskValue/globalRiskLevel.
+  // GLOBAL STATUS (col Y on the sheet): the program's computed per-report risk classification
+  // (RIESGO …). This is the AUTHORITATIVE risk source — on commit it maps to a RiskAssessment
+  // (src/lib/risk/from-mentor-report.ts), keyed by the program month. Global risk is ingested, not
+  // derived.
   mentorReportedGlobalStatus String?
   submissionId               String    @unique
   rawSubmissionId            String?

@@ -107,16 +107,30 @@ export const TEMPLATE_COLUMNS: Record<ImportEntity, FieldDef[]> = {
     { field: "workshops", type: "int" },
     { field: "highlights", type: "string" },
     { field: "academicProgressNotes", type: "string" },
-    // The mentor's own self-reported global assessment (GLOBAL STATUS on the sheet) — quarantined
-    // by design, never consulted by src/lib/risk/derive.ts or recompute.ts.
+    // GLOBAL STATUS (col Y): the authoritative per-report risk classification → RiskAssessment
+    // (src/lib/risk/from-mentor-report.ts). Ingested, not derived.
     { field: "mentorReportedGlobalStatus", type: "string" },
+    { field: "country", type: "string", enumCategory: "country" },
+    { field: "cohort", type: "string" },
+    { field: "university", type: "string" },
+  ],
+  // Per-scholar per-program-month risk classification, ingested verbatim from the SUPPORT ACTIVITY
+  // LOG (sheet-computed values). `globalRisk` is the authoritative headline (SIN RIESGO … RIESGO
+  // CRÍTICO); the two axes are supporting detail (SIN ALERTAS/BAJO/MEDIO/ALTO/CRÍTICO). Levels are
+  // validated against a controlled Spanish→RiskLevel map in validate.ts, not an enumCategory.
+  MONTHLY_STATUS: [
+    { field: "scholarId", type: "string", required: true, example: "BT-CO-001" },
+    { field: "period", type: "string", required: true, example: "MES 1" },
+    { field: "globalRisk", type: "string", required: true, example: "SIN RIESGO" },
+    { field: "academicAxis", type: "string", example: "SIN ALERTAS" },
+    { field: "psychosocialAxis", type: "string", example: "BAJO" },
     { field: "country", type: "string", enumCategory: "country" },
     { field: "cohort", type: "string" },
     { field: "university", type: "string" },
   ],
   SUPPORT_ACTIVITY: [
     { field: "scholarId", type: "string", required: true, example: "BT-CO-001" },
-    { field: "period", type: "string", required: true, example: "2026-06" },
+    { field: "period", type: "string", required: true, example: "MES 1" },
     { field: "activityType", type: "string", required: true, enumCategory: "activity_type", example: "INDIVIDUAL_TUTORING" },
     { field: "activityCount", type: "int", example: "2" },
     { field: "attendanceStatus", type: "string" },

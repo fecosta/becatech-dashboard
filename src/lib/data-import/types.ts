@@ -50,6 +50,8 @@ export interface ValidatedBatch {
   ACADEMIC_TERM: Prisma.AcademicTermUncheckedCreateInput[];
   MONTHLY_CHECKIN: Prisma.MonthlyCheckinUncheckedCreateInput[];
   MENTOR_REPORT: Prisma.MentorReportUncheckedCreateInput[];
+  // Ingested per-scholar per-month risk classification (SUPPORT ACTIVITY LOG → RiskAssessment).
+  MONTHLY_STATUS: Prisma.RiskAssessmentUncheckedCreateInput[];
   SUPPORT_ACTIVITY: Prisma.SupportActivityUncheckedCreateInput[];
   SCHOLAR_REQUEST: Prisma.ScholarRequestUncheckedCreateInput[];
   FINANCIAL_INPUT: Prisma.FinancialInputUncheckedCreateInput[];
@@ -83,6 +85,7 @@ export const IMPORT_ENTITY_ORDER: ImportEntity[] = [
   "ACADEMIC_TERM",
   "MONTHLY_CHECKIN",
   "MENTOR_REPORT",
+  "MONTHLY_STATUS",
   "SUPPORT_ACTIVITY",
   "SCHOLAR_REQUEST",
   "FINANCIAL_INPUT",
@@ -94,6 +97,7 @@ export function emptyValidatedBatch(): ValidatedBatch {
     ACADEMIC_TERM: [],
     MONTHLY_CHECKIN: [],
     MENTOR_REPORT: [],
+    MONTHLY_STATUS: [],
     SUPPORT_ACTIVITY: [],
     SCHOLAR_REQUEST: [],
     FINANCIAL_INPUT: [],

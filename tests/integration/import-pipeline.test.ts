@@ -4,7 +4,6 @@ import {
   createImportBatch,
   rollbackImportBatch,
 } from "@/lib/data-import/service";
-import { getRiskStageSummary } from "@/lib/dashboard/queries";
 import { prisma } from "@/lib/db";
 import { csvBuffer, resetDb, seedFixture, seedOperatorFixture, xlsxBuffer } from "./helpers";
 
@@ -40,7 +39,52 @@ describe("import pipeline (integration)", () => {
     expect(batch?.status).toBe("COMMITTED");
   });
 
-  it("check-in import recomputes risk for that month", async () => {
+  it("ingests the stored monthly risk classification into RiskAssessment (MONTHLY_STATUS)", async () => {
+    // Global risk is now INGESTED from the SUPPORT ACTIVITY LOG (its sheet-computed classification),
+    // not derived. A MONTHLY_STATUS row maps the Spanish levels straight onto RiskAssessment.
+    const data = csvBuffer(
+      "scholarId,period,globalRisk,academicAxis,psychosocialAxis\n" +
+        "BT-CO-001,MES 1,RIESGO ALTO,ALTO,SIN ALERTAS\n",
+    );
+    const { batchId, result } = await createImportBatch({
+      data,
+      filename: "monthly-status.csv",
+      sourceType: "TEMPLATE",
+      entity: "MONTHLY_STATUS",
+      uploadedById: uploaderId,
+    });
+    expect(result.errorRows).toBe(0);
+    const { recomputed } = await commitImportBatch(batchId);
+    expect(recomputed).toBe(0); // ingested, never recomputed
+
+    const risk = await prisma.riskAssessment.findUnique({
+      where: { scholarId_period: { scholarId: "BT-CO-001", period: "MES 1" } },
+    });
+    expect(risk?.source).toBe("sheet");
+    expect(risk?.globalRiskLevel).toBe("RIESGO_ALTO");
+    expect(risk?.globalRiskValue).toBe(3);
+    expect(risk?.academicRiskLevel).toBe("RIESGO_ALTO"); // "ALTO" axis → RIESGO_ALTO
+    expect(risk?.psychosocialRiskLevel).toBe("SIN_RIESGO"); // "SIN ALERTAS" → SIN_RIESGO
+    expect(risk?.assessmentComplete).toBe(true); // the sheet classified it → complete
+    expect(risk?.alertType).toBe("ACADEMIC"); // academic axis is the sole driver of the max
+  });
+
+  it("rejects a monthly-status row with an unrecognized risk classification", async () => {
+    const data = csvBuffer("scholarId,period,globalRisk\nBT-CO-001,MES 1,TOTALMENTE PERDIDO\n");
+    const { result } = await createImportBatch({
+      data,
+      filename: "monthly-status.csv",
+      sourceType: "TEMPLATE",
+      entity: "MONTHLY_STATUS",
+      uploadedById: uploaderId,
+    });
+    expect(result.successRows).toBe(0);
+    expect(result.errors.find((e) => e.field === "globalRisk")?.message).toContain("TOTALMENTE PERDIDO");
+  });
+
+  it("no import recomputes risk anymore (derived global risk retired)", async () => {
+    // A check-in used to trigger a recompute; now nothing does — risk is ingested from mentor
+    // reports' GLOBAL STATUS (and the manual MONTHLY_STATUS path), never derived.
     const data = csvBuffer("scholarId,reportingMonth,finalStatus\nBT-CO-001,2026-06,En riesgo\n");
     const { batchId } = await createImportBatch({
       data,
@@ -49,40 +93,38 @@ describe("import pipeline (integration)", () => {
       entity: "MONTHLY_CHECKIN",
       uploadedById: uploaderId,
     });
-    const { commit, recomputed } = await commitImportBatch(batchId);
-    expect(commit.touchedRiskEntities).toBe(true);
-    expect(recomputed).toBeGreaterThanOrEqual(1);
-
-    const risk = await prisma.riskAssessment.findUnique({
-      where: { scholarId_period: { scholarId: "BT-CO-001", period: "2026-06" } },
-    });
-    expect(risk?.source).toBe("import-recompute");
-    expect(risk?.psychosocialRiskValue).toBe(3); // "En riesgo" → 3
-
-    // The seed scholar has NO support-activity rows and NO academic term for this period, so both
-    // dimensions are "not assessed" (null) — they must NOT be inferred as 0→4→CRITICO. Global risk
-    // is driven only by the present psychosocial signal (3 = RIESGO_ALTO), never CRITICO, and the
-    // assessment is flagged incomplete so the UI can show "Insufficient Data" instead of a fake 0.
-    expect(risk?.globalRiskValue).toBe(3);
-    expect(risk?.globalRiskLevel).toBe("RIESGO_ALTO");
-    expect(risk?.participationRiskValue).toBe(0); // stored as 0 = did not contribute to the max
-    expect(risk?.assessmentComplete).toBe(false);
-    expect(risk?.missingInputs).toEqual(expect.arrayContaining(["academic", "participation"]));
-    expect(risk?.missingInputs).not.toContain("psychosocial");
-
-    // The stage summary surfaces this as "Insufficient data", kept out of the critical/high count.
-    const summary = await getRiskStageSummary({});
-    expect(summary.insufficientDataCount).toBeGreaterThanOrEqual(1);
-    expect(summary.distribution.CRITICO).toBe(0);
+    const { recomputed } = await commitImportBatch(batchId);
+    expect(recomputed).toBe(0);
+    expect(await prisma.riskAssessment.count()).toBe(0);
   });
 
-  it("derives participation risk from mentor-report activity counts (not the deprecated log)", async () => {
-    // A mentor report with 6 logged activities (3+1+0+0+2) → participation risk 0. Proves
-    // participation now comes from mentor-report counts and is assessed (not the old zero-support
-    // path). No academic term / psychosocial signal → those stay not-assessed.
+  it("a mentor report's GLOBAL STATUS becomes the scholar's risk for that MES (ingested)", async () => {
     const data = csvBuffer(
-      "scholarId,reportingMonth,submissionId,individualTutoring,groupTutoring,individualMentoring,groupMentoring,workshops\n" +
-        "BT-CO-001,2026-06,sub-part-1,3,1,0,0,2\n",
+      "scholarId,reportingMonth,submissionId,mentorReportedGlobalStatus,academicStatus,psychosocialStatus\n" +
+        "BT-CO-001,MES 1,sub-risk-1,RIESGO ALTO,ALTO,SIN ALERTAS\n",
+    );
+    const { batchId } = await createImportBatch({
+      data,
+      filename: "mentor.csv",
+      sourceType: "TEMPLATE",
+      entity: "MENTOR_REPORT",
+      uploadedById: uploaderId,
+    });
+    const { recomputed } = await commitImportBatch(batchId);
+    expect(recomputed).toBe(0); // ingested from GLOBAL STATUS, never recomputed
+
+    const risk = await prisma.riskAssessment.findUnique({
+      where: { scholarId_period: { scholarId: "BT-CO-001", period: "MES 1" } },
+    });
+    expect(risk?.source).toBe("mentor-report");
+    expect(risk?.globalRiskLevel).toBe("RIESGO_ALTO");
+    expect(risk?.academicRiskLevel).toBe("RIESGO_ALTO");
+    expect(risk?.psychosocialRiskLevel).toBe("SIN_RIESGO");
+  });
+
+  it("a mentor report with a blank GLOBAL STATUS writes no risk row (unclassified scholar-month)", async () => {
+    const data = csvBuffer(
+      "scholarId,reportingMonth,submissionId,mentorReportedGlobalStatus\nBT-CO-001,MES 1,sub-norisk-1,\n",
     );
     const { batchId } = await createImportBatch({
       data,
@@ -92,11 +134,8 @@ describe("import pipeline (integration)", () => {
       uploadedById: uploaderId,
     });
     await commitImportBatch(batchId);
-    const risk = await prisma.riskAssessment.findUnique({
-      where: { scholarId_period: { scholarId: "BT-CO-001", period: "2026-06" } },
-    });
-    expect(risk?.participationRiskValue).toBe(0);
-    expect(risk?.missingInputs).not.toContain("participation");
+    expect(await prisma.mentorReport.count({ where: { scholarId: "BT-CO-001" } })).toBe(1); // report kept
+    expect(await prisma.riskAssessment.count()).toBe(0); // but no risk classification
   });
 
   it("legacy wide .xlsx: normalizes into scholar + academic terms", async () => {
@@ -167,49 +206,6 @@ describe("import pipeline (integration)", () => {
     expect(recomputed).toBe(0);
     expect(await prisma.supportActivity.count({ where: { scholarId: "BT-CO-001" } })).toBe(1); // still upserted
     expect(await prisma.riskAssessment.count()).toBe(0); // but risk untouched
-  });
-
-  it("recompute fallback targets the latest real month, never a legacy junk period", async () => {
-    // Seed a corrupted legacy period ("MES 7") alongside a real month ("2026-06"). "MES 7" sorts
-    // lexically ABOVE "2026-06" ('M' > '2'), so a naive max(period) fallback would resurrect it.
-    const base = {
-      academicRiskLevel: "SIN_RIESGO" as const,
-      academicRiskValue: 0,
-      psychosocialRiskLevel: "SIN_RIESGO" as const,
-      psychosocialRiskValue: 0,
-      participationRiskLevel: "SIN_RIESGO" as const,
-      participationRiskValue: 0,
-      globalRiskLevel: "SIN_RIESGO" as const,
-      globalRiskValue: 0,
-      source: "seed",
-    };
-    await prisma.riskAssessment.createMany({
-      data: [
-        { scholarId: "BT-CO-001", period: "MES 7", ...base },
-        { scholarId: "BT-CO-001", period: "2026-06", ...base },
-      ],
-    });
-
-    // An academic-term import contributes no period of its own → recompute falls back to the
-    // scholar's latest existing period, which must be the real month, not the junk label.
-    const data = csvBuffer("scholarId,term,gpa,failedSubjectsCount\nBT-CO-001,2025-1,2.0,2\n");
-    const { batchId } = await createImportBatch({
-      data,
-      filename: "terms.csv",
-      sourceType: "TEMPLATE",
-      entity: "ACADEMIC_TERM",
-      uploadedById: uploaderId,
-    });
-    await commitImportBatch(batchId);
-
-    const real = await prisma.riskAssessment.findUnique({
-      where: { scholarId_period: { scholarId: "BT-CO-001", period: "2026-06" } },
-    });
-    const junk = await prisma.riskAssessment.findUnique({
-      where: { scholarId_period: { scholarId: "BT-CO-001", period: "MES 7" } },
-    });
-    expect(real?.source).toBe("import-recompute"); // real month recomputed
-    expect(junk?.source).toBe("seed"); // junk period left untouched — never resurrected
   });
 
   it("does not recompute risk for financial-only batches", async () => {

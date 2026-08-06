@@ -9,6 +9,8 @@ import type {
   RequestStatus,
 } from "../../generated/prisma/enums";
 import { GPA_SCALE_MAX } from "../academic/gpa-bucket";
+import { parseRiskClassification } from "../risk/classification";
+import { computeAlertType, riskValueFromLevel } from "../risk/risk";
 import { normKey } from "./adapters/shared";
 import { isBadDate, isBadNumber } from "./coerce";
 import { synthSubmissionId } from "./synthkey";
@@ -41,29 +43,6 @@ const gB = (row: CanonicalRow, f: string): boolean | undefined => {
   const v = row.data[f];
   return typeof v === "boolean" ? v : undefined;
 };
-
-/**
- * Coerce a mentor-report reporting month to a real `YYYY-MM` key.
- *
- * The sheet's own "month" field is a free-text label ("MES 1", "Mes 2"…) that cannot serve as a
- * risk period — it broke the current-period logic. Prefer an already-month-shaped raw value
- * (`2026-02` or `2026-02-15` → `2026-02`); otherwise fall back to the session date's month; if
- * neither is usable, return `undefined` (the report simply has no risk period rather than a
- * fabricated one). UTC getters match the adapter's `new Date("YYYY-MM-DD")` (UTC-midnight) parsing.
- */
-export function toReportingMonth(
-  raw: string | undefined,
-  sessionDate: Date | undefined,
-): string | undefined {
-  if (raw) {
-    const m = /^(\d{4})-(\d{1,2})(?:\D|$)/.exec(raw.trim());
-    if (m) return `${m[1]}-${m[2].padStart(2, "0")}`;
-  }
-  if (sessionDate && !Number.isNaN(sessionDate.getTime())) {
-    return `${sessionDate.getUTCFullYear()}-${String(sessionDate.getUTCMonth() + 1).padStart(2, "0")}`;
-  }
-  return undefined;
-}
 
 function checkFields(
   entity: ImportEntity,
@@ -191,8 +170,9 @@ function buildMonthlyCheckin(row: CanonicalRow): Prisma.MonthlyCheckinUncheckedC
 function buildMentorReport(row: CanonicalRow): Prisma.MentorReportUncheckedCreateInput {
   return {
     scholarId: gS(row, "scholarId")!,
-    // Real month (YYYY-MM) for risk periods — derived from the session date, never the "MES n" label.
-    reportingMonth: toReportingMonth(gS(row, "reportingMonth"), gD(row, "sessionDate")),
+    // The program month ("MES 1".."MES 6") from "¿Qué mes reportas?" IS the risk period — it's the
+    // program's real reporting cadence and the key the risk classification is stored against.
+    reportingMonth: gS(row, "reportingMonth"),
     submissionId: gS(row, "submissionId") ?? synthSubmissionId("MENTOR_REPORT", row.data),
     scholarName: gS(row, "scholarName"),
     mentorName: gS(row, "mentorName"),
@@ -220,11 +200,47 @@ function buildMentorReport(row: CanonicalRow): Prisma.MentorReportUncheckedCreat
     workshops: gN(row, "workshops"),
     highlights: gS(row, "highlights"),
     academicProgressNotes: gS(row, "academicProgressNotes"),
-    // Quarantined by design — never read into risk/derive.ts or recompute.ts's mentor select.
+    // GLOBAL STATUS (col Y) — the authoritative risk classification; mapped to a RiskAssessment on
+    // commit (src/lib/risk/from-mentor-report.ts). Ingested, not derived.
     mentorReportedGlobalStatus: gS(row, "mentorReportedGlobalStatus"),
     country: gS(row, "country") as Country | undefined,
     cohort: gS(row, "cohort"),
     university: gS(row, "university"),
+  };
+}
+
+/**
+ * A per-scholar per-program-month risk classification, ingested verbatim from the SUPPORT ACTIVITY
+ * LOG into a RiskAssessment row (`source = "sheet"`). Global risk is the authoritative headline;
+ * the academic/psychosocial axes are stored as supporting detail. Participation is not part of the
+ * sheet's classification, so it stays a non-driver (0). Global validity is enforced pre-switch.
+ */
+function buildMonthlyStatus(row: CanonicalRow): Prisma.RiskAssessmentUncheckedCreateInput {
+  const global = parseRiskClassification(gS(row, "globalRisk"))!; // validated present pre-switch
+  const academic = parseRiskClassification(gS(row, "academicAxis"));
+  const psychosocial = parseRiskClassification(gS(row, "psychosocialAxis"));
+  const academicValue = academic ? riskValueFromLevel(academic) : null;
+  const psychosocialValue = psychosocial ? riskValueFromLevel(psychosocial) : null;
+  return {
+    scholarId: gS(row, "scholarId")!,
+    period: gS(row, "period")!,
+    globalRiskLevel: global,
+    globalRiskValue: riskValueFromLevel(global),
+    academicRiskLevel: academic ?? "SIN_RIESGO",
+    academicRiskValue: academicValue ?? 0,
+    psychosocialRiskLevel: psychosocial ?? "SIN_RIESGO",
+    psychosocialRiskValue: psychosocialValue ?? 0,
+    participationRiskLevel: "SIN_RIESGO",
+    participationRiskValue: 0,
+    // The sheet has classified this scholar-month, so it is a complete assessment (not "Insufficient
+    // Data"). alertType names the driving axis for the UI; participation is not a driver here.
+    assessmentComplete: true,
+    missingInputs: [],
+    alertType: computeAlertType(academicValue, psychosocialValue, null),
+    country: gS(row, "country") as Country | undefined,
+    cohort: gS(row, "cohort"),
+    university: gS(row, "university"),
+    source: "sheet",
   };
 }
 
@@ -392,6 +408,31 @@ export function validateBatch(batch: CanonicalBatch, ctx: ValidationContext): Va
           }
           if (errors.length > before2) continue;
         }
+        if (entity === "MONTHLY_STATUS") {
+          // The global classification is the authoritative headline and is required; the axes are
+          // optional supporting detail. Unrecognized Spanish values are rejected (never guessed).
+          const before2 = errors.length;
+          if (!parseRiskClassification(gS(row, "globalRisk"))) {
+            errors.push({
+              entity,
+              rowNumber: row.rowNumber,
+              field: "globalRisk",
+              message: `Unrecognized risk classification: ${gS(row, "globalRisk") ?? ""}`,
+            });
+          }
+          for (const f of ["academicAxis", "psychosocialAxis"]) {
+            const raw = gS(row, f);
+            if (raw && !parseRiskClassification(raw)) {
+              errors.push({
+                entity,
+                rowNumber: row.rowNumber,
+                field: f,
+                message: `Unrecognized risk classification: ${raw}`,
+              });
+            }
+          }
+          if (errors.length > before2) continue;
+        }
       }
 
       let universityId: string | undefined;
@@ -452,6 +493,9 @@ export function validateBatch(batch: CanonicalBatch, ctx: ValidationContext): Va
           break;
         case "MENTOR_REPORT":
           validated.MENTOR_REPORT.push(buildMentorReport(row));
+          break;
+        case "MONTHLY_STATUS":
+          validated.MONTHLY_STATUS.push(buildMonthlyStatus(row));
           break;
         case "SUPPORT_ACTIVITY":
           validated.SUPPORT_ACTIVITY.push(buildSupportActivity(row));
