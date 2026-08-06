@@ -116,6 +116,8 @@ function buildScholar(
     dateOfBirth: gD(row, "dateOfBirth"),
     mobilePhone: gS(row, "mobilePhone"),
     socioeconomicLevel: gS(row, "socioeconomicLevel"),
+    academicProgress: gS(row, "academicProgress"),
+    currentEnglishLevel: gS(row, "currentEnglishLevel"),
   };
 }
 

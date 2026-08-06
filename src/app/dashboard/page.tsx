@@ -283,8 +283,8 @@ export default async function HomePage({
       <BigTitle>English Level Distribution</BigTitle>
       <Card className="flex items-center justify-between gap-4 p-6">
         <p className="text-sm text-muted">
-          No English-proficiency data exists in the schema yet — this chart will render once a
-          real data source is confirmed.
+          Each scholar&rsquo;s current English level now syncs (shown on the scholar profile). This
+          program-wide distribution chart is a follow-up once levels are populated across scholars.
         </p>
         <ProxyBadge>PENDING</ProxyBadge>
       </Card>

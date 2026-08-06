@@ -255,6 +255,14 @@ export async function getExecutiveOverview(
   const total = scholars.length;
   const retained = counts.ACTIVE + counts.PAUSED + counts.GRADUATED;
 
+  // Persistence/retention = ACTIVE ÷ scholars with a known status, excluding Cohorte 2024 — the
+  // sheet's "Persistence Rate" (its numerator is strictly BECARIO(A) ACTIVO, not +graduated/+paused).
+  // Every scholar in the DB has a status, so the denominator is the in-scope ≠2024 scholars.
+  const retentionEligible = scholars.filter((s) => !isCohort2024(s.cohort));
+  const retentionActive = retentionEligible.filter(
+    (s) => s.programStatus === ProgramStatus.ACTIVE,
+  ).length;
+
   // GPA summary from each scholar's latest accumulated GPA, kept country-aware (Colombia 0–5 vs
   // Peru 0–20 are never blended into one raw mean — see lib/academic/gpa-summary.ts).
   const latestTerms = await latestTermByScholar(ids);
@@ -324,7 +332,7 @@ export async function getExecutiveOverview(
     withdrawnScholars: counts.WITHDRAWN,
     graduatedScholars: counts.GRADUATED,
     pausedScholars: counts.PAUSED,
-    retentionRate: total ? round2(retained / total) : 0,
+    retentionRate: retentionEligible.length ? round2(retentionActive / retentionEligible.length) : 0,
     gpaSummary,
     participationRate: round2(participationRate),
     scholarsNeedingAttention: needingAttention,
@@ -350,12 +358,14 @@ export async function getHomeOverview(filters: DashboardFilters = {}): Promise<H
     peru: active.filter((s) => s.country === Country.PERU).length,
   };
 
-  // Women % among active scholars with a recognized gender (unknown excluded from denominator).
-  const classified = active
-    .map((s) => normalizeGender(s.gender))
-    .filter((g) => g !== "unknown");
-  const womenCount = classified.filter((g) => g === "female").length;
-  const womenPercentage = classified.length ? round2(womenCount / classified.length) : null;
+  // "Active Women %" per the sheet: active women ÷ ALL women (any status) in cohorts 2025/26
+  // (Cohorte 2024 excluded). This is a women-RETENTION metric ("% of women still active"), not a
+  // gender-composition %. (Composition is still available via `genderBreakdown` below.)
+  const women = scholars.filter(
+    (s) => !isCohort2024(s.cohort) && normalizeGender(s.gender) === "female",
+  );
+  const activeWomen = women.filter((s) => s.programStatus === ProgramStatus.ACTIVE).length;
+  const womenPercentage = women.length ? round2(activeWomen / women.length) : null;
 
   // "Selected or latest cohort": honor an active cohort filter, else the latest present.
   const cohort = filters.cohort ?? latestCohort(active.map((s) => s.cohort));
@@ -412,7 +422,7 @@ export async function getHomeOverview(filters: DashboardFilters = {}): Promise<H
   return {
     scholarsByCountry,
     womenPercentage,
-    womenCount,
+    womenCount: activeWomen,
     cohortSpotlight: { cohort, count: cohortCount },
     activeUniversityCount,
     genderBreakdown,
@@ -695,9 +705,26 @@ export async function getAcademicProgress(
   filters: DashboardFilters = {},
   user: CurrentUser | null = null,
 ): Promise<AcademicProgressResult> {
-  const { scholars, riskMap } = await loadScope(filters, scholarAccessWhere(user));
+  const { currentPeriod, scholars, riskMap } = await loadScope(filters, scholarAccessWhere(user));
   const ids = scholars.map((s) => s.scholarId);
   const latestTerms = await latestTermByScholar(ids);
+
+  // "Failed subjects" comes from the MENTOR REPORTS "# at-risk courses" for the current program
+  // month (the sheet's academic-progress source), not the academic-term failed-subjects column.
+  // Max per scholar when a MES has more than one report.
+  const mentorAtRisk = ids.length
+    ? await prisma.mentorReport.findMany({
+        where: { scholarId: { in: ids }, reportingMonth: currentPeriod },
+        select: { scholarId: true, atRiskCoursesCount: true },
+      })
+    : [];
+  const atRiskByScholar = new Map<string, number>();
+  for (const m of mentorAtRisk) {
+    atRiskByScholar.set(
+      m.scholarId,
+      Math.max(atRiskByScholar.get(m.scholarId) ?? 0, m.atRiskCoursesCount ?? 0),
+    );
+  }
 
   const gpaByCountry = new Map<string, number[]>();
   const progressStatusDistribution = emptyProgressDistribution();
@@ -730,7 +757,7 @@ export async function getAcademicProgress(
     const cur = riskMap.get(s.scholarId);
     if (cur) academicRiskDistribution[cur.academicRiskLevel] += 1;
 
-    if ((term?.failedSubjectsCount ?? 0) > 0) scholarsWithFailedSubjects += 1;
+    if ((atRiskByScholar.get(s.scholarId) ?? 0) > 0) scholarsWithFailedSubjects += 1;
 
     if (status === AcademicProgressStatus.BEHIND || status === AcademicProgressStatus.CRITICAL_DELAY) {
       scholarsBehind.push({
@@ -742,7 +769,7 @@ export async function getAcademicProgress(
         latestTerm: term?.term ?? null,
         progressPercentage: term?.progressPercentage ?? null,
         expectedProgressStatus: status,
-        failedSubjectsCount: term?.failedSubjectsCount ?? null,
+        failedSubjectsCount: atRiskByScholar.get(s.scholarId) ?? null,
       });
     }
   }

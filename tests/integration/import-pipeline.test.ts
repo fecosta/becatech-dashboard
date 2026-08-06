@@ -246,6 +246,25 @@ describe("import pipeline (integration)", () => {
     expect(scholar?.university.name).toBe("UNAL");
   });
 
+  it("captures academic progress (col AR) and current English level (col AY) on scholar import", async () => {
+    const data = csvBuffer(
+      "scholarId,fullName,country,cohort,university,academicProgram,gender,academicProgress,currentEnglishLevel\n" +
+        "BT-CO-070,Prog Scholar,COLOMBIA,2025,UNAL,CS,Female,On track,B1\n",
+    );
+    const { batchId, result } = await createImportBatch({
+      data,
+      filename: "scholars.csv",
+      sourceType: "TEMPLATE",
+      entity: "SCHOLAR",
+      uploadedById: uploaderId,
+    });
+    expect(result.errorRows).toBe(0);
+    await commitImportBatch(batchId);
+    const s = await prisma.scholar.findUnique({ where: { scholarId: "BT-CO-070" } });
+    expect(s?.academicProgress).toBe("On track");
+    expect(s?.currentEnglishLevel).toBe("B1");
+  });
+
   it("rejects a new scholar row with an unrecognized university", async () => {
     const data = csvBuffer(
       "scholarId,fullName,country,cohort,university,academicProgram,gender\n" +

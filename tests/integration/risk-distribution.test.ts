@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
-import { getRiskStageSummary } from "@/lib/dashboard/queries";
+import { getExecutiveOverview, getHomeOverview, getRiskStageSummary } from "@/lib/dashboard/queries";
 import { prisma } from "@/lib/db";
 import type { RiskLevel } from "@/generated/prisma/enums";
 import { resetDb, seedFixture } from "./helpers";
@@ -84,5 +84,21 @@ describe("risk distribution (MES period + active-≠Cohorte-2024 denominator)", 
     expect(summary.assessedScholarCount).toBe(2); // both active non-2024
     expect(summary.distribution.SIN_RIESGO).toBe(1); // BT-CO-003 at MES 2
     expect(summary.distribution.RIESGO_ALTO).toBe(0); // BT-CO-001's MES 1 is NOT carried into MES 2
+  });
+});
+
+describe("retention + women% reconciled to the sheet", () => {
+  it("retention = ACTIVE ÷ known-status (excl. 2024); women% = active women ÷ all women (2025/26)", async () => {
+    // seedFixture: BT-CO-001 = ACTIVE, cohort 2025, Female.
+    await addScholar("BT-CO-W", "2025", "WITHDRAWN"); // Female, eligible denominator, not active
+    await addScholar("BT-CO-2024", "Cohorte 2024 COL", "ACTIVE"); // excluded from both metrics
+
+    const exec = await getExecutiveOverview({});
+    // ≠2024 scholars: BT-CO-001 (active) + BT-CO-W (withdrawn) = 2; active = 1 → 0.5
+    expect(exec.retentionRate).toBe(0.5);
+
+    const home = await getHomeOverview({});
+    // women ≠2024: BT-CO-001 + BT-CO-W = 2; active women = 1 → 0.5
+    expect(home.womenPercentage).toBe(0.5);
   });
 });

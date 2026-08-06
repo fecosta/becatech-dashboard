@@ -226,6 +226,12 @@ model Scholar {
   dateOfBirth              DateTime?
   mobilePhone              String?
   socioeconomicLevel       String?
+  // Academic Progress (SCHOLAR GENERAL INFO col AR) — the program's scholar-level academic-progress
+  // label (e.g. on-track / behind). Free text; powers the academic-progress distribution.
+  academicProgress         String?
+  // Current English level (col AY, e.g. "English level - 2026-1"). Stored as the single current
+  // level for now; a per-term EnglishTracking model is a future enhancement.
+  currentEnglishLevel      String?
   importBatchId            String? // last data-import batch that wrote this row (audit + rollback)
   operatorId               String? // delivery partner / operator (Program Ecosystem), nullable
   createdAt                DateTime      @default(now())

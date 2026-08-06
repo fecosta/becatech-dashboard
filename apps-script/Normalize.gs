@@ -290,7 +290,7 @@ var SCHOLAR_HEADER_ = [
   "departmentOrigin", "municipalityOrigin", "currentDepartment", "currentMunicipality",
   "driveFolderUrl", "estimatedGraduationYear", "programDurationYears", "highSchoolGraduationYear",
   "motherEducationLevel", "fatherEducationLevel", "email1", "email2", "dateOfBirth",
-  "mobilePhone", "socioeconomicLevel", "operator",
+  "mobilePhone", "socioeconomicLevel", "operator", "academicProgress", "currentEnglishLevel",
 ];
 var ACADEMIC_TERM_HEADER_ = [
   "scholarId", "term", "gpa", "creditsEnrolled", "enrollmentStatus", "failedSubjectsCount",
@@ -310,10 +310,12 @@ var SCHOLAR_UNMAPPED_HEADERS_ = [
   // only via the manual per-term upload template, where an analyst supplies them deliberately.
   "acumulado", "materias atrasadas", "alternativa de nivelacion", "¿esta nivelando?",
   "plazo maximo", "¿recibio apoyo?", "estado", "total credits", "cumulative - credits",
-  "overdue courses", "academic progress", "cumulative gpa",
-  // English-tracking block (Task 7b) — proposed as a longitudinal EnglishTracking model, not
-  // built this round pending confirmation that these actually repeat per term on the live sheet.
-  "participatin in english program", "english level - 2026-1", "numero de cursos u (requeridos)",
+  "overdue courses", "cumulative gpa",
+  // "academic progress" (col AR) and "english level - <term>" (col AY) are now mapped to
+  // Scholar.academicProgress / Scholar.currentEnglishLevel.
+  // English-tracking block (Task 7b) — the rest are proposed for a longitudinal EnglishTracking
+  // model, not built this round pending confirmation that these actually repeat per term.
+  "participatin in english program", "numero de cursos u (requeridos)",
   "nivel requerido por la u", "nivel de inicio", "nivel (marco)", "¿hizo validacion?",
   "cursos obligatorios", "cursos realizados (a la fecha)", "% avance", "nivel actual 2025-2",
   // Selection-pipeline / financial-input-looking columns — conceptually closer to
@@ -323,7 +325,7 @@ var SCHOLAR_UNMAPPED_HEADERS_ = [
   // Live-sheet Spanish forms of the above (confirmed from the production sync's WARN) + the
   // academic-summary singles and the "año de graduación"/nivel/estado columns we don't map.
   "puntaje", "total de creditos", "gpa acumulado", "% de avance - estudios",
-  "estado avance (act semestral)", "estado final", "edad", "age", "nivel - 2026-1",
+  "estado avance (act semestral)", "estado final", "edad", "age",
   // Per-period activity/alert summary blocks embedded in the scholar sheet (the real source is
   // SUPPORT ACTIVITY LOG) + the Growth-track operator flags — deferred, redundant here.
   "talleres", "sesiones individuales", "tutorias", "psicosocial", "total", "total alertas",
@@ -446,6 +448,10 @@ function normalizeScholarGeneralInfo_(ss) {
   // applicable}. The Spanish category label "Acompañamiento Actual" is NOT the operator column
   // (it's a different column that fails the lookup) — it stays unmapped, see the list above.
   var operatorCol = colIndexOf_(headerKeys, "current operator - support services");
+  var academicProgressCol = colIndexOfAny_(headerKeys, ["academic progress", "progreso academico"]);
+  // English level column is term-suffixed ("English level - 2026-1"); match by prefix so it keeps
+  // resolving as the term rolls over.
+  var currentEnglishLevelCol = colIndexByPrefixAny_(headerKeys, ["english level", "nivel - "]);
   var termColumns = findTermColumns_(headerKeys);
 
   var scholarRows = [];
@@ -485,6 +491,8 @@ function normalizeScholarGeneralInfo_(ss) {
       mobilePhoneCol !== -1 ? row[mobilePhoneCol] : "",
       socioeconomicLevelCol !== -1 ? row[socioeconomicLevelCol] : "",
       operatorCol !== -1 ? row[operatorCol] : "",
+      academicProgressCol !== -1 ? row[academicProgressCol] : "",
+      currentEnglishLevelCol !== -1 ? row[currentEnglishLevelCol] : "",
     ]);
 
     // Pivot repeating per-term columns — a term bucket is created whenever ANY matching column
@@ -516,7 +524,7 @@ function normalizeScholarGeneralInfo_(ss) {
     municipalityOriginCol, currentDepartmentCol, currentMunicipalityCol, driveFolderUrlCol,
     estimatedGraduationYearCol, programDurationYearsCol, highSchoolGraduationYearCol,
     motherEducationLevelCol, fatherEducationLevelCol, email1Col, email2Col, dateOfBirthCol,
-    mobilePhoneCol, socioeconomicLevelCol, operatorCol,
+    mobilePhoneCol, socioeconomicLevelCol, operatorCol, academicProgressCol, currentEnglishLevelCol,
   ].concat(termColumns.map(function (c) { return c.colIndex; }));
   var unrecognized = detectUnrecognizedColumns_(headerKeys, claimedCols, SCHOLAR_UNMAPPED_HEADERS_);
   if (unrecognized.length > 0) {

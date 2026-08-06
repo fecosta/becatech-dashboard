@@ -189,7 +189,13 @@ export async function ScholarProfileView({
               {latestTerm?.term ?? p.currentSemester ?? "Current"} Snapshot
             </div>
             <div className="flex flex-wrap gap-4">
-              <StatChip value={<ProxyBadge>PENDING</ProxyBadge>} label="English Level" />
+              <StatChip
+                value={p.currentEnglishLevel ?? <ProxyBadge>PENDING</ProxyBadge>}
+                label="English Level"
+              />
+              {p.academicProgress ? (
+                <StatChip value={p.academicProgress} label="Academic Progress" />
+              ) : null}
               <StatChip
                 value={
                   latestTerm?.expectedProgressStatus ? (

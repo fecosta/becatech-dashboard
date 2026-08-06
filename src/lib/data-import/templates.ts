@@ -37,6 +37,8 @@ export const TEMPLATE_COLUMNS: Record<ImportEntity, FieldDef[]> = {
     { field: "dateOfBirth", type: "date" },
     { field: "mobilePhone", type: "string" },
     { field: "socioeconomicLevel", type: "string" },
+    { field: "academicProgress", type: "string", example: "On track" }, // col AR
+    { field: "currentEnglishLevel", type: "string", example: "B1" }, // col AY (English level - <term>)
   ],
   ACADEMIC_TERM: [
     { field: "scholarId", type: "string", required: true, example: "BT-CO-001" },
