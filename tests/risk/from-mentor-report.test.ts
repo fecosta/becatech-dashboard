@@ -40,10 +40,18 @@ describe("mentorReportToRisk", () => {
     expect(mentorReportToRisk({ ...base, reportingMonth: "MES 1" })).toBeNull();
   });
 
-  it("returns null when the month is not a program MES label", () => {
-    expect(
-      mentorReportToRisk({ ...base, reportingMonth: "2026-02", mentorReportedGlobalStatus: "SIN RIESGO" }),
-    ).toBeNull();
+  it("keys risk by a calendar-month period as-is when the month isn't a MES label", () => {
+    const r = mentorReportToRisk({
+      ...base,
+      reportingMonth: "2026-02",
+      mentorReportedGlobalStatus: "SIN RIESGO",
+    });
+    expect(r?.period).toBe("2026-02");
+    expect(r?.globalRiskLevel).toBe("SIN_RIESGO");
+  });
+
+  it("returns null only when there is no reporting month at all", () => {
     expect(mentorReportToRisk({ ...base, mentorReportedGlobalStatus: "SIN RIESGO" })).toBeNull();
+    expect(mentorReportToRisk({ ...base, reportingMonth: "  ", mentorReportedGlobalStatus: "SIN RIESGO" })).toBeNull();
   });
 });

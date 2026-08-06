@@ -115,11 +115,13 @@ function financialWhere(filters: DashboardFilters): Prisma.FinancialInputWhereIn
   };
 }
 
-// The "current period" is the latest PROGRAM month (MES n) on record — ordered by number, not
-// lexically ("MES 10" > "MES 9"). Risk is stored per program month; there is no calendar period.
+// The "current period" is the latest month on record. Program months ("MES n") order by number,
+// not lexically; if the sheet reports calendar months instead ("2026-03"), those sort
+// chronologically as strings. Prefer the latest MES, else the latest value.
 async function getCurrentPeriod(): Promise<string> {
   const rows = await prisma.riskAssessment.findMany({ select: { period: true }, distinct: ["period"] });
-  return latestProgramMonth(rows.map((r) => r.period)) ?? "MES 1";
+  const periods = rows.map((r) => r.period);
+  return latestProgramMonth(periods) ?? [...periods].sort().at(-1) ?? "MES 1";
 }
 
 /**
@@ -629,8 +631,13 @@ export async function getMonthlyRiskTrend(
       period,
       mediumPlusPct: total ? round2((mediumPlusByPeriod.get(period) ?? 0) / total) : 0,
     }))
-    // Program months order by number, not lexically ("MES 2" before "MES 10").
-    .sort((a, b) => (programMonthNumber(a.period) ?? 0) - (programMonthNumber(b.period) ?? 0));
+    // Program months order by number ("MES 2" before "MES 10"); calendar months sort as strings.
+    .sort((a, b) => {
+      const na = programMonthNumber(a.period);
+      const nb = programMonthNumber(b.period);
+      if (na != null && nb != null) return na - nb;
+      return a.period.localeCompare(b.period);
+    });
 }
 
 /** Scholar list for the directory/search page (current risk + latest GPA). */

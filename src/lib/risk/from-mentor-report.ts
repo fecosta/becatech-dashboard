@@ -22,14 +22,18 @@ export function programMonthKey(month: string | null | undefined): string | null
 
 /**
  * Map a built MentorReport create-input to a RiskAssessment create-input, or `null` when the report
- * carries no usable classification: a blank/unrecognized GLOBAL STATUS or a non-`MES n` month means
- * the scholar-month is simply unclassified (not counted), matching the sheet.
+ * carries no usable classification: a blank/unrecognized GLOBAL STATUS, or no reporting month at
+ * all, means the scholar-month is simply unclassified (not counted).
+ *
+ * The period is the report's month: a canonical "MES n" when it's a program-month label, otherwise
+ * the month value as-is (some sheets report a calendar month like "2026-03"). Either keys risk fine.
  */
 export function mentorReportToRisk(
   r: Prisma.MentorReportUncheckedCreateInput,
 ): Prisma.RiskAssessmentUncheckedCreateInput | null {
   const global = parseRiskClassification(r.mentorReportedGlobalStatus ?? null);
-  const period = programMonthKey(typeof r.reportingMonth === "string" ? r.reportingMonth : null);
+  const rawMonth = typeof r.reportingMonth === "string" ? r.reportingMonth.trim() : "";
+  const period = programMonthKey(rawMonth) ?? (rawMonth || null);
   if (!global || !period) return null;
 
   const academic = parseRiskClassification(r.academicStatus ?? null);
