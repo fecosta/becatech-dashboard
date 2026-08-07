@@ -928,6 +928,7 @@ export async function getSupportParticipation(
     byRiskLevel: Object.values(RiskLevel).map((riskLevel) => ({
       riskLevel,
       scholarCount: perLevelCounts[riskLevel],
+      participatedCount: perLevelParticipated[riskLevel],
       participatedPct: perLevelCounts[riskLevel]
         ? round2(perLevelParticipated[riskLevel] / perLevelCounts[riskLevel])
         : 0,

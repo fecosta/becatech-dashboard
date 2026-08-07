@@ -251,17 +251,19 @@ export default async function EarlySupportPage({
       <Card className="mt-4">
         <div className="mb-3.5 flex flex-wrap items-baseline justify-between gap-1.5">
           <div className="text-[13.5px] font-bold text-surface-dark">Participation by Risk Level</div>
-          <div className="text-xs text-muted">% of scholars in each tier with ≥1 activity this month</div>
+          <div className="text-xs text-muted">% of scholars in each tier with ≥1 support activity to date</div>
         </div>
         <div className="flex flex-wrap gap-4">
-          {support.byRiskLevel.map((r) => (
-            <StatChip
-              key={r.riskLevel}
-              tone={PARTICIPATION_TONE[r.riskLevel]}
-              value={fmtPct(r.participatedPct)}
-              label={RISK_LEVEL_LABEL[r.riskLevel]}
-            />
-          ))}
+          {support.byRiskLevel
+            .filter((r) => r.scholarCount > 0)
+            .map((r) => (
+              <StatChip
+                key={r.riskLevel}
+                tone={PARTICIPATION_TONE[r.riskLevel]}
+                value={fmtPct(r.participatedPct)}
+                label={`${RISK_LEVEL_LABEL[r.riskLevel]} · ${r.participatedCount}/${r.scholarCount} scholars`}
+              />
+            ))}
         </div>
       </Card>
 

@@ -196,6 +196,8 @@ export interface MonthActivityStat {
 export interface ParticipationByRisk {
   riskLevel: RiskLevel;
   scholarCount: number;
+  /** Scholars in this tier with ≥1 activity — the numerator behind participatedPct. */
+  participatedCount: number;
   averageActivitiesPerScholar: number;
   /** % of scholars in this risk tier with ≥1 activity across the whole scope/period. */
   participatedPct: number;
