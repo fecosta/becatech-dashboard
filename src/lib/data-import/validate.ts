@@ -9,6 +9,7 @@ import type {
   RequestStatus,
 } from "../../generated/prisma/enums";
 import { GPA_SCALE_MAX } from "../academic/gpa-bucket";
+import { resolveProgramMonth } from "../program-calendar";
 import { parseRiskClassification } from "../risk/classification";
 import { computeAlertType, riskValueFromLevel } from "../risk/risk";
 import { normKey } from "./adapters/shared";
@@ -189,15 +190,21 @@ function buildMonthlyCheckin(row: CanonicalRow): Prisma.MonthlyCheckinUncheckedC
 }
 
 function buildMentorReport(row: CanonicalRow): Prisma.MentorReportUncheckedCreateInput {
+  const country = gS(row, "country") as Country | undefined;
+  // Program month ("MES n") is derived from country + session date via the confirmed program-calendar
+  // windows — the sheet's MONTH column is not synced. Semester stays the sheet's value, falling back
+  // to the derived one only when blank (never overwritten, so a future out-of-window semester is kept).
+  const derived = resolveProgramMonth(country, gD(row, "sessionDate"));
   return {
     scholarId: gS(row, "scholarId")!,
     // Reporting month = the "¿Qué mes reportas?" label if present, else the session date's month
     // (that column is usually blank on the live sheet). This is the key risk is stored against.
     reportingMonth: reportingMonthFor(gS(row, "reportingMonth"), gD(row, "sessionDate")),
+    programMonth: derived.programMonth ?? undefined,
     submissionId: gS(row, "submissionId") ?? synthSubmissionId("MENTOR_REPORT", row.data),
     scholarName: gS(row, "scholarName"),
     mentorName: gS(row, "mentorName"),
-    semester: gS(row, "semester"),
+    semester: gS(row, "semester") ?? derived.semester ?? undefined,
     registrationDate: gD(row, "registrationDate"),
     sessionDate: gD(row, "sessionDate"),
     sessionType: gS(row, "sessionType"),
@@ -224,7 +231,7 @@ function buildMentorReport(row: CanonicalRow): Prisma.MentorReportUncheckedCreat
     // GLOBAL STATUS (col Y) — the authoritative risk classification; mapped to a RiskAssessment on
     // commit (src/lib/risk/from-mentor-report.ts). Ingested, not derived.
     mentorReportedGlobalStatus: gS(row, "mentorReportedGlobalStatus"),
-    country: gS(row, "country") as Country | undefined,
+    country,
     cohort: gS(row, "cohort"),
     university: gS(row, "university"),
   };

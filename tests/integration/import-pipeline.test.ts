@@ -159,6 +159,55 @@ describe("import pipeline (integration)", () => {
     expect(risk?.globalRiskLevel).toBe("RIESGO_ALTO");
   });
 
+  it("derives programMonth (MES n) + semester from country + session date", async () => {
+    // Colombia 2026-05-01 falls in MES 3 (Apr 15 – May 11) of semester 2026-1.
+    const data = csvBuffer(
+      "scholarId,submissionId,country,sessionDate,mentorReportedGlobalStatus\n" +
+        "BT-CO-001,sub-pm-1,COLOMBIA,2026-05-01,RIESGO ALTO\n",
+    );
+    const { batchId } = await createImportBatch({
+      data,
+      filename: "mentor.csv",
+      sourceType: "TEMPLATE",
+      entity: "MENTOR_REPORT",
+      uploadedById: uploaderId,
+    });
+    await commitImportBatch(batchId);
+    const report = await prisma.mentorReport.findUnique({ where: { submissionId: "sub-pm-1" } });
+    expect(report?.programMonth).toBe("MES 3");
+    expect(report?.semester).toBe("2026-1"); // sheet semester blank → derived
+    // Additive: reportingMonth (calendar) still drives the risk period, untouched by programMonth.
+    expect(report?.reportingMonth).toBe("2026-05");
+    const risk = await prisma.riskAssessment.findUnique({
+      where: { scholarId_period: { scholarId: "BT-CO-001", period: "2026-05" } },
+    });
+    expect(risk?.globalRiskLevel).toBe("RIESGO_ALTO");
+  });
+
+  it("leaves programMonth null for an out-of-window session date (report + risk still commit)", async () => {
+    // Colombia opens Feb 17; a Jan session is outside every configured window → programMonth null,
+    // never guessed. The report still upserts and risk is still keyed by the reporting month.
+    const data = csvBuffer(
+      "scholarId,submissionId,country,sessionDate,mentorReportedGlobalStatus\n" +
+        "BT-CO-001,sub-pm-2,COLOMBIA,2026-01-05,RIESGO ALTO\n",
+    );
+    const { batchId } = await createImportBatch({
+      data,
+      filename: "mentor.csv",
+      sourceType: "TEMPLATE",
+      entity: "MENTOR_REPORT",
+      uploadedById: uploaderId,
+    });
+    await commitImportBatch(batchId);
+    const report = await prisma.mentorReport.findUnique({ where: { submissionId: "sub-pm-2" } });
+    expect(report).not.toBeNull(); // report still committed
+    expect(report?.programMonth).toBeNull(); // out of window → null
+    const risk = await prisma.riskAssessment.findUnique({
+      where: { scholarId_period: { scholarId: "BT-CO-001", period: "2026-01" } },
+    });
+    expect(risk?.globalRiskLevel).toBe("RIESGO_ALTO");
+  });
+
   it("legacy wide .xlsx: normalizes into scholar + academic terms", async () => {
     const data = xlsxBuffer([
       ["ID", "PAÍS", "COHORTE", "UNIVERSIDAD", "PROGRAMA ACADÉMICO", "NOMBRE COMPLETO", "GÉNERO", "ESTADO ACTUAL", "GPA 2024-1", "GPA 2024-2"],

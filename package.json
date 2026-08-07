@@ -16,6 +16,7 @@
     "db:studio": "prisma studio",
     "dashboard:check": "tsx src/scripts/dashboard-check.ts",
     "data-quality:scan": "tsx src/scripts/data-quality-scan.ts",
+    "backfill:program-month": "tsx src/scripts/backfill-program-month.ts",
     "test": "vitest run",
     "test:integration": "vitest run --config vitest.integration.config.ts"
   },

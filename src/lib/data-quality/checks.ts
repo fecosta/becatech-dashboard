@@ -70,7 +70,7 @@ export async function scanDataQuality(): Promise<DetectedIssue[]> {
   }
 
   const mentorReports = await prisma.mentorReport.findMany({
-    select: { id: true, scholarId: true },
+    select: { id: true, scholarId: true, country: true, sessionDate: true, programMonth: true },
   });
   for (const m of mentorReports) {
     if (!scholarIds.has(m.scholarId)) {
@@ -81,6 +81,19 @@ export async function scanDataQuality(): Promise<DetectedIssue[]> {
         scholarId: m.scholarId,
         issueDescription: "Mentor report references an unknown scholar.",
         severity: "high",
+      });
+    }
+    // A session date that resolves to no program month fell outside every confirmed calendar window
+    // (unconfigured semester, or a gap) — surfaced, never guessed (src/lib/program-calendar.ts).
+    if (m.sessionDate && !m.programMonth?.trim()) {
+      const month = `${m.sessionDate.getUTCFullYear()}-${String(m.sessionDate.getUTCMonth() + 1).padStart(2, "0")}`;
+      issues.push({
+        issueType: "MENTOR_REPORT_UNMAPPED_PROGRAM_MONTH",
+        sourceName: "MentorReport",
+        recordId: m.id,
+        scholarId: m.scholarId,
+        issueDescription: `Session date (${month}, ${m.country ?? "unknown country"}) falls outside all configured program-month windows; program month unresolved.`,
+        severity: "low",
       });
     }
   }

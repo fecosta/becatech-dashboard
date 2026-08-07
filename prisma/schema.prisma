@@ -329,6 +329,10 @@ model MentorReport {
   cohort                     String?
   university                 String?
   reportingMonth             String?
+  // Program month ("MES 1".."MES 6") derived from country + sessionDate via the confirmed
+  // program-calendar windows (src/lib/program-calendar.ts). Additive/supporting — reportingMonth
+  // still drives RiskAssessment.period. Null when the session date falls outside a configured window.
+  programMonth               String?
   registrationDate           DateTime?
   sessionDate                DateTime?
   sessionType                String?
