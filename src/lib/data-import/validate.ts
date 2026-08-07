@@ -44,6 +44,25 @@ const gB = (row: CanonicalRow, f: string): boolean | undefined => {
   return typeof v === "boolean" ? v : undefined;
 };
 
+/**
+ * A mentor report's reporting month = the reported-month label if present, else the session date's
+ * `YYYY-MM`. On the live sheet the "¿Qué mes reportas?" column is usually blank, but the session
+ * date is always set — so without this fallback `reportingMonth` is null and the report keys no
+ * risk period. Accepts either a program-month label ("MES 3") or a calendar month; risk keying
+ * downstream tolerates both. UTC getters match the adapter's UTC-midnight date parsing.
+ */
+export function reportingMonthFor(
+  raw: string | undefined,
+  sessionDate: Date | undefined,
+): string | undefined {
+  const trimmed = raw?.trim();
+  if (trimmed) return trimmed;
+  if (sessionDate && !Number.isNaN(sessionDate.getTime())) {
+    return `${sessionDate.getUTCFullYear()}-${String(sessionDate.getUTCMonth() + 1).padStart(2, "0")}`;
+  }
+  return undefined;
+}
+
 function checkFields(
   entity: ImportEntity,
   row: CanonicalRow,
@@ -172,9 +191,9 @@ function buildMonthlyCheckin(row: CanonicalRow): Prisma.MonthlyCheckinUncheckedC
 function buildMentorReport(row: CanonicalRow): Prisma.MentorReportUncheckedCreateInput {
   return {
     scholarId: gS(row, "scholarId")!,
-    // The program month ("MES 1".."MES 6") from "¿Qué mes reportas?" IS the risk period — it's the
-    // program's real reporting cadence and the key the risk classification is stored against.
-    reportingMonth: gS(row, "reportingMonth"),
+    // Reporting month = the "¿Qué mes reportas?" label if present, else the session date's month
+    // (that column is usually blank on the live sheet). This is the key risk is stored against.
+    reportingMonth: reportingMonthFor(gS(row, "reportingMonth"), gD(row, "sessionDate")),
     submissionId: gS(row, "submissionId") ?? synthSubmissionId("MENTOR_REPORT", row.data),
     scholarName: gS(row, "scholarName"),
     mentorName: gS(row, "mentorName"),

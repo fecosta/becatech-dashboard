@@ -138,6 +138,27 @@ describe("import pipeline (integration)", () => {
     expect(await prisma.riskAssessment.count()).toBe(0); // but no risk classification
   });
 
+  it("keys risk by the session-date month when the reporting-month label is blank", async () => {
+    // The live sheet leaves "¿Qué mes reportas?" blank but always has a session date → the reporting
+    // month must fall back to the session date, else the report keys no risk (the production bug).
+    const data = csvBuffer(
+      "scholarId,submissionId,sessionDate,mentorReportedGlobalStatus\nBT-CO-001,sub-sd-1,2026-03-15,RIESGO ALTO\n",
+    );
+    const { batchId } = await createImportBatch({
+      data,
+      filename: "mentor.csv",
+      sourceType: "TEMPLATE",
+      entity: "MENTOR_REPORT",
+      uploadedById: uploaderId,
+    });
+    await commitImportBatch(batchId);
+    const risk = await prisma.riskAssessment.findUnique({
+      where: { scholarId_period: { scholarId: "BT-CO-001", period: "2026-03" } },
+    });
+    expect(risk?.source).toBe("mentor-report");
+    expect(risk?.globalRiskLevel).toBe("RIESGO_ALTO");
+  });
+
   it("legacy wide .xlsx: normalizes into scholar + academic terms", async () => {
     const data = xlsxBuffer([
       ["ID", "PAÍS", "COHORTE", "UNIVERSIDAD", "PROGRAMA ACADÉMICO", "NOMBRE COMPLETO", "GÉNERO", "ESTADO ACTUAL", "GPA 2024-1", "GPA 2024-2"],
