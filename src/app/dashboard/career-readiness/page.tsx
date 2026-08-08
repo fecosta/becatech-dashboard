@@ -1,6 +1,6 @@
 import { BulletTrackGoal } from "@/components/BulletTrackGoal";
 import { PaceBarChart } from "@/components/PaceBarChart";
-import { AccessDenied, Card, PageHeader, SectionTitle, StatChip } from "@/components/ui";
+import { AccessDenied, Card, PageHeader, ProxyBadge, SectionTitle, StatChip } from "@/components/ui";
 import { gpaSummaryKpi } from "@/lib/academic/gpa-summary";
 import { Permission } from "@/lib/auth/authorization";
 import { requirePermission } from "@/lib/auth/guard";
@@ -117,6 +117,23 @@ export default async function CareerReadinessPage({
           {SKILLS_METRICS.map((m) => (
             <BulletTrackGoal key={m.label} label={m.label} goalLabel={m.goalLabel} pending />
           ))}
+        </Card>
+      </div>
+
+      <div className="mt-6">
+        <SectionTitle>
+          Skills by City{" "}
+          <span className="font-normal normal-case tracking-normal text-muted">— illustrative</span>
+        </SectionTitle>
+        {/* No per-city professional-skills data source exists yet — explicit pending state, never
+            fabricated (the prototype's heatmap values are illustrative). */}
+        <Card className="flex items-center justify-between gap-4">
+          <p className="text-sm text-muted">
+            A per-city breakdown of professional-skills scores (Mindset, Social Capital, Attendance,
+            Module D2, Leadership) will appear once the professional-development team&rsquo;s data is
+            available.
+          </p>
+          <ProxyBadge>PENDING</ProxyBadge>
         </Card>
       </div>
 
