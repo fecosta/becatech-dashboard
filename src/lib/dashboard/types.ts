@@ -65,6 +65,20 @@ export interface HomeOverview {
   retentionByYear: { year: 1 | 2 | 3; rate: number }[];
   /** Distinct delivery-partner operators serving active in-scope scholars. */
   deliveryPartnerCount: number;
+  /** Active scholars by socioeconomic level (raw level string; "Not reported" for blank). */
+  socioeconomicBreakdown: { level: string; count: number }[];
+  /** Active Colombia scholars by city (currentMunicipality); top cities + an "Other cities" bucket. */
+  cityBreakdown: { city: string; count: number }[];
+  /** Active scholars by current English level (A1–C2), all six levels; null when none are recorded. */
+  englishLevelDistribution: { level: string; count: number }[] | null;
+  /** Per-university retention among in-scope scholars (active vs withdrawn), active-count desc. */
+  universityRetention: {
+    name: string;
+    retentionPct: number;
+    dropOutPct: number;
+    activeCount: number;
+    dropOutCount: number;
+  }[];
 }
 
 export interface ExecutiveOverview {

@@ -4,6 +4,7 @@ import { BulletTrackGoal } from "@/components/BulletTrackGoal";
 import { FactStrip } from "@/components/FactStrip";
 import { FreshnessBadge } from "@/components/FreshnessBadge";
 import { PaceBarChart } from "@/components/PaceBarChart";
+import { UniversityRetentionList } from "@/components/UniversityRetentionList";
 import { AccessDenied, Card, KpiCard, PageHeader, ProxyBadge, StatChip } from "@/components/ui";
 import { gpaSummaryKpi } from "@/lib/academic/gpa-summary";
 import { Permission } from "@/lib/auth/authorization";
@@ -20,6 +21,13 @@ import {
 import { fmtInt, fmtPct } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
+
+// Program retention targets by year — documented program goals (not derived from data), used only
+// for the goal marker on the retention bullet bars.
+const RETENTION_GOALS: Record<1 | 2 | 3, number> = { 1: 85, 2: 90, 3: 90 };
+
+// English levels shown in developing (purple) vs professional-working (green) proficiency.
+const ENGLISH_DEVELOPING = ["A1", "A2", "B1"];
 
 /** Big, standout section heading (mockup's `.section-title-big`) — Home-only styling. */
 function BigTitle({ children }: { children: ReactNode }) {
@@ -78,6 +86,13 @@ export default async function HomePage({
   ];
   const activeTotal =
     home.scholarsByYear.year1 + home.scholarsByYear.year2 + home.scholarsByYear.year3;
+
+  // Dropout rate as a share of active scholars (mockup wording: "% of active scholars").
+  const dropoutRate = o.activeScholars ? o.withdrawnScholars / o.activeScholars : 0;
+  const sesTotal = home.socioeconomicBreakdown.reduce((n, s) => n + s.count, 0);
+  const cityMax = Math.max(0, ...home.cityBreakdown.map((c) => c.count));
+  const englishTotal = home.englishLevelDistribution?.reduce((n, e) => n + e.count, 0) ?? 0;
+  const englishMax = Math.max(0, ...(home.englishLevelDistribution?.map((e) => e.count) ?? []));
 
   return (
     <div>
@@ -178,7 +193,6 @@ export default async function HomePage({
               value={fmtInt(home.genderBreakdown.female)}
               label="Active women"
             />
-            <StatChip tone="red" value={fmtInt(o.withdrawnScholars)} label="Drop out" />
           </div>
         </Card>
 
@@ -194,8 +208,10 @@ export default async function HomePage({
             <BulletTrackGoal
               key={r.year}
               label={`Year ${r.year}`}
+              goalLabel={`goal ≥${RETENTION_GOALS[r.year]}%`}
               valueLabel={fmtPct(r.rate)}
               fillPct={r.rate * 100}
+              goalPct={RETENTION_GOALS[r.year]}
             />
           ))}
         </Card>
@@ -249,7 +265,79 @@ export default async function HomePage({
             ]}
           />
         </Card>
+
+        {/* Cuadro 5: Dropouts — count is real; a per-reason breakdown has no data source yet. */}
+        <Card>
+          <div className="mb-3.5 flex flex-wrap items-baseline justify-between gap-1.5">
+            <div className="text-[13.5px] font-bold text-surface-dark">Dropouts</div>
+            <div className="text-xs text-muted">{fmtPct(dropoutRate)} of active scholars</div>
+          </div>
+          <div className="mb-3.5 text-[32px] font-extrabold text-[#d33636]">
+            {fmtInt(o.withdrawnScholars)}
+          </div>
+          <p className="text-xs text-muted">
+            Reason breakdown (financial, academic, psychosocial, relocation) isn&rsquo;t tracked in
+            the data yet.
+          </p>
+        </Card>
+
+        {/* Cuadro 6: Socioeconomic Condition */}
+        <Card>
+          <div className="mb-3.5 text-[13.5px] font-bold text-surface-dark">
+            Socioeconomic Condition
+          </div>
+          {sesTotal === 0 ? (
+            <p className="text-sm text-muted">No socioeconomic data for the current selection.</p>
+          ) : (
+            <div className="flex flex-wrap gap-4">
+              {home.socioeconomicBreakdown.map((s) => (
+                <StatChip
+                  key={s.level}
+                  tone={s.level === "Baja" ? "green" : s.level === "Alta" ? "red" : "default"}
+                  value={fmtPct(s.count / sesTotal)}
+                  label={s.level}
+                />
+              ))}
+            </div>
+          )}
+        </Card>
       </div>
+
+      <BigTitle>Active Scholars by City (Colombia)</BigTitle>
+      <Card className="p-6">
+        {home.cityBreakdown.length === 0 ? (
+          <p className="text-sm text-muted">No city data for the current selection.</p>
+        ) : (
+          <>
+            <PaceBarChart
+              barAreaPx={150}
+              barWidthPx={56}
+              data={home.cityBreakdown.map((c) => ({
+                label: c.city,
+                valueLabel: fmtInt(c.count),
+                heightPct: cityMax ? Math.round((c.count / cityMax) * 100) : 0,
+                color: c.city === "Other cities" ? "#d9c7f5" : "#a62bff",
+              }))}
+            />
+            <div className="mt-4 text-xs text-muted">Active scholars in Colombia by city.</div>
+          </>
+        )}
+      </Card>
+
+      <BigTitle>All Universities &mdash; Retention &amp; Drop Out Rate</BigTitle>
+      <Card className="p-6">
+        {home.universityRetention.length === 0 ? (
+          <p className="text-sm text-muted">No universities in scope for this selection.</p>
+        ) : (
+          <UniversityRetentionList
+            data={home.universityRetention.map((u) => ({
+              name: u.name,
+              retentionPct: u.retentionPct,
+              dropOutPct: u.dropOutPct,
+            }))}
+          />
+        )}
+      </Card>
 
       <BigTitle>Scholars by Year</BigTitle>
       <Card className="p-6">
@@ -281,13 +369,30 @@ export default async function HomePage({
       </Card>
 
       <BigTitle>English Level Distribution</BigTitle>
-      <Card className="flex items-center justify-between gap-4 p-6">
-        <p className="text-sm text-muted">
-          Each scholar&rsquo;s current English level now syncs (shown on the scholar profile). This
-          program-wide distribution chart is a follow-up once levels are populated across scholars.
-        </p>
-        <ProxyBadge>PENDING</ProxyBadge>
-      </Card>
+      {home.englishLevelDistribution ? (
+        <Card className="p-6">
+          <PaceBarChart
+            barAreaPx={140}
+            data={home.englishLevelDistribution.map((e) => ({
+              label: e.level,
+              valueLabel: fmtPct(englishTotal ? e.count / englishTotal : 0),
+              heightPct: englishMax ? Math.round((e.count / englishMax) * 100) : 0,
+              color: ENGLISH_DEVELOPING.includes(e.level) ? "#a62bff" : "#27cf77",
+            }))}
+          />
+          <div className="mt-3.5 text-xs text-muted">
+            A1&ndash;B1: developing proficiency · B2&ndash;C2: professional working proficiency
+          </div>
+        </Card>
+      ) : (
+        <Card className="flex items-center justify-between gap-4 p-6">
+          <p className="text-sm text-muted">
+            Each scholar&rsquo;s current English level now syncs (shown on the scholar profile). This
+            program-wide distribution appears once levels are populated across scholars.
+          </p>
+          <ProxyBadge>PENDING</ProxyBadge>
+        </Card>
+      )}
 
       {/* Executive attention band — kept from the prior implementation (not in the mockup,
           but useful working navigation the redesign doesn't replace). */}

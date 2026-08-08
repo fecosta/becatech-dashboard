@@ -424,6 +424,73 @@ export async function getHomeOverview(filters: DashboardFilters = {}): Promise<H
     active.map((s) => s.operator?.name).filter((n): n is string => !!n),
   ).size;
 
+  // Socioeconomic condition among active scholars (raw level; blank -> "Not reported").
+  const SES_ORDER = ["Baja", "Media", "Alta"];
+  const sesCounts = new Map<string, number>();
+  for (const s of active) {
+    const level = s.socioeconomicLevel?.trim() || "Not reported";
+    sesCounts.set(level, (sesCounts.get(level) ?? 0) + 1);
+  }
+  const socioeconomicBreakdown = [...sesCounts.entries()]
+    .map(([level, count]) => ({ level, count }))
+    .sort((a, b) => {
+      const ia = SES_ORDER.indexOf(a.level);
+      const ib = SES_ORDER.indexOf(b.level);
+      if (ia !== -1 || ib !== -1) return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+      return b.count - a.count;
+    });
+
+  // Active Colombia scholars by city (municipality); top cities + an "Other cities" bucket.
+  const cityCounts = new Map<string, number>();
+  for (const s of active) {
+    if (s.country !== Country.COLOMBIA) continue;
+    const city = s.currentMunicipality?.trim();
+    if (city) cityCounts.set(city, (cityCounts.get(city) ?? 0) + 1);
+  }
+  const sortedCities = [...cityCounts.entries()].sort((a, b) => b[1] - a[1]);
+  const TOP_CITIES = 4;
+  const cityBreakdown = sortedCities.slice(0, TOP_CITIES).map(([city, count]) => ({ city, count }));
+  const otherCities = sortedCities.slice(TOP_CITIES).reduce((n, [, c]) => n + c, 0);
+  if (otherCities > 0) cityBreakdown.push({ city: "Other cities", count: otherCities });
+
+  // English level distribution among active scholars (canonical A1–C2); null when none recorded.
+  const ENGLISH_LEVELS = ["A1", "A2", "B1", "B2", "C1", "C2"] as const;
+  const engCounts = new Map<string, number>();
+  for (const s of active) {
+    const raw = s.currentEnglishLevel?.trim().toUpperCase();
+    const level = ENGLISH_LEVELS.find((l) => raw?.startsWith(l));
+    if (level) engCounts.set(level, (engCounts.get(level) ?? 0) + 1);
+  }
+  const englishTotal = [...engCounts.values()].reduce((n, c) => n + c, 0);
+  const englishLevelDistribution = englishTotal
+    ? ENGLISH_LEVELS.map((level) => ({ level, count: engCounts.get(level) ?? 0 }))
+    : null;
+
+  // Per-university retention among in-scope scholars (active vs withdrawn), pct summing to 100.
+  const uniAgg = new Map<string, { active: number; dropout: number }>();
+  for (const s of scholars) {
+    const name = s.university.name;
+    if (!name) continue;
+    const row = uniAgg.get(name) ?? { active: 0, dropout: 0 };
+    if (s.programStatus === ProgramStatus.ACTIVE) row.active += 1;
+    else if (s.programStatus === ProgramStatus.WITHDRAWN) row.dropout += 1;
+    uniAgg.set(name, row);
+  }
+  const universityRetention = [...uniAgg.entries()]
+    .map(([name, r]) => {
+      const denom = r.active + r.dropout;
+      const retentionPct = denom ? Math.round((r.active / denom) * 100) : 0;
+      return {
+        name,
+        activeCount: r.active,
+        dropOutCount: r.dropout,
+        retentionPct,
+        dropOutPct: denom ? 100 - retentionPct : 0,
+      };
+    })
+    .filter((u) => u.activeCount + u.dropOutCount > 0)
+    .sort((a, b) => b.activeCount - a.activeCount);
+
   return {
     scholarsByCountry,
     womenPercentage,
@@ -435,6 +502,10 @@ export async function getHomeOverview(filters: DashboardFilters = {}): Promise<H
     scholarsByYear,
     retentionByYear,
     deliveryPartnerCount,
+    socioeconomicBreakdown,
+    cityBreakdown,
+    englishLevelDistribution,
+    universityRetention,
   };
 }
 
