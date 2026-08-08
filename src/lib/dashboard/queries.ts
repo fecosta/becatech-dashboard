@@ -31,6 +31,8 @@ import type {
   ProgressDistribution,
   RiskAlertRow,
   RiskAlertsResult,
+  RiskBreakdownRow,
+  RiskBreakdowns,
   RiskDistribution,
   RiskStageSummary,
   ScholarDirectoryRow,
@@ -672,6 +674,64 @@ export async function getUniversityRiskBreakdown(
     .sort(
       (a, b) => a.country.localeCompare(b.country) || a.universityName.localeCompare(b.universityName),
     );
+}
+
+/**
+ * Early Support risk breakdowns by city / gender / socioeconomic condition. Each row's bar =
+ * low-risk % (SIN_RIESGO + RIESGO_BAJO) over active, ≠Cohorte-2024 scholars in that group — the
+ * same denominator convention as getUniversityRiskBreakdown (count includes unclassified).
+ */
+export async function getRiskBreakdowns(filters: DashboardFilters = {}): Promise<RiskBreakdowns> {
+  const { scholars, riskMap } = await loadScope(filters);
+
+  type Scoped = (typeof scholars)[number];
+  const group = (keyOf: (s: Scoped) => string | null): Map<string, { count: number; low: number }> => {
+    const m = new Map<string, { count: number; low: number }>();
+    for (const s of scholars) {
+      if (!riskEligible(s)) continue;
+      const key = keyOf(s);
+      if (!key) continue;
+      const row = m.get(key) ?? { count: 0, low: 0 };
+      row.count += 1;
+      const level = riskMap.get(s.scholarId)?.globalRiskLevel;
+      if (level === "SIN_RIESGO" || level === "RIESGO_BAJO") row.low += 1;
+      m.set(key, row);
+    }
+    return m;
+  };
+  const toRows = (
+    m: Map<string, { count: number; low: number }>,
+    order?: string[],
+  ): RiskBreakdownRow[] =>
+    [...m.entries()]
+      .map(([name, r]) => ({
+        name,
+        scholarCount: r.count,
+        lowRiskPct: r.count ? round2(r.low / r.count) : 0,
+      }))
+      .sort((a, b) => {
+        if (order) {
+          const ia = order.indexOf(a.name);
+          const ib = order.indexOf(b.name);
+          if (ia !== -1 || ib !== -1) return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+        }
+        return b.scholarCount - a.scholarCount;
+      });
+
+  const GENDER_LABEL: Record<string, string> = { female: "Women", male: "Men", other: "Other" };
+  const byGender = toRows(
+    group((s) => GENDER_LABEL[normalizeGender(s.gender)] ?? null), // unknown gender excluded
+    ["Women", "Men", "Other"],
+  );
+  const byCity = toRows(
+    group((s) => (s.country === Country.COLOMBIA ? s.currentMunicipality?.trim() || null : null)),
+  ).slice(0, 8);
+  const bySocioeconomic = toRows(
+    group((s) => s.socioeconomicLevel?.trim() || null),
+    ["Baja", "Media", "Alta"],
+  );
+
+  return { byCity, byGender, bySocioeconomic };
 }
 
 /**

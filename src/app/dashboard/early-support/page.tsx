@@ -1,5 +1,6 @@
 import type { AlertType, RiskLevel } from "@/generated/prisma/enums";
 import { ComboBarLineCard, Donut, LineCard } from "@/components/charts";
+import { PaceBarChart } from "@/components/PaceBarChart";
 import { UniHBarRow } from "@/components/UniHBarRow";
 import { AccessDenied, Card, DarkCallout, PageHeader, SectionTitle, StatChip } from "@/components/ui";
 import { gpaSummaryKpi } from "@/lib/academic/gpa-summary";
@@ -11,6 +12,7 @@ import {
   getExecutiveOverview,
   getHomeOverview,
   getMonthlyRiskTrend,
+  getRiskBreakdowns,
   getRiskStageSummary,
   getSupportParticipation,
   getUniversityRiskBreakdown,
@@ -56,7 +58,7 @@ export default async function EarlySupportPage({
   // Years 1–2 band derived from currentSemester (documented default — see program-stage.ts).
   const filters = parseFilters(await searchParams);
   const stageFilters = { ...filters, programStage: "YEARS_1_2" as const };
-  const [risk, support, pace, stageOverview, overallOverview, home, uniBreakdown, riskTrend] =
+  const [risk, support, pace, stageOverview, overallOverview, home, uniBreakdown, riskTrend, breakdowns] =
     await Promise.all([
       getRiskStageSummary(stageFilters),
       getSupportParticipation(stageFilters),
@@ -66,12 +68,15 @@ export default async function EarlySupportPage({
       getHomeOverview(stageFilters),
       getUniversityRiskBreakdown(stageFilters),
       getMonthlyRiskTrend(stageFilters),
+      getRiskBreakdowns(stageFilters),
     ]);
 
   const atRisk = ALERT_SPLIT_ORDER.reduce((sum, t) => sum + risk.alertTypeCounts[t], 0);
   const onTrack = pace.progressStatusDistribution.ON_TRACK;
   const behind = pace.progressStatusDistribution.SLIGHTLY_BEHIND + pace.progressStatusDistribution.BEHIND;
   const critical = pace.progressStatusDistribution.CRITICAL_DELAY;
+  const progressTotal = onTrack + behind + critical;
+  const progressPct = (n: number) => (progressTotal ? Math.round((n / progressTotal) * 100) : 0);
 
   // Denominator for the level percentages = active, ≠Cohorte-2024 scholars (the program's official
   // denominator), so "No risk" reads e.g. 63% of all eligible scholars — not 63% of only the
@@ -214,6 +219,19 @@ export default async function EarlySupportPage({
         </Card>
       </div>
 
+      <Card className="mt-4">
+        <div className="mb-3.5 flex flex-wrap items-baseline justify-between gap-1.5">
+          <div className="text-[13.5px] font-bold text-surface-dark">Main Risk Level Reasons</div>
+          <div className="text-xs text-muted">
+            {fmtInt(stageOverview.withdrawnScholars)} dropouts to date
+          </div>
+        </div>
+        <p className="text-xs text-muted">
+          A per-reason breakdown (financial, academic, psychosocial, relocation) isn&rsquo;t tracked
+          in the data yet.
+        </p>
+      </Card>
+
       <div className="mt-6">
         <SectionTitle>Scholars Status per University</SectionTitle>
         <Card>
@@ -228,6 +246,53 @@ export default async function EarlySupportPage({
               }))}
             />
           )}
+        </Card>
+      </div>
+
+      <div className="mt-6 grid gap-4 lg:grid-cols-2">
+        <div>
+          <SectionTitle>Risk Level by City</SectionTitle>
+          <Card>
+            {breakdowns.byCity.length === 0 ? (
+              <p className="text-sm text-muted">No city data for this selection.</p>
+            ) : (
+              <UniHBarRow
+                hideLegend
+                data={breakdowns.byCity.map((r) => ({ name: r.name, lowRiskPct: r.lowRiskPct }))}
+              />
+            )}
+          </Card>
+        </div>
+        <div>
+          <SectionTitle>Risk Level by Gender</SectionTitle>
+          <Card>
+            {breakdowns.byGender.length === 0 ? (
+              <p className="text-sm text-muted">No gender data for this selection.</p>
+            ) : (
+              <UniHBarRow
+                hideLegend
+                data={breakdowns.byGender.map((r) => ({ name: r.name, lowRiskPct: r.lowRiskPct }))}
+              />
+            )}
+          </Card>
+        </div>
+      </div>
+
+      <div className="mt-6">
+        <SectionTitle>Risk Level by Socioeconomic Condition</SectionTitle>
+        <Card>
+          {breakdowns.bySocioeconomic.length === 0 ? (
+            <p className="text-sm text-muted">No socioeconomic data for this selection.</p>
+          ) : (
+            <UniHBarRow
+              hideLegend
+              data={breakdowns.bySocioeconomic.map((r) => ({ name: r.name, lowRiskPct: r.lowRiskPct }))}
+            />
+          )}
+          <div className="mt-3.5 text-xs text-muted">
+            Bar = % Low risk (No Risk + Low). Lower socioeconomic condition often correlates with
+            higher risk.
+          </div>
         </Card>
       </div>
 
@@ -272,11 +337,31 @@ export default async function EarlySupportPage({
         <div className="grid gap-4 lg:grid-cols-2">
           <Card>
             <div className="mb-1.5 text-[13.5px] font-bold text-surface-dark">On track vs. behind</div>
-            <div className="flex flex-wrap gap-4 pt-2">
-              <StatChip value={fmtInt(onTrack)} label="On track with study plan" />
-              <StatChip value={fmtInt(behind)} label="Need to catch up / level" />
-              {critical > 0 ? <StatChip tone="red" value={fmtInt(critical)} label="Critical delay" /> : null}
-            </div>
+            <PaceBarChart
+              data={[
+                {
+                  label: "On track",
+                  note: "Following their study plan",
+                  valueLabel: `${progressPct(onTrack)}%`,
+                  heightPct: progressPct(onTrack),
+                  color: "#27cf77",
+                },
+                {
+                  label: "Behind",
+                  note: "One course behind",
+                  valueLabel: `${progressPct(behind)}%`,
+                  heightPct: progressPct(behind),
+                  color: "#8fe0b4",
+                },
+                {
+                  label: "Critical",
+                  note: "More than one course behind",
+                  valueLabel: `${progressPct(critical)}%`,
+                  heightPct: progressPct(critical),
+                  color: "#a62bff",
+                },
+              ]}
+            />
           </Card>
           <Card>
             <div className="mb-3.5 flex flex-wrap items-baseline justify-between gap-1.5">

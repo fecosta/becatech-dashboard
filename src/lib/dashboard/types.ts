@@ -320,6 +320,21 @@ export interface MonthlyRiskTrendPoint {
   mediumPlusPct: number;
 }
 
+/** One low-risk-% row for a risk breakdown (by city / gender / socioeconomic). */
+export interface RiskBreakdownRow {
+  name: string;
+  /** (SIN_RIESGO + RIESGO_BAJO) / scholarCount, 0-1 — same denominator as UniversityRiskRow. */
+  lowRiskPct: number;
+  scholarCount: number;
+}
+
+/** Early Support risk breakdowns by dimension (each over active, ≠Cohorte-2024 scholars in scope). */
+export interface RiskBreakdowns {
+  byCity: RiskBreakdownRow[];
+  byGender: RiskBreakdownRow[];
+  bySocioeconomic: RiskBreakdownRow[];
+}
+
 export interface ProgramEcosystemUniversityRow {
   universityId: string;
   name: string;

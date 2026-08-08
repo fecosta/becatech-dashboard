@@ -5,13 +5,14 @@ import type { Country } from "@/generated/prisma/enums";
 
 export interface UniHBarDatum {
   name: string;
-  country: Country;
+  /** Optional country tag (shown for universities; omitted for city/gender/socioeconomic rows). */
+  country?: Country;
   lowRiskPct: number; // 0-1
 }
 
 const COUNTRY_ABBR: Record<Country, string> = { COLOMBIA: "COL", PERU: "PE" };
 
-export function UniHBarRow({ data }: { data: UniHBarDatum[] }) {
+export function UniHBarRow({ data, hideLegend = false }: { data: UniHBarDatum[]; hideLegend?: boolean }) {
   return (
     <div>
       {data.map((d) => {
@@ -22,10 +23,15 @@ export function UniHBarRow({ data }: { data: UniHBarDatum[] }) {
             className="flex items-center gap-3.5 border-b border-border py-2.5 last:border-b-0"
           >
             <div className="w-[250px] flex-shrink-0 text-[12.5px] font-semibold text-surface-dark">
-              {d.name}{" "}
-              <span className="font-normal text-muted" title={COUNTRY_LABEL[d.country]}>
-                {COUNTRY_ABBR[d.country]}
-              </span>
+              {d.name}
+              {d.country ? (
+                <>
+                  {" "}
+                  <span className="font-normal text-muted" title={COUNTRY_LABEL[d.country]}>
+                    {COUNTRY_ABBR[d.country]}
+                  </span>
+                </>
+              ) : null}
             </div>
             <div className="h-[18px] flex-1 rounded-full bg-track">
               <div
@@ -38,13 +44,15 @@ export function UniHBarRow({ data }: { data: UniHBarDatum[] }) {
           </div>
         );
       })}
-      <div className="mt-4 flex flex-wrap gap-3.5 text-xs text-ink">
-        <span className="inline-flex items-center gap-1.5">
-          <i className="inline-block h-2.5 w-2.5 rounded-full bg-green" />
-          Bar = % Low risk (No Risk + Low)
-        </span>
-        <span className="text-muted">Remaining % = Needs attention (Medium + High + Critical)</span>
-      </div>
+      {hideLegend ? null : (
+        <div className="mt-4 flex flex-wrap gap-3.5 text-xs text-ink">
+          <span className="inline-flex items-center gap-1.5">
+            <i className="inline-block h-2.5 w-2.5 rounded-full bg-green" />
+            Bar = % Low risk (No Risk + Low)
+          </span>
+          <span className="text-muted">Remaining % = Needs attention (Medium + High + Critical)</span>
+        </div>
+      )}
     </div>
   );
 }
