@@ -156,6 +156,7 @@ export async function ScholarProfileView({
       <SectionTitle>Identity &amp; Program</SectionTitle>
       <ProfileCard
         fullName={p.fullName}
+        country={p.country}
         university={p.university.name}
         cohort={p.cohort}
         academicProgram={p.academicProgram}
@@ -169,6 +170,7 @@ export async function ScholarProfileView({
         latestTerm={latestTerm?.term ?? null}
         gender={p.gender}
         expectedEndDate={p.expectedEndDate}
+        estimatedGraduationYear={p.estimatedGraduationYear}
         operatorName={p.operator?.name ?? null}
       />
 

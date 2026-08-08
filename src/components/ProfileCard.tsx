@@ -1,12 +1,13 @@
 // Scholar identity card for the profile page (Beca Tech+ prototype "Scholar Profile").
 // Deliberately omits "Age" — no birth-date field exists in the schema (documented gap).
-import type { ProgramStatus, RiskLevel } from "@/generated/prisma/enums";
-import { PROGRAM_STATUS_LABEL, RISK_LEVEL_LABEL } from "@/lib/labels";
+import type { Country, ProgramStatus, RiskLevel } from "@/generated/prisma/enums";
+import { COUNTRY_LABEL, PROGRAM_STATUS_LABEL, RISK_LEVEL_LABEL } from "@/lib/labels";
 import { ActivityChip, Card, ProxyBadge, StatusBadge } from "@/components/ui";
 import { programYearFromSemester } from "@/lib/academic/program-year";
 
 export interface ProfileCardProps {
   fullName: string;
+  country: Country;
   university: string;
   cohort: string;
   academicProgram: string;
@@ -22,6 +23,8 @@ export interface ProfileCardProps {
   latestTerm: string | null;
   gender: string;
   expectedEndDate: Date | null;
+  /** Program-declared expected graduation year (col K); falls back to expectedEndDate's year. */
+  estimatedGraduationYear: number | null;
   /** Delivery-partner operator name; null renders a pending badge (no operator assigned yet). */
   operatorName: string | null;
 }
@@ -53,6 +56,7 @@ function Field({ label, children, span }: { label: string; children: React.React
 export function ProfileCard(props: ProfileCardProps) {
   const {
     fullName,
+    country,
     university,
     cohort,
     academicProgram,
@@ -66,6 +70,7 @@ export function ProfileCard(props: ProfileCardProps) {
     latestTerm,
     gender,
     expectedEndDate,
+    estimatedGraduationYear,
     operatorName,
   } = props;
 
@@ -79,6 +84,7 @@ export function ProfileCard(props: ProfileCardProps) {
       <div className="h-[78px] w-[78px] shrink-0 rounded-2xl bg-gradient-to-br from-purple to-green" />
       <div className="grid flex-1 grid-cols-1 gap-x-[22px] gap-y-2.5 sm:grid-cols-3">
         <Field label="Name">{fullName}</Field>
+        <Field label="Country">{COUNTRY_LABEL[country]}</Field>
         <Field label="University">{university || DASH}</Field>
         <Field label="Cohort">{cohort || DASH}</Field>
         <Field label="Major">{academicProgram || DASH}</Field>
@@ -91,7 +97,8 @@ export function ProfileCard(props: ProfileCardProps) {
           <StatusBadge tone={statusTone(programStatus, currentRiskLevel)}>{statusText}</StatusBadge>
         </Field>
         <Field label="Est. Year of Finalization">
-          {expectedEndDate ? new Date(expectedEndDate).getFullYear() : DASH}
+          {estimatedGraduationYear ??
+            (expectedEndDate ? new Date(expectedEndDate).getFullYear() : DASH)}
         </Field>
         <Field label="Delivery Partner">
           {operatorName ?? <ProxyBadge>PENDING</ProxyBadge>}
