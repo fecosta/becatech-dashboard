@@ -348,6 +348,8 @@ export interface ProgramEcosystemUniversityRow {
   scholarCount: number;
   activeScholarCount: number;
   dropOutCount: number;
+  /** Distinct cohorts of in-scope scholars at this university, ascending. */
+  cohorts: string[];
   riskDistribution: RiskDistribution;
   /** Not available — no evaluation-results data source. */
   evaluationResults: null;

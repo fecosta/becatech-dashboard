@@ -49,6 +49,7 @@ export default async function ProgramEcosystemPage({
             scholarCount={u.scholarCount}
             activeScholarCount={u.activeScholarCount}
             dropOutCount={u.dropOutCount}
+            cohorts={u.cohorts}
             riskDistribution={u.riskDistribution}
             semesterStartDate={u.semesterStartDate}
             semesterEndDate={u.semesterEndDate}

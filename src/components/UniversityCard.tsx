@@ -25,6 +25,7 @@ export function UniversityCard({
   scholarCount,
   activeScholarCount,
   dropOutCount,
+  cohorts,
   riskDistribution,
   semesterStartDate,
   semesterEndDate,
@@ -38,12 +39,15 @@ export function UniversityCard({
   scholarCount: number;
   activeScholarCount: number;
   dropOutCount: number;
+  cohorts: string[];
   riskDistribution: RiskDistribution;
   semesterStartDate: Date | string | null;
   semesterEndDate: Date | string | null;
   examWindowStart: Date | string | null;
   examWindowEnd: Date | string | null;
 }) {
+  const enrolled = activeScholarCount + dropOutCount;
+  const retentionPct = enrolled ? Math.round((activeScholarCount / enrolled) * 100) : null;
   return (
     <Card className={BORDER_CLASS[country]}>
       <div className="mb-2 text-[14.5px] font-bold leading-snug text-surface-dark">
@@ -61,6 +65,12 @@ export function UniversityCard({
         </span>
         {scholarCount === 0 ? null : (
           <>
+            {retentionPct != null ? (
+              <span>
+                Retention {retentionPct}% · Drop out {100 - retentionPct}%
+              </span>
+            ) : null}
+            {cohorts.length > 0 ? <span>Cohorts: {cohorts.join(", ")}</span> : null}
             <span>
               Semester: {fmtShortDate(semesterStartDate)} – {fmtShortDate(semesterEndDate)}
             </span>

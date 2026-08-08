@@ -1201,6 +1201,7 @@ export async function getProgramEcosystem(
       scholarCount: number;
       activeScholarCount: number;
       dropOutCount: number;
+      cohorts: Set<string>;
       riskDistribution: RiskDistribution;
     }
   >();
@@ -1213,6 +1214,7 @@ export async function getProgramEcosystem(
         scholarCount: 0,
         activeScholarCount: 0,
         dropOutCount: 0,
+        cohorts: new Set<string>(),
         riskDistribution: emptyRiskDistribution(),
       };
       universityStats.set(s.universityId, uStat);
@@ -1220,6 +1222,7 @@ export async function getProgramEcosystem(
     uStat.scholarCount += 1;
     if (s.programStatus === ProgramStatus.ACTIVE) uStat.activeScholarCount += 1;
     if (s.programStatus === ProgramStatus.WITHDRAWN) uStat.dropOutCount += 1;
+    if (s.cohort?.trim()) uStat.cohorts.add(s.cohort.trim());
     const level = riskMap.get(s.scholarId)?.globalRiskLevel;
     if (level) uStat.riskDistribution[level] += 1;
 
@@ -1233,6 +1236,7 @@ export async function getProgramEcosystem(
       scholarCount: 0,
       activeScholarCount: 0,
       dropOutCount: 0,
+      cohorts: new Set<string>(),
       riskDistribution: emptyRiskDistribution(),
     };
     return {
@@ -1248,6 +1252,7 @@ export async function getProgramEcosystem(
       scholarCount: stat.scholarCount,
       activeScholarCount: stat.activeScholarCount,
       dropOutCount: stat.dropOutCount,
+      cohorts: [...stat.cohorts].sort(),
       riskDistribution: stat.riskDistribution,
       evaluationResults: null,
     };
