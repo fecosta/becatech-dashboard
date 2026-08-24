@@ -1,37 +1,67 @@
 @import "tailwindcss";
 
 /*
- * Beca Tech+ design tokens. Exact hex values come from the prototype at
- * design-reference/BecaTech_Plus_Prototype.html. Raw values live in :root; the
+ * Beca Tech+ design tokens. Exact hex values come from the design reference at
+ * design-reference/MVP_Dashboard AUGUST 4.html. Raw values live in :root; the
  * @theme inline block maps them onto Tailwind's --color-* namespace so utilities
  * like bg-cream / text-ink / text-purple / bg-surface-dark are generated.
  */
 :root {
   /* Brand palette */
-  --cream: #f3f1e7; /* page background */
+  --cream: #efefe4; /* page background */
   --purple: #a62bff; /* primary brand accent */
   --yellow: #f3ff00; /* accent on dark surfaces — active nav, callout values */
   --green: #27cf77; /* positive deltas, "on track" */
-  --surface-dark: #0a0a0a; /* sidebar + dark callout background */
+  --surface-dark: #000000; /* sidebar, dark callouts, exec-table header */
   --ink: #33312b; /* primary text */
   --muted: #6f6c62; /* secondary text */
   --card: #ffffff; /* card surface */
   --border: #e4e0d2; /* hairline borders */
 
-  /* Supporting tints used across the prototype */
+  /* Light/dark ends of each accent. Used by the gradient hero-stat banners and by
+     badges that need a legible foreground on a tinted background (e.g. green-dark
+     text on mint). Not a numeric scale — three fixed stops per hue. */
+  --yellow-light: #f7ff66;
+  --yellow-dark: #c9d400;
+  --green-light: #6fe0a7;
+  --green-dark: #1a9054;
+  --purple-light: #c97aff;
+  --purple-dark: #6f15c4;
+
+  /* Two one-off stops the design uses as bare hex, named so they are greppable:
+     the Peru summary row in exec tables, and the warm start of the black gradient
+     (deliberately not --ink, which is a text color). */
+  --purple-deep: #7a1fc7;
+  --surface-dark-soft: #3a372e;
+
+  /* The design file's own name for --surface-dark. Kept as a raw alias so markup
+     transcribed from the reference keeps working; --surface-dark stays the
+     canonical name because it describes the role, and because renaming ~40 call
+     sites would trade a visible diff for silently-dropped Tailwind utilities.
+     Deliberately NOT exported to @theme — Tailwind already ships --color-black. */
+  --black: var(--surface-dark);
+
+  /* Supporting tints used across the design */
   --lavender: #f5eaff; /* PROXY pill / activity chip / question chip bg */
   --mint: #eafbf2; /* status-badge bg */
   --chip-cream: #f8f6ef; /* stat-chip bg */
   --track: #f1eee3; /* progress-bar track bg */
 
-  /* Segmented risk-bar palette (prototype re-colors the 0–4 scale onto brand hues).
-     Used only by the RiskBar component; the semantic RiskBadge pills keep their own
-     legible green→amber→red scale for dense tables. */
+  /* Segmented risk palette (the design re-colors the 0–4 scale onto brand hues).
+     Used by RiskBar, Donut and RiskHeatmapTable; the semantic RiskBadge pills keep
+     their own legible green→amber→red scale for dense tables. Kept separate from
+     --green-light on purpose: --risk-low is a scale position, not an accent. */
   --risk-none: #27cf77;
   --risk-low: #8fe0b4;
   --risk-medium: #a62bff;
   --risk-high: #3a0a5c;
   --risk-critical: #0a0a0a;
+
+  /* Display face for page titles and the numbered section headings. BookmanJF Pro
+     is the licensed brand face; it is not loaded here, and the design file does not
+     load it either — both fall back to Georgia, so app and reference match. Swap in
+     next/font/local here if it is ever licensed. */
+  --font-display-stack: Georgia, "Times New Roman", serif;
 
   /* App-level aliases (kept so existing var(--background)/var(--foreground) refs work) */
   --background: var(--cream);
@@ -56,22 +86,32 @@
   --color-chip-cream: var(--chip-cream);
   --color-track: var(--track);
 
+  --color-yellow-light: var(--yellow-light);
+  --color-yellow-dark: var(--yellow-dark);
+  --color-green-light: var(--green-light);
+  --color-green-dark: var(--green-dark);
+  --color-purple-light: var(--purple-light);
+  --color-purple-dark: var(--purple-dark);
+  --color-purple-deep: var(--purple-deep);
+  --color-surface-dark-soft: var(--surface-dark-soft);
+
   --color-risk-none: var(--risk-none);
   --color-risk-low: var(--risk-low);
   --color-risk-medium: var(--risk-medium);
   --color-risk-high: var(--risk-high);
   --color-risk-critical: var(--risk-critical);
 
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-instrument-sans);
   --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-display-stack);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  /* System font stack per the prototype — no webfont to load. Geist var kept as a
-     first preference where the next/font var is present, then system fallbacks. */
+  /* Instrument Sans is loaded by next/font in app/layout.tsx; the system stack is
+     the fallback while it swaps in. */
   font-family:
-    var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
-    sans-serif;
+    var(--font-instrument-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+    Arial, sans-serif;
 }
