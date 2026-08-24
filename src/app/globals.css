@@ -48,7 +48,7 @@
   --track: #f1eee3; /* progress-bar track bg */
 
   /* Segmented risk palette (the design re-colors the 0–4 scale onto brand hues).
-     Used by RiskBar, Donut and RiskHeatmapTable; the semantic RiskBadge pills keep
+     Used by the Donut and RiskHeatmapTable; the semantic RiskBadge pills keep
      their own legible green→amber→red scale for dense tables. Kept separate from
      --green-light on purpose: --risk-low is a scale position, not an accent. */
   --risk-none: #27cf77;

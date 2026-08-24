@@ -1,22 +1,17 @@
-// Partner-university card (Program Ecosystem) — country-colored left border (purple =
-// Colombia, green = Peru, matching the mockup), scholar counts, risk mix, and
-// semester/exam dates from the University model.
+// Partner-university card (Program Ecosystem), per design-reference/MVP_Dashboard
+// AUGUST 4.html: name + type badge on the head row, a bordered location line, three
+// compact count chips, then a bordered-top meta block.
+//
+// The country-colored left border (purple = Colombia, green = Peru) follows
+// COUNTRY_TONE, shared with the ecosystem group headings.
 import type { Country, UniversityType } from "@/generated/prisma/enums";
-import { Card, ProxyBadge } from "@/components/ui";
-import { RiskBar } from "@/components/RiskBar";
-import { COUNTRY_ABBR, COUNTRY_TONE } from "@/lib/labels";
-import type { RiskDistribution } from "@/lib/dashboard/types";
+import { Card, StatChip, TypeBadge } from "@/components/ui";
+import { COUNTRY_LABEL, COUNTRY_TONE } from "@/lib/labels";
 
 const TYPE_LABEL: Record<UniversityType, string> = { PUBLIC: "Public", PRIVATE: "Private" };
-// Both accents follow COUNTRY_TONE so the card, the ecosystem group headings and
-// the per-country summary rows can never disagree about which colour a country is.
-const BORDER_CLASS: Record<Country, string> = {
-  COLOMBIA: "border-l-4 border-l-purple",
-  PERU: "border-l-4 border-l-green",
-};
-const VALUE_CLASS: Record<"purple" | "green", string> = {
-  purple: "text-purple",
-  green: "text-green",
+const BORDER_CLASS: Record<"purple" | "green", string> = {
+  purple: "border-l-4 border-l-purple",
+  green: "border-l-4 border-l-green",
 };
 
 const fmtShortDate = (d: Date | string | null): string =>
@@ -31,7 +26,6 @@ export function UniversityCard({
   activeScholarCount,
   dropOutCount,
   cohorts,
-  riskDistribution,
   semesterStartDate,
   semesterEndDate,
   examWindowStart,
@@ -41,58 +35,66 @@ export function UniversityCard({
   city: string;
   country: Country;
   type: UniversityType;
+  /** Everyone ever enrolled here — a superset of active + dropout. */
   scholarCount: number;
   activeScholarCount: number;
   dropOutCount: number;
   cohorts: string[];
-  riskDistribution: RiskDistribution;
   semesterStartDate: Date | string | null;
   semesterEndDate: Date | string | null;
   examWindowStart: Date | string | null;
   examWindowEnd: Date | string | null;
 }) {
-  const enrolled = activeScholarCount + dropOutCount;
-  const retentionPct = enrolled ? Math.round((activeScholarCount / enrolled) * 100) : null;
+  // Retention is over the settled population (active + withdrawn); scholars who are
+  // paused or graduated are not a retention outcome either way.
+  const settled = activeScholarCount + dropOutCount;
+  const retentionPct = settled ? Math.round((activeScholarCount / settled) * 100) : null;
+  const hasScholars = scholarCount > 0;
+
   return (
-    <Card className={BORDER_CLASS[country]}>
-      <div className="mb-2 text-[14.5px] font-bold leading-snug text-surface-dark">
-        {name}{" "}
-        <span className="text-[11px] font-normal text-muted">
-          {city}, {COUNTRY_ABBR[country]} · {TYPE_LABEL[type]}
-        </span>
+    <Card className={`${BORDER_CLASS[COUNTRY_TONE[country]]} p-4`}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="text-sm font-extrabold leading-tight text-surface-dark">{name}</div>
+        <TypeBadge tone={type === "PUBLIC" ? "mint" : "lavender"}>{TYPE_LABEL[type]}</TypeBadge>
       </div>
-      <div className={`mb-1 text-sm font-bold ${VALUE_CLASS[COUNTRY_TONE[country]]}`}>
-        {activeScholarCount} active scholars
+      <div className="mb-3 mt-1 border-b border-border pb-[11px] text-[11px] text-muted">
+        {city}, {COUNTRY_LABEL[country]}
       </div>
-      <div className="flex flex-col gap-1 text-xs text-muted">
-        <span>
-          {activeScholarCount} active · {dropOutCount} drop out
-        </span>
-        {scholarCount === 0 ? null : (
-          <>
-            {retentionPct != null ? (
-              <span>
-                Retention {retentionPct}% · Drop out {100 - retentionPct}%
-              </span>
+
+      <div className="mb-2.5 flex gap-1.5">
+        <StatChip size="sm" value={scholarCount} label="Enrolled to date" />
+        <StatChip size="sm" value={activeScholarCount} label="Active" tone="green" />
+        <StatChip
+          size="sm"
+          value={dropOutCount}
+          label="Dropout"
+          tone={dropOutCount > 0 ? "red" : "default"}
+        />
+      </div>
+
+      {hasScholars ? (
+        <div className="flex flex-col gap-1.5 border-t border-border pt-2.5 text-[11px] text-muted">
+          <span>
+            {cohorts.length > 0 ? (
+              <>
+                <b className="font-bold text-ink">Cohorts</b> {cohorts.join(", ")}
+                {retentionPct != null ? " · " : null}
+              </>
             ) : null}
-            {cohorts.length > 0 ? <span>Cohorts: {cohorts.join(", ")}</span> : null}
-            <span>
-              Semester: {fmtShortDate(semesterStartDate)} – {fmtShortDate(semesterEndDate)}
-            </span>
-            <span>
-              Exams: {fmtShortDate(examWindowStart)} – {fmtShortDate(examWindowEnd)}
-            </span>
-          </>
-        )}
-      </div>
-      {scholarCount > 0 ? (
-        <div className="mt-3">
-          <RiskBar distribution={riskDistribution} />
+            {retentionPct != null ? (
+              <>
+                <b className="font-bold text-ink">Retention</b> {retentionPct}% /{" "}
+                <b className="font-bold text-ink">Dropout</b> {100 - retentionPct}%
+              </>
+            ) : null}
+          </span>
+          <span>
+            <b className="font-bold text-ink">Semester</b> {fmtShortDate(semesterStartDate)} –{" "}
+            {fmtShortDate(semesterEndDate)} · exams {fmtShortDate(examWindowStart)} –{" "}
+            {fmtShortDate(examWindowEnd)}
+          </span>
         </div>
       ) : null}
-      <div className="mt-2.5 flex items-center gap-1.5 text-xs text-muted">
-        Evaluation results <ProxyBadge>PENDING</ProxyBadge>
-      </div>
     </Card>
   );
 }

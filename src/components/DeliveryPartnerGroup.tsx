@@ -1,43 +1,45 @@
-// Grouped delivery-partner list (Program Ecosystem) — one group per operator track.
-import type { Country } from "@/generated/prisma/enums";
-import { ProxyBadge } from "@/components/ui";
-import { COUNTRY_LABEL } from "@/lib/labels";
+// Operating-partner rows (Program Ecosystem). AUGUST 4 groups these by country and
+// carries the track as a badge on each row, inverting the previous grouping — the
+// question the page answers is "who delivers this, where", and the track is an
+// attribute of the partner rather than the top-level split.
+import type { Country, OperatorTrack } from "@/generated/prisma/enums";
+import { TypeBadge } from "@/components/ui";
 
 export interface DeliveryPartnerRow {
   name: string;
   country: Country;
+  track: OperatorTrack;
   scholarCount: number;
 }
 
-export function DeliveryPartnerGroup({
-  title,
-  operators,
-}: {
-  title: string;
-  operators: DeliveryPartnerRow[];
-}) {
+const TRACK_LABEL: Record<OperatorTrack, string> = {
+  EARLY_SUPPORT: "Early Support",
+  GROWTH_DEVELOPMENT: "Growth & Development",
+};
+
+export function DeliveryPartnerGroup({ operators }: { operators: DeliveryPartnerRow[] }) {
   return (
-    <div className="mt-4 first:mt-0">
-      <div className="mb-2 text-xs font-bold uppercase tracking-[0.03em] text-purple">{title}</div>
+    <div className="px-5">
       {operators.map((o) => (
         <div
           key={o.name}
-          className="flex items-center justify-between border-b border-border py-2.5 last:border-b-0"
+          className="flex items-start justify-between gap-3 border-b border-border py-2.5 last:border-b-0"
         >
           <div className="text-[13.5px] font-semibold text-surface-dark">
             {o.name}
-            <span className="ml-1.5 text-[11.5px] font-normal text-muted">
-              {COUNTRY_LABEL[o.country]}
-            </span>
+            <TypeBadge tone={o.track === "EARLY_SUPPORT" ? "lavender" : "mint"}>
+              {TRACK_LABEL[o.track]}
+            </TypeBadge>
           </div>
-          <div className="text-sm font-extrabold text-surface-dark">
+          <div
+            className={`shrink-0 text-sm font-extrabold ${
+              o.track === "EARLY_SUPPORT" ? "text-purple" : "text-green"
+            }`}
+          >
             {o.scholarCount} <span className="text-[11.5px] font-normal text-muted">scholars</span>
           </div>
         </div>
       ))}
-      <div className="mt-2 flex items-center gap-1.5 text-xs text-muted">
-        Survey results <ProxyBadge>PENDING</ProxyBadge>
-      </div>
     </div>
   );
 }

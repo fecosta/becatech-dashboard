@@ -78,9 +78,25 @@ export function SectionTitle({
   );
 }
 
-export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
+export function Card({
+  children,
+  className = "",
+  padded = true,
+}: {
+  children: ReactNode;
+  className?: string;
+  /** Drop the default p-5 when the content owns its own padding (e.g. full-bleed
+   *  rows that need their dividers to reach the card edge). Conflicting padding
+   *  utilities resolve by stylesheet order, not class order, so this has to be a
+   *  prop rather than an override in className. */
+  padded?: boolean;
+}) {
   return (
-    <div className={`rounded-2xl border border-border bg-card p-5 ${className}`}>{children}</div>
+    <div
+      className={`rounded-2xl border border-border bg-card ${padded ? "p-5" : ""} ${className}`}
+    >
+      {children}
+    </div>
   );
 }
 

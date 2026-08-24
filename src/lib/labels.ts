@@ -73,9 +73,9 @@ export const RISK_LEVEL_HEX: Record<RiskLevel, string> = {
 };
 
 /**
- * Segmented risk palette (matches RiskBar.tsx's --risk-* tokens / the mockup's donut) —
- * a different, brand-hued scale from RISK_LEVEL_HEX above. Use this one wherever a chart
- * sits next to a RiskBar on the same page, so the colors read as the same scale.
+ * Segmented risk palette (matches the --risk-* tokens in globals.css) — a different,
+ * brand-hued scale from RISK_LEVEL_HEX above. Use this one for the risk donut and the
+ * profile heatmap, so the two read as the same scale.
  */
 export const RISK_LEVEL_HEX_SEGMENTED: Record<RiskLevel, string> = {
   SIN_RIESGO: "#27cf77",
