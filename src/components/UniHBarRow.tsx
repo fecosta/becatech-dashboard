@@ -1,6 +1,6 @@
 // Per-university horizontal bar row ("Scholars Status per University") — bar width =
 // % low risk (SIN_RIESGO + RIESGO_BAJO), the remainder needs attention.
-import { COUNTRY_LABEL } from "@/lib/labels";
+import { COUNTRY_ABBR, COUNTRY_LABEL } from "@/lib/labels";
 import type { Country } from "@/generated/prisma/enums";
 
 export interface UniHBarDatum {
@@ -9,8 +9,6 @@ export interface UniHBarDatum {
   country?: Country;
   lowRiskPct: number; // 0-1
 }
-
-const COUNTRY_ABBR: Record<Country, string> = { COLOMBIA: "COL", PERU: "PE" };
 
 export function UniHBarRow({ data, hideLegend = false }: { data: UniHBarDatum[]; hideLegend?: boolean }) {
   return (

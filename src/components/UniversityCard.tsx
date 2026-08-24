@@ -4,15 +4,20 @@
 import type { Country, UniversityType } from "@/generated/prisma/enums";
 import { Card, ProxyBadge } from "@/components/ui";
 import { RiskBar } from "@/components/RiskBar";
+import { COUNTRY_ABBR, COUNTRY_TONE } from "@/lib/labels";
 import type { RiskDistribution } from "@/lib/dashboard/types";
 
 const TYPE_LABEL: Record<UniversityType, string> = { PUBLIC: "Public", PRIVATE: "Private" };
-const COUNTRY_ABBR: Record<Country, string> = { COLOMBIA: "COL", PERU: "PE" };
+// Both accents follow COUNTRY_TONE so the card, the ecosystem group headings and
+// the per-country summary rows can never disagree about which colour a country is.
 const BORDER_CLASS: Record<Country, string> = {
   COLOMBIA: "border-l-4 border-l-purple",
   PERU: "border-l-4 border-l-green",
 };
-const VALUE_CLASS: Record<Country, string> = { COLOMBIA: "text-purple", PERU: "text-green" };
+const VALUE_CLASS: Record<"purple" | "green", string> = {
+  purple: "text-purple",
+  green: "text-green",
+};
 
 const fmtShortDate = (d: Date | string | null): string =>
   d ? new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(new Date(d)) : "—";
@@ -56,7 +61,7 @@ export function UniversityCard({
           {city}, {COUNTRY_ABBR[country]} · {TYPE_LABEL[type]}
         </span>
       </div>
-      <div className={`mb-1 text-sm font-bold ${VALUE_CLASS[country]}`}>
+      <div className={`mb-1 text-sm font-bold ${VALUE_CLASS[COUNTRY_TONE[country]]}`}>
         {activeScholarCount} active scholars
       </div>
       <div className="flex flex-col gap-1 text-xs text-muted">

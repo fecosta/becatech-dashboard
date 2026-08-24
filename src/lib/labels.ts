@@ -17,6 +17,20 @@ export const COUNTRY_LABEL: Record<Country, string> = {
   PERU: "Peru",
 };
 
+/** Short form used where a country sits beside a name (e.g. "UTEC PE"). */
+export const COUNTRY_ABBR: Record<Country, string> = {
+  COLOMBIA: "COL",
+  PERU: "PE",
+};
+
+/** The accent each country reads as throughout the design — the university card's
+ *  left border, the ecosystem country group bars, the per-country summary rows.
+ *  Kept here so those three cannot drift apart. */
+export const COUNTRY_TONE: Record<Country, "purple" | "green"> = {
+  COLOMBIA: "purple",
+  PERU: "green",
+};
+
 export const PROGRAM_STATUS_LABEL: Record<ProgramStatus, string> = {
   ACTIVE: "Active",
   WITHDRAWN: "Withdrawn",
