@@ -78,15 +78,28 @@ values are shown raw, never silently defaulted.
   (needs an `EnglishTracking` model decision); selection/financial-looking columns (`LB: ACADÉMICO`,
   `ICFES COL`, `SISBEN COL`, `Nivel económico (Perú)`, `NIVEL DE PRIORIZACIÓN`, `MONTO`,
   `PUNTAJE SELECCIÓN`, `OBSERVACIÓN`); and `Age` (dropped — derive from `dateOfBirth`).
-- **Missing from source entirely:** satisfaction survey, professional-skills scores, dropout-reason
-  taxonomy, university contacts — kept `Pending`/`Not Available` in the UI, never fabricated.
+- **Missing from source entirely:** satisfaction survey, professional-skills scores (the `MAKERS`
+  and `CONFIDENT ENGLISH` columns exist but are entirely empty), dropout-reason taxonomy, university
+  and operator contacts — kept `Pending`/`Not Available` in the UI, never fabricated.
+- **Correction (AUGUST 4 pass):** the *risk-reason* taxonomy is **not** missing. The two
+  "¿Qué situación específica está presentando el becario?" columns on MENTOR REPORTS are synced to
+  `MentorReport.academicAlertType` / `psychosocialAlertType` and are fully populated with a closed
+  list — 21 academic and 16 psychosocial options. They are grouped in `lib/risk/reason-taxonomy.ts`.
+  (`ACADEMIC CAUSE` / `PSYCHOSOCIAL CAUSE`, listed as unmapped, are a different pair of columns and
+  are blank in the reference export.) This is distinct from the *drop-out* reason, which genuinely
+  has no source.
 
 ### Fields requiring controlled mappings
 
 `Current Operator - Support Services` → resolved to an `Operator` by name (unknown = data-quality
 error, never auto-created). Enrollment/modality/risk-word/check-in-status → `lib/display/source-values.ts`.
-Socioeconomic (SISBEN COL vs Nivel económico Perú) — **country-specific, do not merge into one
-numeric scale**; needs an approved cross-country mapping (open decision).
+Socioeconomic — the raw `SISBEN COL` / `Nivel económico (Perú)` columns remain country-specific and
+must not be merged into one numeric scale. **Correction (AUGUST 4 pass):** the separate
+`Socioeconomic Level` column already carries a single harmonised scale for both countries
+(`Vulnerabilidad alta / moderada / baja`), so the cross-country reconciliation is done upstream and
+is not an open decision. What is still open is the *tier naming* the design proposes — see
+`lib/scholars/socioeconomic-tier.ts`. Roughly a fifth of scholars are marked `Pending` there and
+never receive a tier.
 
 ## 3. `MENTOR REPORTS` — flat, one row per mentor session
 
