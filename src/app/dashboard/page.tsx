@@ -17,7 +17,7 @@ import { PROGRESS_LABEL } from "@/lib/academic/academic-progress-label";
 import { ENGLISH_LEVELS } from "@/lib/academic/english-level";
 import { Permission } from "@/lib/auth/authorization";
 import { requirePermission } from "@/lib/auth/guard";
-import { parseFilters, type SearchParams } from "@/lib/dashboard/filters";
+import { filterChipsFor, parseFilters, type SearchParams } from "@/lib/dashboard/filters";
 import {
   getAcademicProgressByCountry,
   getCohortRetention,
@@ -118,11 +118,7 @@ export default async function HomePage({
     getDataFreshness(new Date()),
   ]);
 
-  const scopeChips = [
-    { label: `Cohort: ${filters.cohort ?? "all"}`, tone: "black" as const },
-    { label: `Country: ${filters.country ? COUNTRY_LABEL[filters.country] : "all"}`, tone: "green" as const },
-    { label: `University: ${filters.university ?? "all"}`, tone: "ghost" as const },
-  ];
+  const scopeChips = filterChipsFor(filters, ["cohort", "country", "university"]);
 
   const retentionRows: ExecRow[] = [
     ...retention.rows.map<ExecRow>((r) => ({

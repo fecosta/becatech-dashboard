@@ -9,6 +9,7 @@ import {
   AccessDenied,
   Card,
   DarkCallout,
+  FilterChipRow,
   KpiCard,
   PageHeader,
   SectionTitle,
@@ -18,7 +19,7 @@ import { SectionNav } from "@/components/SectionNav";
 import { gpaSummaryKpi } from "@/lib/academic/gpa-summary";
 import { Permission } from "@/lib/auth/authorization";
 import { requirePermission } from "@/lib/auth/guard";
-import { parseFilters, type SearchParams } from "@/lib/dashboard/filters";
+import { filterChipsFor, parseFilters, type SearchParams } from "@/lib/dashboard/filters";
 import {
   getAcademicProgress,
   getExecutiveOverview,
@@ -115,6 +116,8 @@ export default async function EarlySupportPage({
     getParticipationByActivityAndRisk(stageFilters),
     getRiskByGender(stageFilters),
   ]);
+
+  const scopeChips = filterChipsFor(filters, ["cohort", "country", "university"]);
 
   const missingReportsCount = alerts.attentionList.filter(
     (r) => r.missingCheckin || r.missingMentorReport,
@@ -237,6 +240,7 @@ export default async function EarlySupportPage({
       <SectionTitle size="lg" id="early-sec-2">
         2 · Scholar Status
       </SectionTitle>
+      <FilterChipRow chips={scopeChips} />
       <div>
         <Card>
           <div className="mb-3.5 text-[13.5px] font-bold text-surface-dark">2.1 Overall Status</div>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { preserveParams, visiblePillsForPath } from "@/lib/dashboard/filters";
+import { filterChipsFor, preserveParams, visiblePillsForPath } from "@/lib/dashboard/filters";
 
 // preserveParams builds the filter-preserving query string used by the deprecated-route
 // redirect stubs (risk-alerts → early-support, tracking → its new destinations, etc.).
@@ -91,5 +91,28 @@ describe("visiblePillsForPath", () => {
       "risk",
       "period",
     ]);
+  });
+});
+
+describe("filterChipsFor", () => {
+  it("reads 'all' when a filter is unset", () => {
+    expect(filterChipsFor({}, ["cohort", "country"])).toEqual([
+      { label: "Cohort: all", tone: "black" },
+      { label: "Country: all", tone: "green" },
+    ]);
+  });
+
+  it("reflects the applied value, so a card cannot disagree with the top bar", () => {
+    const chips = filterChipsFor({ cohort: "Cohorte 2025", country: "PERU" }, [
+      "cohort",
+      "country",
+    ]);
+    expect(chips.map((c) => c.label)).toEqual(["Cohort: Cohorte 2025", "Country: PERU"]);
+  });
+
+  // Same filter, same colour on every view — the design file is inconsistent about this.
+  it("gives each filter a stable tone", () => {
+    expect(filterChipsFor({}, ["risk"])[0].tone).toBe("purple");
+    expect(filterChipsFor({}, ["university"])[0].tone).toBe("ghost");
   });
 });
