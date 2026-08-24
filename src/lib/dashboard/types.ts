@@ -1,5 +1,7 @@
 // Typed inputs and results for the dashboard query layer (src/lib/dashboard/queries.ts).
 import type { RiskBand } from "./bands";
+import type { ActivityGroup, RiskTier } from "./risk-tier";
+import type { RiskReasonCategory } from "../risk/reason-taxonomy";
 import type { EnglishLevel } from "../academic/english-level";
 import type { SocioeconomicTier } from "../scholars/socioeconomic-tier";
 import type {
@@ -492,4 +494,51 @@ export interface GpaByCohort {
   peru: { scale: number; rows: { cohort: string; average: number | null; count: number }[]; overall: number | null };
   /** Terms a scholar was not enrolled in are stored as a literal 0 in the source. */
   excludedZeroGpaCount: number;
+}
+
+// ------------------------------------------------------------------
+// AUGUST 4 early-support sections
+// ------------------------------------------------------------------
+
+/** One axis of §2.2. The two axes overlap, so each carries its own denominator. */
+export interface RiskReasonAxis {
+  /** Scholars flagged with at least one reason on THIS axis. Percentages are over it. */
+  scholarsWithAnyReason: number;
+  rows: { category: RiskReasonCategory; label: string; scholarCount: number; pct: number }[];
+}
+
+export interface RiskReasonBreakdown {
+  period: string;
+  atRiskScholarCount: number;
+  academic: RiskReasonAxis;
+  psychosocial: RiskReasonAxis;
+  /** Scholars whose only reasons are options the taxonomy has not classified. */
+  unclassifiedScholarCount: number;
+  /** The unclassified options themselves, so a drift shows up as text, not a silent gap. */
+  unmappedAtoms: string[];
+  /** Scholars flagged on both axes — why the two tables do not sum to the at-risk total. */
+  bothAxesCount: number;
+}
+
+/** §2.3 — participation by activity group and risk tier. */
+export interface ParticipationByActivityAndRisk {
+  period: string;
+  groups: {
+    activity: ActivityGroup;
+    rows: {
+      tier: RiskTier;
+      scholarCount: number;
+      participatedCount: number;
+      /** null when the tier has no scholars — never a misleading 0%. */
+      pct: number | null;
+    }[];
+  }[];
+}
+
+/** §2.5 — risk tier by gender. */
+export interface RiskByGenderRow {
+  gender: "female" | "male" | "other";
+  scholarCount: number;
+  tiers: Record<RiskTier, number>;
+  tierPct: Record<RiskTier, number>;
 }

@@ -2,6 +2,8 @@ import Link from "next/link";
 import type { AlertType, RiskLevel } from "@/generated/prisma/enums";
 import { ComboBarLineCard, Donut, LineCard } from "@/components/charts";
 import { PaceBarChart } from "@/components/PaceBarChart";
+import { ExecTable, type ExecRow } from "@/components/ExecTable";
+import { FactStrip } from "@/components/FactStrip";
 import { UniHBarRow } from "@/components/UniHBarRow";
 import {
   AccessDenied,
@@ -23,15 +25,29 @@ import {
   getHomeOverview,
   getMonthlyRiskTrend,
   getRiskBreakdowns,
+  getParticipationByActivityAndRisk,
   getRiskAlerts,
+  getRiskByGender,
+  getRiskReasonBreakdown,
   getRiskStageSummary,
   getSupportParticipation,
   getUniversityRiskBreakdown,
 } from "@/lib/dashboard/queries";
 import { ALERT_TYPE_LABEL, RISK_LEVEL_HEX_SEGMENTED, RISK_LEVEL_LABEL, RISK_LEVEL_NOTE } from "@/lib/labels";
+import {
+  ACTIVITY_GROUP_LABEL,
+  RISK_TIER_LABEL,
+  RISK_TIER_ORDER,
+} from "@/lib/dashboard/risk-tier";
 import { fmtInt, fmtPct } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
+
+const GENDER_LABEL: Record<"female" | "male" | "other", string> = {
+  female: "Women",
+  male: "Men",
+  other: "Other",
+};
 
 // Alert types shown in the split, in priority order. NONE is intentionally excluded.
 const ALERT_SPLIT_ORDER: AlertType[] = [
@@ -81,6 +97,9 @@ export default async function EarlySupportPage({
     riskTrend,
     breakdowns,
     alerts,
+    reasons,
+    participation,
+    byGender,
   ] = await Promise.all([
     getRiskStageSummary(stageFilters),
     getSupportParticipation(stageFilters),
@@ -92,6 +111,9 @@ export default async function EarlySupportPage({
     getMonthlyRiskTrend(stageFilters),
     getRiskBreakdowns(stageFilters),
     getRiskAlerts(stageFilters, user),
+    getRiskReasonBreakdown(stageFilters),
+    getParticipationByActivityAndRisk(stageFilters),
+    getRiskByGender(stageFilters),
   ]);
 
   const missingReportsCount = alerts.attentionList.filter(
@@ -156,22 +178,24 @@ export default async function EarlySupportPage({
         </div>
       </div>
 
-      <div className="flex divide-x divide-border overflow-hidden rounded-2xl border border-border bg-card">
-        <div className="flex-1 px-2.5 py-[18px] text-center">
-          <div className="text-2xl font-extrabold text-purple">{fmtInt(stageOverview.activeScholars)}</div>
-          <div className="mt-1 text-[11.5px] text-muted">
-            Total scholars <span className="opacity-70">({fmtPct(stagePct)} of all active)</span>
-          </div>
-        </div>
-        <div className="flex-1 px-2.5 py-[18px] text-center">
-          <div className="text-2xl font-extrabold text-green">{fmtPct(year1?.rate ?? 0)}</div>
-          <div className="mt-1 text-[11.5px] text-muted">Year 1 retention</div>
-        </div>
-        <div className="flex-1 px-2.5 py-[18px] text-center">
-          <div className="text-2xl font-extrabold text-green">{fmtPct(year2?.rate ?? 0)}</div>
-          <div className="mt-1 text-[11.5px] text-muted">Year 2 retention</div>
-        </div>
-      </div>
+      <SectionTitle size="lg" id="early-sec-1">
+        1 · Scholars in Years 1 and 2
+      </SectionTitle>
+      <FactStrip
+        items={[
+          {
+            value: fmtInt(stageOverview.activeScholars),
+            label: (
+              <>
+                Total scholars <span className="opacity-70">({fmtPct(stagePct)} of all active)</span>
+              </>
+            ),
+            tone: "purple",
+          },
+          { value: fmtPct(year1?.rate ?? 0), label: "Year 1 retention", tone: "green" },
+          { value: fmtPct(year2?.rate ?? 0), label: "Year 2 retention", tone: "green" },
+        ]}
+      />
 
       <div className="mt-4">
         <DarkCallout
@@ -210,9 +234,12 @@ export default async function EarlySupportPage({
         />
       </div>
 
-      <div className="mt-6">
-        <SectionTitle>Scholars Status</SectionTitle>
+      <SectionTitle size="lg" id="early-sec-2">
+        2 · Scholar Status
+      </SectionTitle>
+      <div>
         <Card>
+          <div className="mb-3.5 text-[13.5px] font-bold text-surface-dark">2.1 Overall Status</div>
           {riskClassified === 0 ? (
             <p className="text-sm text-muted">No risk data for the current selection.</p>
           ) : (
@@ -233,6 +260,32 @@ export default async function EarlySupportPage({
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+          {riskClassified === 0 ? null : (
+            <div className="mt-5">
+              <ExecTable
+                headers={["Risk level", "%", "Scholars", "What it means"]}
+                rows={[
+                  ...RISK_ORDER.map<ExecRow>((l) => ({
+                    key: l,
+                    label: RISK_LEVEL_LABEL[l],
+                    cells: [
+                      `${Math.round((risk.distribution[l] / riskTotal) * 100)}%`,
+                      fmtInt(risk.distribution[l]),
+                      <span key="n" className="text-muted">
+                        {RISK_LEVEL_NOTE[l]}
+                      </span>,
+                    ],
+                  })),
+                  {
+                    key: "total",
+                    label: "TOTAL",
+                    summary: "actual",
+                    cells: ["100%", fmtInt(riskTotal), ""],
+                  },
+                ]}
+              />
             </div>
           )}
         </Card>
@@ -270,19 +323,90 @@ export default async function EarlySupportPage({
 
       <Card className="mt-4">
         <div className="mb-3.5 flex flex-wrap items-baseline justify-between gap-1.5">
-          <div className="text-[13.5px] font-bold text-surface-dark">Main Risk Level Reasons</div>
+          <div className="text-[13.5px] font-bold text-surface-dark">2.2 Reasons for Risk</div>
           <div className="text-xs text-muted">
-            {fmtInt(stageOverview.withdrawnScholars)} dropouts to date
+            {fmtInt(reasons.atRiskScholarCount)} scholars at medium risk or above ·{" "}
+            {reasons.period}
           </div>
         </div>
-        <p className="text-xs text-muted">
-          A per-reason breakdown (financial, academic, psychosocial, relocation) isn&rsquo;t tracked
-          in the data yet.
-        </p>
+        {reasons.academic.rows.length === 0 && reasons.psychosocial.rows.length === 0 ? (
+          <p className="text-sm text-muted">
+            No risk reasons reported for this selection in {reasons.period}.
+          </p>
+        ) : (
+          <>
+            <div className="mb-2.5">
+              <span className="inline-flex items-center rounded-[10px] border-2 border-green-dark bg-green px-4 py-2 text-xs font-extrabold text-white">
+                Academic — {fmtInt(reasons.academic.scholarsWithAnyReason)} scholars
+              </span>
+            </div>
+            <ExecTable
+              headers={["Reason", "%", "Scholars"]}
+              rows={reasons.academic.rows.map<ExecRow>((r) => ({
+                key: r.category,
+                label: r.label,
+                cells: [`${r.pct}%`, fmtInt(r.scholarCount)],
+              }))}
+              empty="No academic reasons reported."
+            />
+
+            <div className="mb-2.5 mt-5">
+              <span className="inline-flex items-center rounded-[10px] border-2 border-purple-dark bg-purple px-4 py-2 text-xs font-extrabold text-white">
+                Psychosocial — {fmtInt(reasons.psychosocial.scholarsWithAnyReason)} scholars
+              </span>
+            </div>
+            <ExecTable
+              headers={["Reason", "%", "Scholars"]}
+              rows={reasons.psychosocial.rows.map<ExecRow>((r) => ({
+                key: r.category,
+                label: r.label,
+                cells: [`${r.pct}%`, fmtInt(r.scholarCount)],
+              }))}
+              empty="No psychosocial reasons reported."
+            />
+
+            <div className="mt-3.5 rounded-xl bg-chip-cream px-3.5 py-3 text-xs text-muted">
+              <b className="text-ink">The two tables overlap and do not add up.</b>{" "}
+              {fmtInt(reasons.bothAxesCount)} scholar
+              {reasons.bothAxesCount === 1 ? " is" : "s are"} flagged on both axes, so each table is
+              a percentage of its own group.
+              {reasons.unclassifiedScholarCount > 0
+                ? ` ${fmtInt(reasons.unclassifiedScholarCount)} scholar(s) were flagged only with options the reason grouping has not classified yet.`
+                : ""}
+            </div>
+          </>
+        )}
+      </Card>
+
+      {/* 2.3 — participation against risk, by activity. */}
+      <Card className="mt-4">
+        <div className="mb-3.5 flex flex-wrap items-baseline justify-between gap-1.5">
+          <div className="text-[13.5px] font-bold text-surface-dark">
+            2.3 Participation and Risk Level
+          </div>
+          <div className="text-xs text-muted">{participation.period}</div>
+        </div>
+        <ExecTable
+          headers={["Activity", ...RISK_TIER_ORDER.map((t) => RISK_TIER_LABEL[t])]}
+          rows={participation.groups.map<ExecRow>((g) => ({
+            key: g.activity,
+            label: ACTIVITY_GROUP_LABEL[g.activity],
+            cells: g.rows.map((r) =>
+              r.pct == null ? "—" : `${r.pct}% (${r.participatedCount}/${r.scholarCount})`,
+            ),
+          }))}
+          caption="Share of scholars in each tier with at least one session this month, with the counts behind it. These columns are integers with a zero default, so a blank report and a genuine zero look the same — which is why the denominator is always shown."
+        />
+        <div className="mt-3.5 rounded-xl bg-chip-cream px-3.5 py-3 text-xs text-muted">
+          <b className="text-ink">The month-by-month trend is not shown yet.</b> Risk periods are
+          currently keyed two different ways — the first two program months fall back to a calendar
+          month because the sheet column that carries them is unmapped — so an M1→M6 line would
+          compare unlike periods.
+        </div>
       </Card>
 
       <div className="mt-6">
-        <SectionTitle>Scholars Status per University</SectionTitle>
+        <SectionTitle>2.4 Scholar Status per University</SectionTitle>
         <Card>
           {uniBreakdown.length === 0 ? (
             <p className="text-sm text-muted">No universities in scope for this selection.</p>
@@ -298,37 +422,25 @@ export default async function EarlySupportPage({
         </Card>
       </div>
 
-      <div className="mt-6 grid gap-4 lg:grid-cols-2">
-        <div>
-          <SectionTitle>Risk Level by City</SectionTitle>
-          <Card>
-            {breakdowns.byCity.length === 0 ? (
-              <p className="text-sm text-muted">No city data for this selection.</p>
-            ) : (
-              <UniHBarRow
-                hideLegend
-                data={breakdowns.byCity.map((r) => ({ name: r.name, lowRiskPct: r.lowRiskPct }))}
-              />
-            )}
-          </Card>
-        </div>
-        <div>
-          <SectionTitle>Risk Level by Gender</SectionTitle>
-          <Card>
-            {breakdowns.byGender.length === 0 ? (
-              <p className="text-sm text-muted">No gender data for this selection.</p>
-            ) : (
-              <UniHBarRow
-                hideLegend
-                data={breakdowns.byGender.map((r) => ({ name: r.name, lowRiskPct: r.lowRiskPct }))}
-              />
-            )}
-          </Card>
-        </div>
+      <div className="mt-6">
+        <SectionTitle>2.5 Risk Level by Gender</SectionTitle>
+        <Card>
+          <ExecTable
+            headers={["Risk level", ...byGender.map((g) => GENDER_LABEL[g.gender])]}
+            rows={[...RISK_TIER_ORDER].reverse().map<ExecRow>((tier) => ({
+              key: tier,
+              label: RISK_TIER_LABEL[tier],
+              cells: byGender.map((g) => `${g.tierPct[tier]}% (${g.tiers[tier]})`),
+            }))}
+            empty="No gender data for this selection."
+          />
+        </Card>
       </div>
 
+      {/* Kept past the redesign: whether vulnerability predicts risk is the program's
+          core thesis, and no other section answers it. */}
       <div className="mt-6">
-        <SectionTitle>Risk Level by Socioeconomic Condition</SectionTitle>
+        <SectionTitle>2.6 Risk Level by Socioeconomic Condition</SectionTitle>
         <Card>
           {breakdowns.bySocioeconomic.length === 0 ? (
             <p className="text-sm text-muted">No socioeconomic data for this selection.</p>
@@ -381,8 +493,10 @@ export default async function EarlySupportPage({
         </div>
       </Card>
 
-      <div className="mt-6">
-        <SectionTitle>Academic Progress</SectionTitle>
+      <SectionTitle size="lg" id="early-sec-3">
+        3 · Academic Progress
+      </SectionTitle>
+      <div>
         <div className="grid gap-4 lg:grid-cols-2">
           <Card>
             <div className="mb-1.5 text-[13.5px] font-bold text-surface-dark">On track vs. behind</div>

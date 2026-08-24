@@ -6,6 +6,22 @@ import { parseScholarProgress } from "../academic/academic-progress-label";
 import { ENGLISH_LEVELS, type EnglishLevel, parseEnglishLevel } from "../academic/english-level";
 import { parseSocioeconomicTier, type SocioeconomicTier, TIER_MAPPING_APPROVED } from "../scholars/socioeconomic-tier";
 import { dropoutBand } from "./bands";
+import {
+  ACTIVITY_GROUP_COLUMNS,
+  ACTIVITY_GROUP_ORDER,
+  RISK_TIER_ORDER,
+  type RiskTier,
+  riskTier,
+} from "./risk-tier";
+import {
+  CATEGORIES_BY_AXIS,
+  categorizeAlertAtom,
+  normalizeAlertAtom,
+  RISK_REASON_LABEL,
+  type RiskAxis,
+  type RiskReasonCategory,
+  splitAlertAtoms,
+} from "../risk/reason-taxonomy";
 import { cohortYear, normalizeOrigin, originKey } from "./origin";
 import { summarizeGpa } from "../academic/gpa-summary";
 import { type CurrentUser, scholarAccessWhere } from "../auth/authorization";
@@ -32,6 +48,10 @@ import type {
   GpaByCohort,
   OriginBreakdown,
   OriginMatrix,
+  ParticipationByActivityAndRisk,
+  RiskByGenderRow,
+  RiskReasonAxis,
+  RiskReasonBreakdown,
   ScholarBaseCounts,
   UniversityRetentionRow,
   VulnerabilityTiers,
@@ -1710,4 +1730,210 @@ export async function getGpaByCohort(filters: DashboardFilters = {}): Promise<Gp
     peru: side(Country.PERU),
     excludedZeroGpaCount,
   };
+}
+
+// ------------------------------------------------------------------
+// 9.11 AUGUST 4 early-support sections
+// ------------------------------------------------------------------
+
+/**
+ * §2.2 Why scholars are at risk.
+ *
+ * Reads the two "situación específica" multi-selects already synced onto MentorReport,
+ * grouped by the taxonomy in lib/risk/reason-taxonomy.ts.
+ *
+ * Counts SCHOLARS, not report rows or selected options: a scholar with two options in
+ * the same reason counts once for that reason, and one who was reported twice in the
+ * period counts once overall.
+ *
+ * The two axes are reported independently because they overlap for most at-risk
+ * scholars. Do not add the two tables together.
+ */
+export async function getRiskReasonBreakdown(
+  filters: DashboardFilters = {},
+): Promise<RiskReasonBreakdown> {
+  const { currentPeriod, scholars, riskMap } = await loadScope(filters);
+
+  const atRisk = scholars.filter((s) => {
+    if (!riskEligible(s)) return false;
+    const level = riskMap.get(s.scholarId)?.globalRiskLevel;
+    return level != null && riskTier(level) !== "LOW";
+  });
+  const atRiskIds = atRisk.map((s) => s.scholarId);
+
+  const reports = atRiskIds.length
+    ? await prisma.mentorReport.findMany({
+        where: { scholarId: { in: atRiskIds } },
+        select: {
+          scholarId: true,
+          reportingMonth: true,
+          academicAlertType: true,
+          psychosocialAlertType: true,
+        },
+      })
+    : [];
+  const inPeriod = reports.filter((r) => (r.reportingMonth ?? currentPeriod) === currentPeriod);
+
+  // scholarId -> the reasons they were flagged with, per axis.
+  const byAxis: Record<RiskAxis, Map<string, Set<RiskReasonCategory>>> = {
+    academic: new Map(),
+    psychosocial: new Map(),
+  };
+  const unmapped = new Set<string>();
+  const unclassifiedOnly = new Set<string>();
+  const anyAtomSeen = new Set<string>();
+
+  for (const r of inPeriod) {
+    for (const axis of ["academic", "psychosocial"] as RiskAxis[]) {
+      const raw = axis === "academic" ? r.academicAlertType : r.psychosocialAlertType;
+      for (const atom of splitAlertAtoms(raw)) {
+        anyAtomSeen.add(r.scholarId);
+        const category = categorizeAlertAtom(atom, axis);
+        if (!category) {
+          unmapped.add(normalizeAlertAtom(atom));
+          unclassifiedOnly.add(r.scholarId);
+          continue;
+        }
+        const set = byAxis[axis].get(r.scholarId) ?? new Set<RiskReasonCategory>();
+        set.add(category);
+        byAxis[axis].set(r.scholarId, set);
+      }
+    }
+  }
+
+  const axisResult = (axis: RiskAxis): RiskReasonAxis => {
+    const scholarsOnAxis = byAxis[axis];
+    const counts = new Map<RiskReasonCategory, number>();
+    for (const categories of scholarsOnAxis.values()) {
+      for (const c of categories) counts.set(c, (counts.get(c) ?? 0) + 1);
+    }
+    const denominator = scholarsOnAxis.size;
+    return {
+      scholarsWithAnyReason: denominator,
+      rows: CATEGORIES_BY_AXIS[axis]
+        .map((category) => ({
+          category,
+          label: RISK_REASON_LABEL[category],
+          scholarCount: counts.get(category) ?? 0,
+          pct: denominator ? Math.round(((counts.get(category) ?? 0) / denominator) * 100) : 0,
+        }))
+        .filter((r) => r.scholarCount > 0)
+        .sort((a, b) => b.scholarCount - a.scholarCount),
+    };
+  };
+
+  let bothAxesCount = 0;
+  for (const id of byAxis.academic.keys()) {
+    if (byAxis.psychosocial.has(id)) bothAxesCount += 1;
+  }
+
+  // Only count a scholar as unclassified if NONE of their options were classified.
+  let unclassifiedScholarCount = 0;
+  for (const id of unclassifiedOnly) {
+    if (!byAxis.academic.has(id) && !byAxis.psychosocial.has(id)) unclassifiedScholarCount += 1;
+  }
+
+  return {
+    period: currentPeriod,
+    atRiskScholarCount: atRisk.length,
+    academic: axisResult("academic"),
+    psychosocial: axisResult("psychosocial"),
+    unclassifiedScholarCount,
+    unmappedAtoms: [...unmapped].sort(),
+    bothAxesCount,
+  };
+}
+
+/**
+ * §2.3 Participation by activity group and risk tier.
+ *
+ * A caveat worth carrying into the UI: these counts are `Int @default(0)` on
+ * MentorReport, so a blank cell and a real zero are indistinguishable at this grain.
+ * The "blank is not zero" rule in the sync contract applies to SupportActivity rows,
+ * not to these columns. Every percentage therefore ships with its denominator.
+ */
+export async function getParticipationByActivityAndRisk(
+  filters: DashboardFilters = {},
+): Promise<ParticipationByActivityAndRisk> {
+  const { currentPeriod, scholars, riskMap } = await loadScope(filters);
+  const eligible = scholars.filter(riskEligible);
+
+  const tierOf = new Map<string, RiskTier>();
+  for (const s of eligible) {
+    const level = riskMap.get(s.scholarId)?.globalRiskLevel;
+    if (level != null) tierOf.set(s.scholarId, riskTier(level));
+  }
+
+  const reports = tierOf.size
+    ? await prisma.mentorReport.findMany({
+        where: { scholarId: { in: [...tierOf.keys()] } },
+        select: {
+          scholarId: true,
+          reportingMonth: true,
+          individualTutoring: true,
+          groupTutoring: true,
+          individualMentoring: true,
+          groupMentoring: true,
+          workshops: true,
+        },
+      })
+    : [];
+  const inPeriod = reports.filter((r) => (r.reportingMonth ?? currentPeriod) === currentPeriod);
+
+  return {
+    period: currentPeriod,
+    groups: ACTIVITY_GROUP_ORDER.map((activity) => {
+      const participated = new Set<string>();
+      for (const r of inPeriod) {
+        const total = ACTIVITY_GROUP_COLUMNS[activity].reduce((n, col) => n + (r[col] ?? 0), 0);
+        if (total > 0) participated.add(r.scholarId);
+      }
+      return {
+        activity,
+        rows: RISK_TIER_ORDER.map((tier) => {
+          const ids = [...tierOf.entries()].filter(([, t]) => t === tier).map(([id]) => id);
+          const participatedCount = ids.filter((id) => participated.has(id)).length;
+          return {
+            tier,
+            scholarCount: ids.length,
+            participatedCount,
+            pct: ids.length ? Math.round((participatedCount / ids.length) * 100) : null,
+          };
+        }),
+      };
+    }),
+  };
+}
+
+/** §2.5 Risk tier by gender. */
+export async function getRiskByGender(
+  filters: DashboardFilters = {},
+): Promise<RiskByGenderRow[]> {
+  const { scholars, riskMap } = await loadScope(filters);
+  const eligible = scholars.filter(riskEligible);
+
+  const genders: RiskByGenderRow["gender"][] = ["female", "male", "other"];
+  return genders
+    .map((gender) => {
+      const subset = eligible.filter((s) => normalizeGender(s.gender) === gender);
+      const tiers: Record<RiskTier, number> = { LOW: 0, MEDIUM: 0, HIGH_CRITICAL: 0 };
+      let assessed = 0;
+      for (const s of subset) {
+        const level = riskMap.get(s.scholarId)?.globalRiskLevel;
+        if (level == null) continue;
+        tiers[riskTier(level)] += 1;
+        assessed += 1;
+      }
+      return {
+        gender,
+        scholarCount: assessed,
+        tiers,
+        tierPct: {
+          LOW: assessed ? Math.round((tiers.LOW / assessed) * 100) : 0,
+          MEDIUM: assessed ? Math.round((tiers.MEDIUM / assessed) * 100) : 0,
+          HIGH_CRITICAL: assessed ? Math.round((tiers.HIGH_CRITICAL / assessed) * 100) : 0,
+        },
+      };
+    })
+    .filter((r) => r.scholarCount > 0);
 }
