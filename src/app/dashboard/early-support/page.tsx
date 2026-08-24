@@ -3,6 +3,7 @@ import { ComboBarLineCard, Donut, LineCard } from "@/components/charts";
 import { PaceBarChart } from "@/components/PaceBarChart";
 import { UniHBarRow } from "@/components/UniHBarRow";
 import { AccessDenied, Card, DarkCallout, PageHeader, SectionTitle, StatChip } from "@/components/ui";
+import { SectionNav } from "@/components/SectionNav";
 import { gpaSummaryKpi } from "@/lib/academic/gpa-summary";
 import { Permission } from "@/lib/auth/authorization";
 import { requirePermission } from "@/lib/auth/guard";
@@ -56,7 +57,8 @@ export default async function EarlySupportPage({
   }
 
   // Years 1–2 band derived from currentSemester (documented default — see program-stage.ts).
-  const filters = parseFilters(await searchParams);
+  const sp = await searchParams;
+  const filters = parseFilters(sp);
   const stageFilters = { ...filters, programStage: "YEARS_1_2" as const };
   const [risk, support, pace, stageOverview, overallOverview, home, uniBreakdown, riskTrend, breakdowns] =
     await Promise.all([
@@ -378,6 +380,8 @@ export default async function EarlySupportPage({
           </Card>
         </div>
       </div>
+
+      <SectionNav current="/dashboard/early-support" sp={sp} user={user} />
     </div>
   );
 }

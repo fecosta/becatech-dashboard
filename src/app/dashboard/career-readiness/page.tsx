@@ -1,6 +1,7 @@
 import { BulletTrackGoal } from "@/components/BulletTrackGoal";
 import { PaceBarChart } from "@/components/PaceBarChart";
 import { AccessDenied, Card, PageHeader, ProxyBadge, SectionTitle, StatChip } from "@/components/ui";
+import { SectionNav } from "@/components/SectionNav";
 import { gpaSummaryKpi } from "@/lib/academic/gpa-summary";
 import { Permission } from "@/lib/auth/authorization";
 import { requirePermission } from "@/lib/auth/guard";
@@ -43,7 +44,8 @@ export default async function CareerReadinessPage({
   }
 
   // Years 3–5 band derived from currentSemester (documented default — see program-stage.ts).
-  const filters = parseFilters(await searchParams);
+  const sp = await searchParams;
+  const filters = parseFilters(sp);
   const stageFilters = { ...filters, programStage: "YEARS_3_5" as const };
   const [pace, stageOverview, overallOverview, home, support] = await Promise.all([
     getAcademicProgress(stageFilters, user),
@@ -183,6 +185,8 @@ export default async function CareerReadinessPage({
           </Card>
         </div>
       </div>
+
+      <SectionNav current="/dashboard/career-readiness" sp={sp} user={user} />
     </div>
   );
 }

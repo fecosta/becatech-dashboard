@@ -4,6 +4,7 @@ import { FactStrip } from "@/components/FactStrip";
 import { FreshnessBadge } from "@/components/FreshnessBadge";
 import { PaceBarChart } from "@/components/PaceBarChart";
 import { UniversityRetentionList } from "@/components/UniversityRetentionList";
+import { SectionNav } from "@/components/SectionNav";
 import {
   AccessDenied,
   Card,
@@ -51,7 +52,8 @@ export default async function HomePage({
     );
   }
 
-  const filters = parseFilters(await searchParams);
+  const sp = await searchParams;
+  const filters = parseFilters(sp);
   const [o, home, ap, alerts, filterOptions, freshness] = await Promise.all([
     getExecutiveOverview(filters),
     getHomeOverview(filters),
@@ -412,6 +414,8 @@ export default async function HomePage({
         </Link>
         <KpiCard label="Withdrawals" value={fmtInt(o.withdrawnScholars)} sub="In the selected group" />
       </div>
+
+      <SectionNav current="/dashboard" sp={sp} user={user} />
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { type Column, DataTable } from "@/components/DataTable";
 import { ScholarProfileView } from "@/components/ScholarProfileView";
 import { ScholarSearch } from "@/components/ScholarSearch";
 import { AccessDenied, Badge, PageHeader, RiskBadge } from "@/components/ui";
+import { SectionNav } from "@/components/SectionNav";
 import { canAccessScholar, type CurrentUser, Permission } from "@/lib/auth/authorization";
 import { requirePermission } from "@/lib/auth/guard";
 import { parseFilters, preserveParams, type SearchParams } from "@/lib/dashboard/filters";
@@ -50,6 +51,8 @@ export default async function ScholarsPage({
       />
       <ScholarSearch />
       <ScholarResults q={q} filters={filters} sp={sp} user={user!} />
+
+      <SectionNav current="/dashboard/scholars" sp={sp} user={user} />
     </div>
   );
 }

@@ -5,6 +5,7 @@ import type { NavItem, NavSection } from "@/components/Sidebar";
 import { can, Permission } from "@/lib/auth/authorization";
 import { getCurrentUserResult } from "@/lib/auth/current-user";
 import { getFilterOptions } from "@/lib/dashboard/queries";
+import { VIEW_ORDER } from "@/lib/dashboard/views";
 
 // Live data dashboards — always render at request time (also avoids build-time DB access).
 export const dynamic = "force-dynamic";
@@ -12,36 +13,12 @@ export const dynamic = "force-dynamic";
 type NavConfigItem = NavItem & { permission: Permission };
 type NavConfigSection = { heading?: string; items: NavConfigItem[] };
 
-// Beca Tech+ narrative IA (Phase B): Home → Early Support → Growth & Development →
-// Scholar Progress → Program Ecosystem as the primary flow, matching the mockup's own
-// nav order; secondary tools under "More"; data tools under "Admin". Permissions are
-// unchanged from the prior IA so no role loses access.
+// Beca Tech+ narrative IA: the five primary views come straight from VIEW_ORDER, which
+// the per-page prev/next SectionNav also reads — so the sidebar order and the walk
+// order cannot drift. Secondary tools sit under "More", data tools under "Admin".
+// Permissions are unchanged from the prior IA so no role loses access.
 const NAV: NavConfigSection[] = [
-  {
-    items: [
-      { href: "/dashboard", label: "Home", exact: true, permission: Permission.VIEW_DASHBOARD },
-      {
-        href: "/dashboard/early-support",
-        label: "Early Support",
-        permission: Permission.VIEW_SCHOLAR_TRACKING,
-      },
-      {
-        href: "/dashboard/career-readiness",
-        label: "Growth & Development",
-        permission: Permission.VIEW_SCHOLAR_TRACKING,
-      },
-      {
-        href: "/dashboard/scholars",
-        label: "Scholar Progress",
-        permission: Permission.VIEW_SCHOLAR_TRACKING,
-      },
-      {
-        href: "/dashboard/actors",
-        label: "Program Ecosystem",
-        permission: Permission.VIEW_SCHOLAR_TRACKING,
-      },
-    ],
-  },
+  { items: [...VIEW_ORDER] },
   {
     heading: "More",
     items: [

@@ -1,6 +1,7 @@
 import { DeliveryPartnerGroup } from "@/components/DeliveryPartnerGroup";
 import { UniversityCard } from "@/components/UniversityCard";
 import { AccessDenied, Card, PageHeader, SectionTitle } from "@/components/ui";
+import { SectionNav } from "@/components/SectionNav";
 import { Permission } from "@/lib/auth/authorization";
 import { requirePermission } from "@/lib/auth/guard";
 import { parseFilters, type SearchParams } from "@/lib/dashboard/filters";
@@ -13,7 +14,7 @@ export default async function ProgramEcosystemPage({
 }: {
   searchParams: Promise<SearchParams>;
 }) {
-  const { allowed } = await requirePermission(Permission.VIEW_SCHOLAR_TRACKING);
+  const { user, allowed } = await requirePermission(Permission.VIEW_SCHOLAR_TRACKING);
   if (!allowed) {
     return (
       <div>
@@ -23,7 +24,8 @@ export default async function ProgramEcosystemPage({
     );
   }
 
-  const filters = parseFilters(await searchParams);
+  const sp = await searchParams;
+  const filters = parseFilters(sp);
   const eco = await getProgramEcosystem(filters);
 
   const earlySupportOperators = eco.operators.filter((o) => o.track === "EARLY_SUPPORT");
@@ -69,6 +71,8 @@ export default async function ProgramEcosystemPage({
           <DeliveryPartnerGroup title="Growth & Development" operators={growthOperators} />
         </Card>
       </div>
+
+      <SectionNav current="/dashboard/actors" sp={sp} user={user} />
     </div>
   );
 }
