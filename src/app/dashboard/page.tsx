@@ -1,11 +1,18 @@
 import Link from "next/link";
-import type { ReactNode } from "react";
 import { BulletTrackGoal } from "@/components/BulletTrackGoal";
 import { FactStrip } from "@/components/FactStrip";
 import { FreshnessBadge } from "@/components/FreshnessBadge";
 import { PaceBarChart } from "@/components/PaceBarChart";
 import { UniversityRetentionList } from "@/components/UniversityRetentionList";
-import { AccessDenied, Card, KpiCard, PageHeader, ProxyBadge, StatChip } from "@/components/ui";
+import {
+  AccessDenied,
+  Card,
+  KpiCard,
+  PageHeader,
+  ProxyBadge,
+  SectionTitle,
+  StatChip,
+} from "@/components/ui";
 import { gpaSummaryKpi } from "@/lib/academic/gpa-summary";
 import { Permission } from "@/lib/auth/authorization";
 import { requirePermission } from "@/lib/auth/guard";
@@ -28,15 +35,6 @@ const RETENTION_GOALS: Record<1 | 2 | 3, number> = { 1: 85, 2: 90, 3: 90 };
 
 // English levels shown in developing (purple) vs professional-working (green) proficiency.
 const ENGLISH_DEVELOPING = ["A1", "A2", "B1"];
-
-/** Big, standout section heading (mockup's `.section-title-big`) — Home-only styling. */
-function BigTitle({ children }: { children: ReactNode }) {
-  return (
-    <h2 className="mb-3.5 mt-8 text-[21px] font-extrabold text-surface-dark first:mt-0">
-      {children}
-    </h2>
-  );
-}
 
 export default async function HomePage({
   searchParams,
@@ -145,7 +143,7 @@ export default async function HomePage({
         ]}
       />
 
-      <BigTitle>How Do We Support Scholars?</BigTitle>
+      <SectionTitle size="lg">How Do We Support Scholars?</SectionTitle>
       <Card className="flex flex-wrap items-center justify-between gap-5">
         <p className="max-w-[440px] text-sm leading-relaxed text-muted">
           Every scholar moves through two stages of support, each with its own goals and metrics —
@@ -167,7 +165,7 @@ export default async function HomePage({
         </div>
       </Card>
 
-      <BigTitle>Program Overview</BigTitle>
+      <SectionTitle size="lg">Program Overview</SectionTitle>
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Cuadro 1: Total Active Scholars */}
         <Card>
@@ -303,7 +301,7 @@ export default async function HomePage({
         </Card>
       </div>
 
-      <BigTitle>Active Scholars by City (Colombia)</BigTitle>
+      <SectionTitle size="lg">Active Scholars by City (Colombia)</SectionTitle>
       <Card className="p-6">
         {home.cityBreakdown.length === 0 ? (
           <p className="text-sm text-muted">No city data for the current selection.</p>
@@ -324,7 +322,7 @@ export default async function HomePage({
         )}
       </Card>
 
-      <BigTitle>All Universities &mdash; Retention &amp; Drop Out Rate</BigTitle>
+      <SectionTitle size="lg">All Universities &mdash; Retention &amp; Drop Out Rate</SectionTitle>
       <Card className="p-6">
         {home.universityRetention.length === 0 ? (
           <p className="text-sm text-muted">No universities in scope for this selection.</p>
@@ -339,7 +337,7 @@ export default async function HomePage({
         )}
       </Card>
 
-      <BigTitle>Scholars by Year</BigTitle>
+      <SectionTitle size="lg">Scholars by Year</SectionTitle>
       <Card className="p-6">
         <PaceBarChart
           barAreaPx={180}
@@ -368,7 +366,7 @@ export default async function HomePage({
         </div>
       </Card>
 
-      <BigTitle>English Level Distribution</BigTitle>
+      <SectionTitle size="lg">English Level Distribution</SectionTitle>
       {home.englishLevelDistribution ? (
         <Card className="p-6">
           <PaceBarChart
@@ -396,7 +394,7 @@ export default async function HomePage({
 
       {/* Executive attention band — kept from the prior implementation (not in the mockup,
           but useful working navigation the redesign doesn't replace). */}
-      <BigTitle>Executive Attention</BigTitle>
+      <SectionTitle size="lg">Executive Attention</SectionTitle>
       <div className="grid gap-4 sm:grid-cols-3">
         <Link href="/dashboard/early-support" className="block">
           <KpiCard

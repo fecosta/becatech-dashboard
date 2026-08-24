@@ -105,11 +105,8 @@ export default async function CareerReadinessPage({
       </div>
 
       <div className="mt-6">
-        <SectionTitle>
-          Growth &amp; Development Metrics{" "}
-          <span className="font-normal normal-case tracking-normal text-muted">
-            — goal vs. actual (illustrative)
-          </span>
+        <SectionTitle note="— goal vs. actual (illustrative)">
+          Growth &amp; Development Metrics
         </SectionTitle>
         {/* No data source exists for these yet. Rendered as an explicit pending state — never
             invented numbers. Goal shape only, per the professional-development team's own mockup. */}
@@ -121,10 +118,7 @@ export default async function CareerReadinessPage({
       </div>
 
       <div className="mt-6">
-        <SectionTitle>
-          Skills by City{" "}
-          <span className="font-normal normal-case tracking-normal text-muted">— illustrative</span>
-        </SectionTitle>
+        <SectionTitle note="— illustrative">Skills by City</SectionTitle>
         {/* No per-city professional-skills data source exists yet — explicit pending state, never
             fabricated (the prototype's heatmap values are illustrative). */}
         <Card className="flex items-center justify-between gap-4">

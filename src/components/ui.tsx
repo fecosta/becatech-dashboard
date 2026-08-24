@@ -1,6 +1,6 @@
 // Shared presentational UI primitives (no client-only features — usable in server
 // and client components alike). Styling follows the Beca Tech+ design tokens in
-// src/app/globals.css (source of truth: design-reference/BecaTech_Plus_Prototype.html).
+// src/app/globals.css (source of truth: design-reference/MVP_Dashboard AUGUST 4.html).
 import type { ReactNode } from "react";
 import type { RiskLevel } from "@/generated/prisma/enums";
 import { RISK_LEVEL_CLASS, RISK_LEVEL_LABEL } from "@/lib/labels";
@@ -18,7 +18,7 @@ export function PageHeader({
   return (
     <div className="mb-5">
       <div className="flex items-baseline justify-between gap-4">
-        <h1 className="text-[22px] font-extrabold text-surface-dark">{title}</h1>
+        <h1 className="font-display text-[26px] font-bold text-surface-dark">{title}</h1>
         {tag ? <span className="font-mono text-xs text-muted">{tag}</span> : null}
       </div>
       {subtitle ? (
@@ -28,9 +28,53 @@ export function PageHeader({
   );
 }
 
-export function SectionTitle({ children }: { children: ReactNode }) {
+/**
+ * Section heading, in the two sizes the design uses.
+ *
+ * "sm" is the small uppercase purple eyebrow used inside a view. "lg" is the
+ * numbered outline heading ("1 · Our Scholars") that AUGUST 4 puts at the top of
+ * every top-level section — display serif, sentence case. Home used to carry its
+ * own local copy of this; it lives here now so the two cannot drift.
+ *
+ * The number is passed as part of `children`, not generated: sections get
+ * renumbered whenever one is added or dropped, so it is content, not structure.
+ */
+export function SectionTitle({
+  children,
+  size = "sm",
+  note,
+  id,
+}: {
+  children: ReactNode;
+  size?: "sm" | "lg";
+  /** Muted, normal-weight trailing gloss (e.g. "— department of origin"). */
+  note?: ReactNode;
+  /** Anchor target, matching the design's id="home-sec-1" outline links. */
+  id?: string;
+}) {
+  const large = size === "lg";
   return (
-    <h2 className="mb-3 text-[13px] font-bold uppercase tracking-[0.04em] text-purple">{children}</h2>
+    <h2
+      id={id}
+      className={
+        large
+          ? "mb-3.5 mt-[34px] font-display text-[22px] font-bold text-surface-dark"
+          : "mb-3 text-[13px] font-bold uppercase tracking-[0.04em] text-purple"
+      }
+    >
+      {children}
+      {note ? (
+        <span
+          className={
+            large
+              ? "ml-2 text-sm font-normal text-muted"
+              : "ml-1 font-normal normal-case tracking-normal text-muted"
+          }
+        >
+          {note}
+        </span>
+      ) : null}
+    </h2>
   );
 }
 
