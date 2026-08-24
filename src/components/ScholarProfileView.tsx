@@ -172,6 +172,9 @@ export async function ScholarProfileView({
         expectedEndDate={p.expectedEndDate}
         estimatedGraduationYear={p.estimatedGraduationYear}
         operatorName={p.operator?.name ?? null}
+        scholarId={p.scholarId}
+        email={p.email1 ?? p.email2 ?? null}
+        mobilePhone={p.mobilePhone ?? null}
       />
 
       <div className="mt-6">
@@ -195,8 +198,11 @@ export async function ScholarProfileView({
                 value={p.currentEnglishLevel ?? <ProxyBadge>PENDING</ProxyBadge>}
                 label="English Level"
               />
+              {/* Two different measures that used to share the label "Academic Progress":
+                  the standing the program records on the scholar, and the pace derived
+                  from credits on their latest term. */}
               {p.academicProgress ? (
-                <StatChip value={p.academicProgress} label="Academic Progress" />
+                <StatChip value={p.academicProgress} label="Reported standing" />
               ) : null}
               <StatChip
                 value={
@@ -212,7 +218,7 @@ export async function ScholarProfileView({
                     "—"
                   )
                 }
-                label="Academic Progress"
+                label="Pace vs. study plan"
               />
             </div>
           </Card>
@@ -220,16 +226,32 @@ export async function ScholarProfileView({
       </div>
 
       <div className="mt-6">
-        <SectionTitle>Monthly Follow-Up History</SectionTitle>
-        <Card>
-          <RiskHeatmapTable rows={heatmapRows} />
+        <SectionTitle>Risk History — by Semester</SectionTitle>
+        <Card className="flex flex-wrap items-center justify-between gap-4">
+          <p className="max-w-[720px] text-sm text-muted">
+            Risk is recorded per program month, and the same month number in two different
+            semesters currently shares one key — so there is no way to roll it up per semester
+            without merging semesters together. Needs a semester recorded on each assessment.
+          </p>
+          <ProxyBadge>PENDING</ProxyBadge>
         </Card>
       </div>
 
-      {/* Full Record — carried forward from the pre-merge profile page, additive (not in
-          the mockup, but working case-management detail the redesign doesn't replace). */}
-      <div className="mt-8">
-        <SectionTitle>Full Record</SectionTitle>
+      <div className="mt-6">
+        <SectionTitle>Monthly Detail</SectionTitle>
+        <Card>
+          <RiskHeatmapTable rows={heatmapRows} firstColumnHeader="Month" />
+        </Card>
+      </div>
+
+      {/* Full Record — the design has no equivalent, but this holds the only copy of the
+          academic terms, check-ins, mentor reports, requests and financial records, so it
+          is collapsed rather than dropped. <details> keeps this a server component. */}
+      <details className="mt-8">
+        <summary className="cursor-pointer list-none text-[13px] font-bold uppercase tracking-[0.04em] text-purple">
+          Full Record ▸
+        </summary>
+        <div className="mt-4">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatChip value={fmtGpa(latestTerm?.accumulatedGpa)} label="Cumulative GPA" />
           <StatChip
@@ -291,8 +313,9 @@ export async function ScholarProfileView({
             </section>
           </div>
         </div>
-        <Card className="mt-6 text-xs text-muted">Folder: {p.driveFolderUrl ?? "—"}</Card>
-      </div>
+          <Card className="mt-6 text-xs text-muted">Folder: {p.driveFolderUrl ?? "—"}</Card>
+        </div>
+      </details>
     </div>
   );
 }

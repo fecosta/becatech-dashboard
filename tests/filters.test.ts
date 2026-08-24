@@ -57,7 +57,7 @@ describe("visiblePillsForPath", () => {
     expect(visiblePillsForPath("/dashboard/actors")).toEqual(["cohort", "country", "university"]);
   });
 
-  it("Scholar Progress puts university first and includes status/risk", () => {
+  it("Scholar Profile puts university first and includes status/risk", () => {
     expect(visiblePillsForPath("/dashboard/scholars")).toEqual([
       "university",
       "country",

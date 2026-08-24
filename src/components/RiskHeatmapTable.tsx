@@ -1,4 +1,4 @@
-// Monthly follow-up heatmap (Scholar Progress) — one row per period, one risk-colored
+// Monthly follow-up heatmap (Scholar Profile) — one row per period, one risk-colored
 // cell per dimension. CRITICO gets the mockup's solid black+yellow treatment; the other
 // four levels use a light tint of their own RISK_LEVEL_HEX_SEGMENTED color.
 import type { RiskLevel } from "@/generated/prisma/enums";

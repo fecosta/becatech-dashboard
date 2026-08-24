@@ -20,7 +20,7 @@ export const VIEW_ORDER: readonly DashboardView[] = [
     label: "Growth & Development",
     permission: P.VIEW_SCHOLAR_TRACKING,
   },
-  { href: "/dashboard/scholars", label: "Scholar Progress", permission: P.VIEW_SCHOLAR_TRACKING },
+  { href: "/dashboard/scholars", label: "Scholar Profile", permission: P.VIEW_SCHOLAR_TRACKING },
   { href: "/dashboard/actors", label: "Program Ecosystem", permission: P.VIEW_SCHOLAR_TRACKING },
 ] as const;
 

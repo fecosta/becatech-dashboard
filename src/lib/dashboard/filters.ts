@@ -45,7 +45,7 @@ export type FilterKey = "country" | "cohort" | "university" | "status" | "risk" 
 /**
  * Which TopFilters pills a given dashboard route should show. Per the Phase B indicator
  * spec: most views only need cohort/country/university; Home also gets a department
- * pill (for its department breakdown); Scholar Progress puts university first (its
+ * pill (for its department breakdown); Scholar Profile puts university first (its
  * search matches on university name too). Out-of-scope routes (unit-economics,
  * selection-pipeline, admin/**) keep today's full pill set.
  */

@@ -542,3 +542,17 @@ export interface RiskByGenderRow {
   tiers: Record<RiskTier, number>;
   tierPct: Record<RiskTier, number>;
 }
+
+/** §1 of the scholar view — who to call first. Carries contact details, so every read
+ *  must stay inside the caller's scholar access scope. */
+export interface ContactPriorityRow {
+  scholarId: string;
+  fullName: string;
+  email: string | null;
+  mobilePhone: string | null;
+  university: string;
+  cohort: string;
+  country: Country;
+  riskLevel: RiskLevel;
+  riskValue: number;
+}

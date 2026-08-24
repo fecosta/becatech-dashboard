@@ -48,6 +48,7 @@ import type {
   GpaByCohort,
   OriginBreakdown,
   OriginMatrix,
+  ContactPriorityRow,
   ParticipationByActivityAndRisk,
   RiskByGenderRow,
   RiskReasonAxis,
@@ -1936,4 +1937,39 @@ export async function getRiskByGender(
       };
     })
     .filter((r) => r.scholarCount > 0);
+}
+
+/**
+ * §1 Contact prioritisation — at-risk scholars with the details needed to reach them,
+ * highest risk first.
+ *
+ * Goes through loadScope with the caller's access filter, so a mentor sees only their
+ * own assigned scholars. That matters more here than anywhere else on the dashboard:
+ * this is the one view that puts personal email addresses and phone numbers on screen.
+ */
+export async function getContactPriority(
+  filters: DashboardFilters = {},
+  user: CurrentUser | null = null,
+): Promise<ContactPriorityRow[]> {
+  const { scholars, riskMap } = await loadScope(filters, scholarAccessWhere(user));
+
+  return scholars
+    .filter((s) => s.programStatus === ProgramStatus.ACTIVE)
+    .map((s) => {
+      const risk = riskMap.get(s.scholarId);
+      return { scholar: s, risk };
+    })
+    .filter((r) => r.risk != null && riskTier(r.risk.globalRiskLevel) !== "LOW")
+    .map(({ scholar, risk }) => ({
+      scholarId: scholar.scholarId,
+      fullName: scholar.fullName,
+      email: scholar.email1 ?? scholar.email2 ?? null,
+      mobilePhone: scholar.mobilePhone ?? null,
+      university: scholar.university.name,
+      cohort: scholar.cohort,
+      country: scholar.country,
+      riskLevel: risk!.globalRiskLevel,
+      riskValue: risk!.globalRiskValue,
+    }))
+    .sort((a, b) => b.riskValue - a.riskValue || a.fullName.localeCompare(b.fullName));
 }
