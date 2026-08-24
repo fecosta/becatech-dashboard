@@ -1,41 +1,79 @@
 import Link from "next/link";
-import { BulletTrackGoal } from "@/components/BulletTrackGoal";
-import { FactStrip } from "@/components/FactStrip";
+import { ExecTable, type ExecRow } from "@/components/ExecTable";
 import { FreshnessBadge } from "@/components/FreshnessBadge";
-import { PaceBarChart } from "@/components/PaceBarChart";
-import { UniversityRetentionList } from "@/components/UniversityRetentionList";
 import { SectionNav } from "@/components/SectionNav";
+import { UniversityRetentionList } from "@/components/UniversityRetentionList";
 import {
   AccessDenied,
   Card,
-  KpiCard,
+  FilterChipRow,
+  HeroStat,
   PageHeader,
   ProxyBadge,
   SectionTitle,
   StatChip,
 } from "@/components/ui";
-import { gpaSummaryKpi } from "@/lib/academic/gpa-summary";
+import { PROGRESS_LABEL } from "@/lib/academic/academic-progress-label";
+import { ENGLISH_LEVELS } from "@/lib/academic/english-level";
 import { Permission } from "@/lib/auth/authorization";
 import { requirePermission } from "@/lib/auth/guard";
 import { parseFilters, type SearchParams } from "@/lib/dashboard/filters";
 import {
-  getAcademicProgress,
+  getAcademicProgressByCountry,
+  getCohortRetention,
   getDataFreshness,
+  getDropoutOverview,
+  getEnglishLevelByCountry,
   getExecutiveOverview,
-  getFilterOptions,
-  getHomeOverview,
-  getRiskAlerts,
+  getGpaByCohort,
+  getOriginBreakdown,
+  getScholarBaseCounts,
+  getUniversityRetention,
+  getVulnerabilityTiers,
 } from "@/lib/dashboard/queries";
-import { fmtInt, fmtPct } from "@/lib/format";
+import type { OriginMatrix } from "@/lib/dashboard/types";
+import { COUNTRY_LABEL } from "@/lib/labels";
+import { fmtInt } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
-// Program retention targets by year — documented program goals (not derived from data), used only
-// for the goal marker on the retention bullet bars.
-const RETENTION_GOALS: Record<1 | 2 | 3, number> = { 1: 85, 2: 90, 3: 90 };
+const pctText = (n: number, d: number) => (d ? `${Math.round((n / d) * 100)}%` : "—");
 
-// English levels shown in developing (purple) vs professional-working (green) proficiency.
-const ENGLISH_DEVELOPING = ["A1", "A2", "B1"];
+/** Every program target in AUGUST 4 renders as pending: no approved figures exist, and a
+ *  plausible-looking placeholder in a goal row is worse than an visible gap. */
+const TARGET_PENDING = <ProxyBadge>PENDING</ProxyBadge>;
+
+function OriginTable({ matrix, country }: { matrix: OriginMatrix; country: string }) {
+  if (matrix.rows.length === 0) {
+    return <p className="text-sm text-muted">No origin data for {country} in this selection.</p>;
+  }
+  return (
+    <ExecTable
+      headers={[country === "Colombia" ? "Department" : "Region", ...matrix.cohortYears, "Total"]}
+      rows={[
+        ...matrix.rows.map<ExecRow>((r) => ({
+          key: r.origin,
+          label: r.origin,
+          cells: [...matrix.cohortYears.map((y) => fmtInt(r.counts[y] ?? 0)), fmtInt(r.total)],
+        })),
+        {
+          key: "total",
+          label: "TOTAL",
+          summary: country === "Colombia" ? "col" : "per",
+          cells: [
+            ...matrix.cohortYears.map((y) => fmtInt(matrix.total.counts[y] ?? 0)),
+            fmtInt(matrix.total.total),
+          ],
+        },
+      ]}
+      caption={
+        matrix.notReported > 0
+          ? `${fmtInt(matrix.notReported)} scholar(s) did not report an origin and are excluded.`
+          : undefined
+      }
+    />
+  );
+}
 
 export default async function HomePage({
   searchParams,
@@ -54,96 +92,84 @@ export default async function HomePage({
 
   const sp = await searchParams;
   const filters = parseFilters(sp);
-  const [o, home, ap, alerts, filterOptions, freshness] = await Promise.all([
+  const [
+    o,
+    base,
+    dropouts,
+    retention,
+    tiers,
+    origins,
+    universities,
+    progress,
+    english,
+    gpa,
+    freshness,
+  ] = await Promise.all([
     getExecutiveOverview(filters),
-    getHomeOverview(filters),
-    getAcademicProgress(filters, user),
-    getRiskAlerts(filters, user),
-    getFilterOptions(),
+    getScholarBaseCounts(filters),
+    getDropoutOverview(filters),
+    getCohortRetention(filters),
+    getVulnerabilityTiers(filters),
+    getOriginBreakdown(filters),
+    getUniversityRetention(filters),
+    getAcademicProgressByCountry(filters),
+    getEnglishLevelByCountry(filters),
+    getGpaByCohort(filters),
     getDataFreshness(new Date()),
   ]);
 
-  // GPA is reported per country (Colombia /5, Peru /20) and, for a mixed-country scope, as a
-  // scale-agnostic Academic Performance Index — never a blended raw mean (see gpa-summary.ts).
-  const gpaKpi = gpaSummaryKpi(ap.gpaSummary);
-
-  const criticalCount = alerts.attentionList.filter((r) => r.globalRiskValue >= 3).length;
-  const missingReportsCount = alerts.attentionList.filter(
-    (r) => r.missingCheckin || r.missingMentorReport,
-  ).length;
-
-  // Academic Progress cuadro: On track / Behind / Critical (3 buckets, per the mockup —
-  // SLIGHTLY_BEHIND and BEHIND both count as "Behind", CRITICAL_DELAY is its own bucket).
-  const { ON_TRACK, SLIGHTLY_BEHIND, BEHIND, CRITICAL_DELAY } = ap.progressStatusDistribution;
-  const behindCount = SLIGHTLY_BEHIND + BEHIND;
-  const progressTotal = ON_TRACK + behindCount + CRITICAL_DELAY;
-  const progressPct = (n: number) => (progressTotal ? Math.round((n / progressTotal) * 100) : 0);
-
-  const yearBars = [
-    { key: "year1" as const, label: "Year 1" },
-    { key: "year2" as const, label: "Year 2" },
-    { key: "year3" as const, label: "Year 3" },
+  const scopeChips = [
+    { label: `Cohort: ${filters.cohort ?? "all"}`, tone: "black" as const },
+    { label: `Country: ${filters.country ? COUNTRY_LABEL[filters.country] : "all"}`, tone: "green" as const },
+    { label: `University: ${filters.university ?? "all"}`, tone: "ghost" as const },
   ];
-  const activeTotal =
-    home.scholarsByYear.year1 + home.scholarsByYear.year2 + home.scholarsByYear.year3;
 
-  // Dropout rate as a share of active scholars (mockup wording: "% of active scholars").
-  const dropoutRate = o.activeScholars ? o.withdrawnScholars / o.activeScholars : 0;
-  const sesTotal = home.socioeconomicBreakdown.reduce((n, s) => n + s.count, 0);
-  const cityMax = Math.max(0, ...home.cityBreakdown.map((c) => c.count));
-  const englishTotal = home.englishLevelDistribution?.reduce((n, e) => n + e.count, 0) ?? 0;
-  const englishMax = Math.max(0, ...(home.englishLevelDistribution?.map((e) => e.count) ?? []));
+  const retentionRows: ExecRow[] = [
+    ...retention.rows.map<ExecRow>((r) => ({
+      key: `${r.cohort}-${r.country}`,
+      label: `${r.cohort} · ${COUNTRY_LABEL[r.country]}`,
+      cells: [fmtInt(r.settled), fmtInt(r.active), `${r.retentionPct}%`],
+    })),
+    ...(retention.overall
+      ? [
+          {
+            key: "actual",
+            label: "OVERALL · ACTUAL",
+            summary: "actual" as const,
+            cells: [
+              fmtInt(retention.overall.settled),
+              fmtInt(retention.overall.active),
+              `${retention.overall.retentionPct}%`,
+            ],
+          },
+          {
+            key: "target",
+            label: "OVERALL · TARGET",
+            summary: "goal" as const,
+            cells: ["", "", TARGET_PENDING],
+          },
+        ]
+      : []),
+    ...retention.byCountry.map<ExecRow>((c) => ({
+      key: `country-${c.country}`,
+      label: `OVERALL · ${COUNTRY_LABEL[c.country].toUpperCase()}`,
+      summary: c.country === "COLOMBIA" ? "col" : "per",
+      cells: ["", "", `${c.retentionPct}%`],
+    })),
+  ];
 
   return (
     <div>
       {/* "Data as of {period}" is the latest data MONTH; the freshness badge below is the real
           last-sync time (last committed import/sync) plus paused/stale operational states. */}
-      <PageHeader title="Beca Tech+" tag={`Data as of ${o.currentPeriod}`} />
+      <PageHeader
+        title="Beca Tech+"
+        tag={`Data as of ${o.currentPeriod}`}
+        subtitle="A scholarship program supporting talented, low-income students from Colombia and Peru through technology degrees."
+      />
       <div className="-mt-3 mb-5">
         <FreshnessBadge freshness={freshness} />
       </div>
-
-      {/* Narrative intro — the ten-second answer for a board member. */}
-      <div className="mb-6 rounded-[20px] border-[1.5px] border-purple bg-lavender/40 p-6">
-        <div className="mb-2 text-xs font-bold uppercase tracking-[0.06em] text-purple">Home</div>
-        <h2 className="text-[28px] font-extrabold leading-tight text-surface-dark">
-          The Program, in a Nutshell
-        </h2>
-        <div className="mb-3.5 mt-1 text-[15px] font-bold text-purple">The widest view</div>
-        <p className="max-w-[720px] text-[15.5px] font-bold leading-snug text-surface-dark">
-          We want talented young people to lead the transformation of the tech ecosystem in their
-          communities.
-        </p>
-        <p className="mb-3.5 mt-1.5 max-w-[720px] text-sm leading-relaxed text-ink">
-          Beca Tech+ is a scholarship program that supports talented, low-income students from
-          Colombia and Peru in pursuing technology-related degrees.
-        </p>
-        <span className="mb-3.5 inline-block rounded-full border border-purple/30 bg-card px-4 py-2 text-[13px] font-bold text-purple">
-          How is the program doing, overall?
-        </span>
-        <p className="max-w-[720px] text-[14.5px] leading-relaxed text-ink">
-          Total active scholars, retention, satisfaction, average GPA, and partner universities —
-          filterable by cohort, university, country, and department. The entry point into
-          everything else.
-        </p>
-      </div>
-
-      <FactStrip
-        items={[
-          { value: fmtInt(filterOptions.cohorts.length), label: "Cohorts", tone: "purple" },
-          { value: fmtInt(o.totalScholars), label: "Scholars selected", tone: "green" },
-          {
-            value: fmtInt(home.activeUniversityCount),
-            label: "Partner universities",
-            tone: "purple",
-          },
-          {
-            value: fmtInt(home.deliveryPartnerCount),
-            label: "Delivery partners",
-            tone: "green",
-          },
-        ]}
-      />
 
       <SectionTitle size="lg">How Do We Support Scholars?</SectionTitle>
       <Card className="flex flex-wrap items-center justify-between gap-5">
@@ -167,253 +193,317 @@ export default async function HomePage({
         </div>
       </Card>
 
-      <SectionTitle size="lg">Program Overview</SectionTitle>
+      {/* ---------- 1 · Our Scholars ---------- */}
+      <SectionTitle size="lg" id="home-sec-1">
+        1 · Our Scholars
+      </SectionTitle>
+      <FilterChipRow chips={scopeChips} />
       <div className="grid gap-4 lg:grid-cols-2">
-        {/* Cuadro 1: Total Active Scholars */}
-        <Card>
-          <div className="mb-3.5 text-[13.5px] font-bold text-surface-dark">
-            Total Active Scholars
-          </div>
-          <div className="mb-3.5 text-[32px] font-extrabold text-surface-dark">
-            {fmtInt(o.activeScholars)}
-          </div>
-          <div className="flex flex-wrap gap-4">
-            <StatChip
-              tone="green"
-              value={fmtInt(home.scholarsByCountry.colombia)}
-              label="Active in Colombia"
-            />
-            <StatChip
-              tone="green"
-              value={fmtInt(home.scholarsByCountry.peru)}
-              label="Active in Peru"
-            />
-            <StatChip
-              tone="green"
-              value={fmtInt(home.genderBreakdown.female)}
-              label="Active women"
-            />
-          </div>
-        </Card>
-
-        {/* Cuadro 2: Retention Rate */}
-        <Card>
+        <Card className="border-l-4 border-l-purple">
           <div className="mb-3.5 flex flex-wrap items-baseline justify-between gap-1.5">
-            <div className="text-[13.5px] font-bold text-surface-dark">Retention Rate</div>
+            <div className="text-[13.5px] font-bold text-surface-dark">Total Scholars</div>
             <div className="text-xs text-muted">
-              Program average <b className="text-sm text-surface-dark">{fmtPct(o.retentionRate)}</b>
+              {fmtInt(base.cohortCount)} cohort{base.cohortCount === 1 ? "" : "s"}
             </div>
           </div>
-          {home.retentionByYear.map((r) => (
-            <BulletTrackGoal
-              key={r.year}
-              label={`Year ${r.year}`}
-              goalLabel={`goal ≥${RETENTION_GOALS[r.year]}%`}
-              valueLabel={fmtPct(r.rate)}
-              fillPct={r.rate * 100}
-              goalPct={RETENTION_GOALS[r.year]}
-            />
-          ))}
-        </Card>
-
-        {/* Cuadro 3: Program Satisfaction — no data source, honest pending state */}
-        <Card>
-          <div className="mb-3.5 flex items-center gap-2">
-            <div className="text-[13.5px] font-bold text-surface-dark">Program Satisfaction</div>
-            <ProxyBadge>PROXY</ProxyBadge>
+          <div className="mb-3.5 text-4xl font-extrabold text-purple">
+            {fmtInt(base.selectedTotal)}{" "}
+            <span className="text-sm font-bold text-muted">selected</span>
           </div>
           <div className="flex flex-wrap gap-4">
-            <StatChip value="—" label="Goal" />
-            <StatChip value="—" label={`Result · ${o.currentPeriod}`} />
+            <StatChip tone="green" value={fmtInt(base.activeTotal)} label="Active today" />
           </div>
           <p className="mt-3.5 text-xs text-muted">
-            No survey data source yet — pending an approved satisfaction formula.
+            &ldquo;Selected&rdquo; is every scholar on record. The source tracks only active and
+            withdrawn, so there is no separate admitted-but-never-started count.
           </p>
         </Card>
 
-        {/* Cuadro 4: Academic Progress */}
-        <Card>
-          <div className="mb-3.5 flex flex-wrap items-baseline justify-between gap-1.5">
-            <div className="text-[13.5px] font-bold text-surface-dark">Academic Progress</div>
-            <div className="text-xs text-muted">
-              {gpaKpi.label} <b className="text-sm text-surface-dark">{gpaKpi.value}</b>
-            </div>
+        <Card className="border-l-4 border-l-green">
+          <div className="mb-3.5 text-[13.5px] font-bold text-surface-dark">Active Women</div>
+          <div className="mb-3.5 text-4xl font-extrabold text-green-dark">
+            {fmtInt(base.womenActive.total)}
           </div>
-          <PaceBarChart
-            data={[
-              {
-                label: "On track",
-                note: "Following their study plan",
-                valueLabel: `${progressPct(ON_TRACK)}%`,
-                heightPct: progressPct(ON_TRACK),
-                color: "#27cf77",
-              },
-              {
-                label: "Behind",
-                note: "One course behind",
-                valueLabel: `${progressPct(behindCount)}%`,
-                heightPct: progressPct(behindCount),
-                color: "#8fe0b4",
-              },
-              {
-                label: "Critical",
-                note: "More than one course behind",
-                valueLabel: `${progressPct(CRITICAL_DELAY)}%`,
-                heightPct: progressPct(CRITICAL_DELAY),
-                color: "#a62bff",
-              },
-            ]}
-          />
-        </Card>
-
-        {/* Cuadro 5: Dropouts — count is real; a per-reason breakdown has no data source yet. */}
-        <Card>
-          <div className="mb-3.5 flex flex-wrap items-baseline justify-between gap-1.5">
-            <div className="text-[13.5px] font-bold text-surface-dark">Dropouts</div>
-            <div className="text-xs text-muted">{fmtPct(dropoutRate)} of active scholars</div>
+          <div className="flex flex-wrap gap-4">
+            <StatChip tone="green" value={fmtInt(base.womenActive.colombia)} label="Colombia" />
+            <StatChip tone="green" value={fmtInt(base.womenActive.peru)} label="Peru" />
           </div>
-          <div className="mb-3.5 text-[32px] font-extrabold text-[#d33636]">
-            {fmtInt(o.withdrawnScholars)}
-          </div>
-          <p className="text-xs text-muted">
-            Reason breakdown (financial, academic, psychosocial, relocation) isn&rsquo;t tracked in
-            the data yet.
-          </p>
-        </Card>
-
-        {/* Cuadro 6: Socioeconomic Condition */}
-        <Card>
-          <div className="mb-3.5 text-[13.5px] font-bold text-surface-dark">
-            Socioeconomic Condition
-          </div>
-          {sesTotal === 0 ? (
-            <p className="text-sm text-muted">No socioeconomic data for the current selection.</p>
-          ) : (
-            <div className="flex flex-wrap gap-4">
-              {home.socioeconomicBreakdown.map((s) => (
-                <StatChip
-                  key={s.level}
-                  tone={s.level === "Baja" ? "green" : s.level === "Alta" ? "red" : "default"}
-                  value={fmtPct(s.count / sesTotal)}
-                  label={s.level}
-                />
-              ))}
-            </div>
-          )}
         </Card>
       </div>
 
-      <SectionTitle size="lg">Active Scholars by City (Colombia)</SectionTitle>
-      <Card className="p-6">
-        {home.cityBreakdown.length === 0 ? (
-          <p className="text-sm text-muted">No city data for the current selection.</p>
-        ) : (
-          <>
-            <PaceBarChart
-              barAreaPx={150}
-              barWidthPx={56}
-              data={home.cityBreakdown.map((c) => ({
-                label: c.city,
-                valueLabel: fmtInt(c.count),
-                heightPct: cityMax ? Math.round((c.count / cityMax) * 100) : 0,
-                color: c.city === "Other cities" ? "#d9c7f5" : "#a62bff",
-              }))}
-            />
-            <div className="mt-4 text-xs text-muted">Active scholars in Colombia by city.</div>
-          </>
-        )}
-      </Card>
-
-      <SectionTitle size="lg">All Universities &mdash; Retention &amp; Drop Out Rate</SectionTitle>
-      <Card className="p-6">
-        {home.universityRetention.length === 0 ? (
-          <p className="text-sm text-muted">No universities in scope for this selection.</p>
-        ) : (
-          <UniversityRetentionList
-            data={home.universityRetention.map((u) => ({
-              name: u.name,
-              retentionPct: u.retentionPct,
-              dropOutPct: u.dropOutPct,
-            }))}
-          />
-        )}
-      </Card>
-
-      <SectionTitle size="lg">Scholars by Year</SectionTitle>
-      <Card className="p-6">
-        <PaceBarChart
-          barAreaPx={180}
-          barWidthPx={64}
-          data={yearBars.map(({ key, label }) => {
-            const count = home.scholarsByYear[key];
-            const pct = activeTotal ? Math.round((count / activeTotal) * 100) : 0;
-            return {
-              label,
-              note: `${pct}% of active scholars`,
-              valueLabel: fmtInt(count),
-              heightPct: pct,
-              color: key === "year1" ? "#27cf77" : key === "year2" ? "#8fe0b4" : "#a62bff",
-            };
-          })}
+      <Card className="mt-3.5">
+        <div className="mb-3 text-[13.5px] font-bold text-surface-dark">Total by Cohort</div>
+        <ExecTable
+          headers={["Cohort / Country", "Selected", "Active"]}
+          rows={[
+            ...base.byCohortCountry.map<ExecRow>((r) => ({
+              key: `${r.cohort}-${r.country}`,
+              label: `${r.cohort} · ${COUNTRY_LABEL[r.country]}`,
+              cells: [fmtInt(r.selected), fmtInt(r.active)],
+            })),
+            {
+              key: "total",
+              label: "TOTAL",
+              summary: "goal",
+              cells: [fmtInt(base.selectedTotal), fmtInt(base.activeTotal)],
+            },
+          ]}
         />
-        <div className="mt-4 flex flex-col gap-1 text-xs text-muted">
-          <div>
-            Years 1–2 — <b className="text-ink">Early Support:</b> academic &amp; psychosocial
-            support
+      </Card>
+
+      {/* ---------- 2 · Drop Outs ---------- */}
+      <SectionTitle size="lg" id="home-sec-2">
+        2 · Drop Outs
+      </SectionTitle>
+      <FilterChipRow chips={scopeChips} />
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card>
+          <div className="mb-3.5 flex flex-wrap items-baseline justify-between gap-1.5">
+            <div className="text-[13.5px] font-bold text-surface-dark">Total Scholars Withdrawn</div>
+            <div className="text-xs text-muted">cumulative</div>
           </div>
-          <div>
-            Year 3 onward — <b className="text-ink">Growth &amp; Development:</b> professional
-            development
+          <div className="mb-1.5 text-[32px] font-extrabold text-[#d33636]">
+            {fmtInt(dropouts.withdrawnTotal)}
           </div>
+          <p className="text-xs text-muted">
+            {dropouts.withdrawnPct}% of {fmtInt(dropouts.selectedTotal)} selected — both countries
+            combined.
+          </p>
+        </Card>
+        <Card>
+          <div className="mb-3.5 flex flex-wrap items-baseline justify-between gap-1.5">
+            <div className="text-[13.5px] font-bold text-surface-dark">Total Women Withdrawn</div>
+            <div className="text-xs text-muted">cumulative</div>
+          </div>
+          <div className="mb-1.5 text-[32px] font-extrabold text-[#d33636]">
+            {fmtInt(dropouts.withdrawnWomen)}
+          </div>
+          <p className="text-xs text-muted">
+            {fmtInt(dropouts.withdrawnWomen)} of {fmtInt(dropouts.withdrawnTotal)} withdrawn scholars
+            are women.
+          </p>
+        </Card>
+      </div>
+      <Card className="mt-3.5 flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <div className="mb-1.5 text-[13.5px] font-bold text-surface-dark">
+            Main Reasons for Drop Out
+          </div>
+          <p className="max-w-[620px] text-xs text-muted">
+            No source records why a scholar left. Mentor reports carry risk reasons, but only for the
+            current semester, so they say nothing about scholars who withdrew earlier. This needs an
+            exit-reason column on the scholar sheet.
+          </p>
+        </div>
+        <ProxyBadge>PENDING</ProxyBadge>
+      </Card>
+
+      {/* ---------- 3 · Program Retention ---------- */}
+      <SectionTitle size="lg" id="home-sec-3" note="— share of settled scholars still active">
+        3 · Program Retention
+      </SectionTitle>
+      <FilterChipRow chips={scopeChips} />
+      <div className="mb-3.5 grid gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
+        <HeroStat
+          size="mini"
+          tone="purple"
+          value={retention.overall ? `${retention.overall.retentionPct}%` : "—"}
+          label="Overall program retention"
+        />
+        {retention.byCohortYear.slice(0, 3).map((y, i) => (
+          <HeroStat
+            key={y.year}
+            size="mini"
+            tone={(["black", "green", "yellow"] as const)[i]}
+            value={`${y.retentionPct}%`}
+            label={`${y.year} cohort retention`}
+          />
+        ))}
+      </div>
+      <Card>
+        <ExecTable
+          headers={["Cohort / Country", "Settled", "Active", "Retention"]}
+          rows={retentionRows}
+          caption="Retention is over the settled population — active plus withdrawn. Paused and graduated scholars are not a retention outcome either way."
+        />
+        <div className="mt-3.5 rounded-xl bg-chip-cream px-3.5 py-3 text-xs text-muted">
+          <b className="text-ink">Term-by-term retention is not shown.</b> The design tracks each
+          cohort across semesters, but the source cannot support it: &ldquo;Not applicable for this
+          semester&rdquo; means both &ldquo;had not started&rdquo; and &ldquo;already left&rdquo;,
+          future terms are pre-filled, and some withdrawn scholars still read as enrolled. It needs
+          an exit term recorded per scholar.
         </div>
       </Card>
 
-      <SectionTitle size="lg">English Level Distribution</SectionTitle>
-      {home.englishLevelDistribution ? (
-        <Card className="p-6">
-          <PaceBarChart
-            barAreaPx={140}
-            data={home.englishLevelDistribution.map((e) => ({
-              label: e.level,
-              valueLabel: fmtPct(englishTotal ? e.count / englishTotal : 0),
-              heightPct: englishMax ? Math.round((e.count / englishMax) * 100) : 0,
-              color: ENGLISH_DEVELOPING.includes(e.level) ? "#a62bff" : "#27cf77",
-            }))}
-          />
-          <div className="mt-3.5 text-xs text-muted">
-            A1&ndash;B1: developing proficiency · B2&ndash;C2: professional working proficiency
-          </div>
-        </Card>
-      ) : (
-        <Card className="flex items-center justify-between gap-4 p-6">
-          <p className="text-sm text-muted">
-            Each scholar&rsquo;s current English level now syncs (shown on the scholar profile). This
-            program-wide distribution appears once levels are populated across scholars.
+      {/* ---------- 4 · Vulnerability Level ---------- */}
+      <SectionTitle size="lg" id="home-sec-4" note="— income classification, both countries">
+        4 · Vulnerability Level
+      </SectionTitle>
+      <Card className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <p className="max-w-[720px] text-sm text-muted">
+            The source already carries one harmonised scale for both countries, so the numbers are
+            available. What is not settled is the naming: the design relabels the lowest band
+            &ldquo;Vulnerable&rdquo;, which reverses what that row says about the scholars in it.
+            Publishing tier percentages under unapproved labels would put words in the
+            program&rsquo;s mouth.
           </p>
-          <ProxyBadge>PENDING</ProxyBadge>
-        </Card>
-      )}
+          {tiers.overall ? (
+            <p className="mt-2 text-xs text-muted">
+              {fmtInt(tiers.overall.classified)} scholars classified,{" "}
+              {fmtInt(tiers.overall.unclassified)} still marked pending at source.
+            </p>
+          ) : null}
+        </div>
+        <ProxyBadge>PENDING</ProxyBadge>
+      </Card>
 
-      {/* Executive attention band — kept from the prior implementation (not in the mockup,
-          but useful working navigation the redesign doesn't replace). */}
-      <SectionTitle size="lg">Executive Attention</SectionTitle>
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Link href="/dashboard/early-support" className="block">
-          <KpiCard
-            label="High or critical risk"
-            value={fmtInt(criticalCount)}
-            sub="Scholars needing attention"
-          />
-        </Link>
-        <Link href="/dashboard/early-support" className="block">
-          <KpiCard
-            label="Missing reports"
-            value={fmtInt(missingReportsCount)}
-            sub="Check-in or mentoring this month"
-          />
-        </Link>
-        <KpiCard label="Withdrawals" value={fmtInt(o.withdrawnScholars)} sub="In the selected group" />
+      {/* ---------- 5 · Where Our Scholars Are From ---------- */}
+      <SectionTitle size="lg" id="home-sec-5" note="— department or region of origin">
+        5 · Where Our Scholars Are From
+      </SectionTitle>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card>
+          <div className="mb-3 text-[13.5px] font-bold text-surface-dark">
+            Colombia — by department of origin
+          </div>
+          <OriginTable matrix={origins.colombia} country="Colombia" />
+        </Card>
+        <Card>
+          <div className="mb-3 text-[13.5px] font-bold text-surface-dark">
+            Peru — by region of origin
+          </div>
+          <OriginTable matrix={origins.peru} country="Peru" />
+        </Card>
       </div>
+      <p className="mt-2.5 text-xs text-muted">
+        Where the scholar was born or grew up — not necessarily where they study today.
+      </p>
+
+      {/* ---------- 6 · Program Satisfaction ---------- */}
+      <SectionTitle size="lg" id="home-sec-6">
+        6 · Program Satisfaction
+      </SectionTitle>
+      <Card className="flex flex-wrap items-center justify-between gap-4">
+        <p className="max-w-[720px] text-sm text-muted">
+          No survey data source yet — pending an approved satisfaction formula. The design marks this
+          section a proxy for the same reason.
+        </p>
+        <ProxyBadge>PROXY</ProxyBadge>
+      </Card>
+
+      {/* ---------- 7 · Retention & Dropout by University ---------- */}
+      <SectionTitle size="lg" id="home-sec-7">
+        7 · Retention &amp; Dropout Rate by University
+      </SectionTitle>
+      <Card className="p-6">
+        {universities.length === 0 ? (
+          <p className="text-sm text-muted">No universities in scope for this selection.</p>
+        ) : (
+          <UniversityRetentionList data={universities} />
+        )}
+      </Card>
+
+      {/* ---------- 8 · Academic Progress ---------- */}
+      <SectionTitle size="lg" id="home-sec-8">
+        8 · Academic Progress
+      </SectionTitle>
+      <Card>
+        <div className="mb-3 text-[13.5px] font-bold text-surface-dark">8.1 Academic Standing</div>
+        <ExecTable
+          headers={["Country", ...Object.values(PROGRESS_LABEL), "Not reported"]}
+          rows={progress.map<ExecRow>((r) => ({
+            key: String(r.country),
+            label: r.country === "ALL" ? "ALL COUNTRIES" : COUNTRY_LABEL[r.country],
+            summary: r.country === "ALL" ? "actual" : undefined,
+            cells: [
+              pctText(r.onTrack, r.classified),
+              pctText(r.behind, r.classified),
+              pctText(r.critical, r.classified),
+              fmtInt(r.pending + r.notApplicable + r.unknown),
+            ],
+          }))}
+          caption="Percentages are over scholars with a reported standing; the last column is how many are not yet reported. Computed by the program, not by the universities."
+        />
+      </Card>
+
+      <Card className="mt-3.5">
+        <div className="mb-3 text-[13.5px] font-bold text-surface-dark">8.2 English Level</div>
+        <ExecTable
+          headers={["Country", ...ENGLISH_LEVELS, "Reported"]}
+          rows={english.map<ExecRow>((r) => ({
+            key: String(r.country),
+            label: r.country === "ALL" ? "ALL COUNTRIES" : COUNTRY_LABEL[r.country],
+            summary: r.country === "ALL" ? "actual" : undefined,
+            cells: [
+              ...ENGLISH_LEVELS.map((l) => pctText(r.counts[l], r.classified)),
+              `${fmtInt(r.classified)} / ${fmtInt(
+                r.classified + r.pending + r.notApplicable + r.unrecognized,
+              )}`,
+            ],
+          }))}
+          caption="A1–B1: developing proficiency · B2–C2: professional working proficiency. Percentages are over scholars with a level on record — the last column shows how many that is. Reported by the universities, not measured by the program."
+        />
+      </Card>
+
+      <div className="mt-3.5 grid gap-4 lg:grid-cols-2">
+        <Card>
+          <div className="mb-3 text-[13.5px] font-bold text-surface-dark">
+            8.3 Average GPA — Colombia
+          </div>
+          <ExecTable
+            headers={["Cohort", "GPA", "Scholars"]}
+            rows={[
+              ...gpa.colombia.rows.map<ExecRow>((r) => ({
+                key: r.cohort,
+                label: r.cohort,
+                cells: [r.average ?? "—", fmtInt(r.count)],
+              })),
+              {
+                key: "avg",
+                label: "COLOMBIA AVERAGE",
+                summary: "col",
+                cells: [
+                  gpa.colombia.overall != null
+                    ? `${gpa.colombia.overall} / ${gpa.colombia.scale}`
+                    : "—",
+                  "",
+                ],
+              },
+            ]}
+            empty="No Colombia GPA on record for this selection."
+          />
+        </Card>
+        <Card>
+          <div className="mb-3 text-[13.5px] font-bold text-surface-dark">8.4 Average GPA — Peru</div>
+          <ExecTable
+            headers={["Cohort", "GPA", "Scholars"]}
+            rows={[
+              ...gpa.peru.rows.map<ExecRow>((r) => ({
+                key: r.cohort,
+                label: r.cohort,
+                cells: [r.average ?? "—", fmtInt(r.count)],
+              })),
+              {
+                key: "avg",
+                label: "PERU AVERAGE",
+                summary: "per",
+                cells: [
+                  gpa.peru.overall != null ? `${gpa.peru.overall} / ${gpa.peru.scale}` : "—",
+                  "",
+                ],
+              },
+            ]}
+            empty="No Peru GPA on record for this selection."
+          />
+        </Card>
+      </div>
+      <p className="mt-2.5 text-xs text-muted">
+        Colombia grades on 0–5, Peru on 0–20 — different systems, never blended into one average.
+        {gpa.excludedZeroGpaCount > 0
+          ? ` ${fmtInt(gpa.excludedZeroGpaCount)} term(s) recorded as 0 (not enrolled) are excluded.`
+          : ""}
+      </p>
 
       <SectionNav current="/dashboard" sp={sp} user={user} />
     </div>

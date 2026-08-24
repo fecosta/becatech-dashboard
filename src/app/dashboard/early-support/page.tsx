@@ -1,8 +1,17 @@
+import Link from "next/link";
 import type { AlertType, RiskLevel } from "@/generated/prisma/enums";
 import { ComboBarLineCard, Donut, LineCard } from "@/components/charts";
 import { PaceBarChart } from "@/components/PaceBarChart";
 import { UniHBarRow } from "@/components/UniHBarRow";
-import { AccessDenied, Card, DarkCallout, PageHeader, SectionTitle, StatChip } from "@/components/ui";
+import {
+  AccessDenied,
+  Card,
+  DarkCallout,
+  KpiCard,
+  PageHeader,
+  SectionTitle,
+  StatChip,
+} from "@/components/ui";
 import { SectionNav } from "@/components/SectionNav";
 import { gpaSummaryKpi } from "@/lib/academic/gpa-summary";
 import { Permission } from "@/lib/auth/authorization";
@@ -14,6 +23,7 @@ import {
   getHomeOverview,
   getMonthlyRiskTrend,
   getRiskBreakdowns,
+  getRiskAlerts,
   getRiskStageSummary,
   getSupportParticipation,
   getUniversityRiskBreakdown,
@@ -60,18 +70,33 @@ export default async function EarlySupportPage({
   const sp = await searchParams;
   const filters = parseFilters(sp);
   const stageFilters = { ...filters, programStage: "YEARS_1_2" as const };
-  const [risk, support, pace, stageOverview, overallOverview, home, uniBreakdown, riskTrend, breakdowns] =
-    await Promise.all([
-      getRiskStageSummary(stageFilters),
-      getSupportParticipation(stageFilters),
-      getAcademicProgress(stageFilters, user),
-      getExecutiveOverview(stageFilters),
-      getExecutiveOverview(filters),
-      getHomeOverview(stageFilters),
-      getUniversityRiskBreakdown(stageFilters),
-      getMonthlyRiskTrend(stageFilters),
-      getRiskBreakdowns(stageFilters),
-    ]);
+  const [
+    risk,
+    support,
+    pace,
+    stageOverview,
+    overallOverview,
+    home,
+    uniBreakdown,
+    riskTrend,
+    breakdowns,
+    alerts,
+  ] = await Promise.all([
+    getRiskStageSummary(stageFilters),
+    getSupportParticipation(stageFilters),
+    getAcademicProgress(stageFilters, user),
+    getExecutiveOverview(stageFilters),
+    getExecutiveOverview(filters),
+    getHomeOverview(stageFilters),
+    getUniversityRiskBreakdown(stageFilters),
+    getMonthlyRiskTrend(stageFilters),
+    getRiskBreakdowns(stageFilters),
+    getRiskAlerts(stageFilters, user),
+  ]);
+
+  const missingReportsCount = alerts.attentionList.filter(
+    (r) => r.missingCheckin || r.missingMentorReport,
+  ).length;
 
   const atRisk = ALERT_SPLIT_ORDER.reduce((sum, t) => sum + risk.alertTypeCounts[t], 0);
   const onTrack = pace.progressStatusDistribution.ON_TRACK;
@@ -161,6 +186,28 @@ export default async function EarlySupportPage({
             (a risk dimension was not reported) — shown separately and not counted as high risk.
           </p>
         ) : null}
+      </div>
+
+      {/* Relocated from Home: these are the numbers a coordinator acts on, and acting on
+          them means being on this page. Home now opens with the program story instead. */}
+      <div className="mt-4 grid gap-4 sm:grid-cols-3">
+        <KpiCard
+          label="High or critical risk"
+          value={fmtInt(risk.criticalHighCount)}
+          sub="Scholars needing attention"
+        />
+        <Link href="/dashboard/scholars" className="block">
+          <KpiCard
+            label="Missing reports"
+            value={fmtInt(missingReportsCount)}
+            sub="Check-in or mentoring this month"
+          />
+        </Link>
+        <KpiCard
+          label="Withdrawals"
+          value={fmtInt(stageOverview.withdrawnScholars)}
+          sub="In the selected group"
+        />
       </div>
 
       <div className="mt-6">
