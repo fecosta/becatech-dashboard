@@ -1530,8 +1530,10 @@ export async function getOriginBreakdown(
     const head = sorted.slice(0, TOP_ORIGINS);
     const tail = sorted.slice(TOP_ORIGINS);
     if (tail.length > 0) {
+      // Colombia reports departments, Peru regions — the tail bucket has to match.
+      const tailLabel = country === Country.COLOMBIA ? "Other departments" : "Other regions";
       head.push({
-        origin: tail.length === 1 ? tail[0].origin : "Other regions",
+        origin: tail.length === 1 ? tail[0].origin : tailLabel,
         counts: Object.fromEntries(
           years.map((y) => [y, tail.reduce((n, r) => n + (r.counts[y] ?? 0), 0)]),
         ),
