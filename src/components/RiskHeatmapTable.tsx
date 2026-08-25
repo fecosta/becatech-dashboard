@@ -1,4 +1,4 @@
-// Monthly follow-up heatmap (Scholar Progress) — one row per period, one risk-colored
+// Monthly follow-up heatmap (Scholar Profile) — one row per period, one risk-colored
 // cell per dimension. CRITICO gets the mockup's solid black+yellow treatment; the other
 // four levels use a light tint of their own RISK_LEVEL_HEX_SEGMENTED color.
 import type { RiskLevel } from "@/generated/prisma/enums";
@@ -39,7 +39,14 @@ function RiskCell({ level }: { level: RiskLevel }) {
 
 const TH = "pb-1.5 text-[11px] font-bold uppercase tracking-[0.03em] text-muted";
 
-export function RiskHeatmapTable({ rows }: { rows: RiskHeatmapRow[] }) {
+export function RiskHeatmapTable({
+  rows,
+  firstColumnHeader = "Month",
+}: {
+  rows: RiskHeatmapRow[];
+  /** AUGUST 4 renders this table twice — once per semester, once per month. */
+  firstColumnHeader?: string;
+}) {
   if (rows.length === 0) {
     return <p className="text-sm text-muted">No monthly risk history on record.</p>;
   }
@@ -47,7 +54,7 @@ export function RiskHeatmapTable({ rows }: { rows: RiskHeatmapRow[] }) {
     <table className="w-full border-separate border-spacing-y-1.5 text-[12.5px]">
       <thead>
         <tr>
-          <th className={`${TH} text-left`}>Month</th>
+          <th className={`${TH} text-left`}>{firstColumnHeader}</th>
           <th className={`${TH} text-center`}>Academic</th>
           <th className={`${TH} text-center`}>Psychosocial</th>
           <th className={`${TH} text-center`}>Global</th>

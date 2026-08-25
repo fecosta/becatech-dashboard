@@ -1,4 +1,9 @@
 // Typed inputs and results for the dashboard query layer (src/lib/dashboard/queries.ts).
+import type { RiskBand } from "./bands";
+import type { ActivityGroup, RiskTier } from "./risk-tier";
+import type { RiskReasonCategory } from "../risk/reason-taxonomy";
+import type { EnglishLevel } from "../academic/english-level";
+import type { SocioeconomicTier } from "../scholars/socioeconomic-tier";
 import type {
   AcademicProgressStatus,
   ActivityType,
@@ -369,4 +374,185 @@ export interface ProgramEcosystemResult {
   /** Full fixed partner roster, not scope-dependent — counts default to 0 when out of scope. */
   universities: ProgramEcosystemUniversityRow[];
   operators: ProgramEcosystemOperatorRow[];
+}
+
+// ------------------------------------------------------------------
+// AUGUST 4 home sections
+// ------------------------------------------------------------------
+
+/** §1 Our Scholars — "selected" is every scholar on record. ProgramStatus has no
+ *  admitted-but-never-started state and the source sheet carries only active and
+ *  withdrawn, so there is nothing finer to report. */
+export interface ScholarBaseCounts {
+  selectedTotal: number;
+  activeTotal: number;
+  cohortCount: number;
+  womenActive: { total: number; colombia: number; peru: number };
+  byCohortCountry: {
+    cohort: string;
+    country: Country;
+    selected: number;
+    active: number;
+  }[];
+}
+
+/** §2 Drop Outs. `reasons` is null rather than an empty array: there is no
+ *  dropout-reason column in any source, so "none recorded" would be misleading. */
+export interface DropoutOverview {
+  withdrawnTotal: number;
+  withdrawnWomen: number;
+  selectedTotal: number;
+  withdrawnPct: number;
+  reasons: null;
+}
+
+/** §3 Program Retention. `perTerm` is null by design — see getCohortRetention. */
+export interface CohortRetention {
+  rows: {
+    cohort: string;
+    country: Country;
+    settled: number;
+    active: number;
+    retentionPct: number;
+  }[];
+  overall: { settled: number; active: number; retentionPct: number } | null;
+  byCohortYear: { year: string; retentionPct: number }[];
+  byCountry: { country: Country; retentionPct: number }[];
+  perTerm: null;
+  target: null;
+}
+
+/** §4 Vulnerability. Percentages are always over `classified`, with `unclassified`
+ *  reported beside them. */
+export interface VulnerabilityTiers {
+  mappingApproved: boolean;
+  rows: {
+    cohort: string;
+    country: Country;
+    counts: Record<SocioeconomicTier, number>;
+    pct: Record<SocioeconomicTier, number>;
+    classified: number;
+    unclassified: number;
+  }[];
+  overall: {
+    counts: Record<SocioeconomicTier, number>;
+    pct: Record<SocioeconomicTier, number>;
+    classified: number;
+    unclassified: number;
+  } | null;
+}
+
+/** §5 Where Our Scholars Are From. One matrix per country, origin x cohort year. */
+export interface OriginMatrix {
+  cohortYears: string[];
+  rows: { origin: string; counts: Record<string, number>; total: number }[];
+  total: { counts: Record<string, number>; total: number };
+  /** Kept separate from the "Other" tail — these scholars reported no origin at all. */
+  notReported: number;
+}
+export interface OriginBreakdown {
+  colombia: OriginMatrix;
+  peru: OriginMatrix;
+}
+
+/** §7 Retention & Dropout by University, ranked worst-first and colour-banded. */
+export interface UniversityRetentionRow {
+  name: string;
+  country: Country;
+  activeCount: number;
+  dropOutCount: number;
+  retentionPct: number;
+  dropOutPct: number;
+  band: RiskBand;
+}
+
+/** §8.1 Academic progress by country, from Scholar.academicProgress. */
+export interface AcademicProgressByCountryRow {
+  country: Country | "ALL";
+  onTrack: number;
+  behind: number;
+  critical: number;
+  classified: number;
+  pending: number;
+  notApplicable: number;
+  unknown: number;
+}
+
+/** §8.2 English level by country. `classified` is the only honest denominator. */
+export interface EnglishLevelByCountryRow {
+  country: Country | "ALL";
+  counts: Record<EnglishLevel, number>;
+  classified: number;
+  pending: number;
+  notApplicable: number;
+  unrecognized: number;
+}
+
+/** §8.3/8.4 GPA by cohort, per country, never blended across scales. */
+export interface GpaByCohort {
+  colombia: { scale: number; rows: { cohort: string; average: number | null; count: number }[]; overall: number | null };
+  peru: { scale: number; rows: { cohort: string; average: number | null; count: number }[]; overall: number | null };
+  /** Terms a scholar was not enrolled in are stored as a literal 0 in the source. */
+  excludedZeroGpaCount: number;
+}
+
+// ------------------------------------------------------------------
+// AUGUST 4 early-support sections
+// ------------------------------------------------------------------
+
+/** One axis of §2.2. The two axes overlap, so each carries its own denominator. */
+export interface RiskReasonAxis {
+  /** Scholars flagged with at least one reason on THIS axis. Percentages are over it. */
+  scholarsWithAnyReason: number;
+  rows: { category: RiskReasonCategory; label: string; scholarCount: number; pct: number }[];
+}
+
+export interface RiskReasonBreakdown {
+  period: string;
+  atRiskScholarCount: number;
+  academic: RiskReasonAxis;
+  psychosocial: RiskReasonAxis;
+  /** Scholars whose only reasons are options the taxonomy has not classified. */
+  unclassifiedScholarCount: number;
+  /** The unclassified options themselves, so a drift shows up as text, not a silent gap. */
+  unmappedAtoms: string[];
+  /** Scholars flagged on both axes — why the two tables do not sum to the at-risk total. */
+  bothAxesCount: number;
+}
+
+/** §2.3 — participation by activity group and risk tier. */
+export interface ParticipationByActivityAndRisk {
+  period: string;
+  groups: {
+    activity: ActivityGroup;
+    rows: {
+      tier: RiskTier;
+      scholarCount: number;
+      participatedCount: number;
+      /** null when the tier has no scholars — never a misleading 0%. */
+      pct: number | null;
+    }[];
+  }[];
+}
+
+/** §2.5 — risk tier by gender. */
+export interface RiskByGenderRow {
+  gender: "female" | "male" | "other";
+  scholarCount: number;
+  tiers: Record<RiskTier, number>;
+  tierPct: Record<RiskTier, number>;
+}
+
+/** §1 of the scholar view — who to call first. Carries contact details, so every read
+ *  must stay inside the caller's scholar access scope. */
+export interface ContactPriorityRow {
+  scholarId: string;
+  fullName: string;
+  email: string | null;
+  mobilePhone: string | null;
+  university: string;
+  cohort: string;
+  country: Country;
+  riskLevel: RiskLevel;
+  riskValue: number;
 }

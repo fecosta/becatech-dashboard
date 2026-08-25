@@ -6,6 +6,7 @@ import { ProxyBadge } from "@/components/ui";
 
 export function BulletTrackGoal({
   label,
+  tag,
   goalLabel,
   valueLabel,
   fillPct,
@@ -13,6 +14,8 @@ export function BulletTrackGoal({
   pending = false,
 }: {
   label: string;
+  /** Bold purple module marker shown before the label (e.g. "D1"). */
+  tag?: string;
   /** e.g. "goal ≥85%" — shown next to the label when a goal exists. */
   goalLabel?: string;
   /** Displayed current-value text, e.g. "89%" or "7.6/10". Ignored when pending. */
@@ -31,6 +34,8 @@ export function BulletTrackGoal({
     <div className="mb-3.5 last:mb-0">
       <div className="mb-1 flex justify-between text-xs text-ink">
         <span>
+          {tag ? <b className="text-purple">{tag}</b> : null}
+          {tag ? " · " : null}
           {label}
           {goalLabel ? <span className="text-muted"> · {goalLabel}</span> : null}
         </span>

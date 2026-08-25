@@ -17,6 +17,20 @@ export const COUNTRY_LABEL: Record<Country, string> = {
   PERU: "Peru",
 };
 
+/** Short form used where a country sits beside a name (e.g. "UTEC PE"). */
+export const COUNTRY_ABBR: Record<Country, string> = {
+  COLOMBIA: "COL",
+  PERU: "PE",
+};
+
+/** The accent each country reads as throughout the design — the university card's
+ *  left border, the ecosystem country group bars, the per-country summary rows.
+ *  Kept here so those three cannot drift apart. */
+export const COUNTRY_TONE: Record<Country, "purple" | "green"> = {
+  COLOMBIA: "purple",
+  PERU: "green",
+};
+
 export const PROGRAM_STATUS_LABEL: Record<ProgramStatus, string> = {
   ACTIVE: "Active",
   WITHDRAWN: "Withdrawn",
@@ -59,9 +73,9 @@ export const RISK_LEVEL_HEX: Record<RiskLevel, string> = {
 };
 
 /**
- * Segmented risk palette (matches RiskBar.tsx's --risk-* tokens / the mockup's donut) —
- * a different, brand-hued scale from RISK_LEVEL_HEX above. Use this one wherever a chart
- * sits next to a RiskBar on the same page, so the colors read as the same scale.
+ * Segmented risk palette (matches the --risk-* tokens in globals.css) — a different,
+ * brand-hued scale from RISK_LEVEL_HEX above. Use this one for the risk donut and the
+ * profile heatmap, so the two read as the same scale.
  */
 export const RISK_LEVEL_HEX_SEGMENTED: Record<RiskLevel, string> = {
   SIN_RIESGO: "#27cf77",

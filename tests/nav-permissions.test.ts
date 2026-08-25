@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { UserRole } from "@/generated/prisma/enums";
 import { can, type CurrentUser, Permission } from "@/lib/auth/authorization";
+import { adjacentViews, VIEW_ORDER } from "@/lib/dashboard/views";
 
 // Permission gating each nav item after the Beca Tech+ IA restructure. Kept in lockstep
 // with the NAV config in src/app/dashboard/layout.tsx — a regression here means a role
@@ -88,5 +89,52 @@ describe("nav visibility per role (Beca Tech+ IA)", () => {
 
   it("Analyst/Admin: everything", () => {
     expect(Object.values(visibleNav("ANALYST_ADMIN")).every(Boolean)).toBe(true);
+  });
+});
+
+describe("VIEW_ORDER stays in step with the nav config", () => {
+  it("lists the five primary views in the design's walk order", () => {
+    expect(VIEW_ORDER.map((v) => v.href)).toEqual([
+      "/dashboard",
+      "/dashboard/early-support",
+      "/dashboard/career-readiness",
+      "/dashboard/scholars",
+      "/dashboard/actors",
+    ]);
+  });
+
+  it("gates each view on the same permission the nav test asserts", () => {
+    expect(VIEW_ORDER.map((v) => v.permission)).toEqual([
+      NAV_PERMISSION.home,
+      NAV_PERMISSION.earlySupport,
+      NAV_PERMISSION.careerReadiness,
+      NAV_PERMISSION.scholars,
+      NAV_PERMISSION.programEcosystem,
+    ]);
+  });
+});
+
+describe("SectionNav prev/next", () => {
+  it("walks forward and back through the views for a tracking role", () => {
+    const mentor = u("MENTOR");
+    expect(adjacentViews("/dashboard", mentor).prev).toBeUndefined();
+    expect(adjacentViews("/dashboard", mentor).next?.href).toBe("/dashboard/early-support");
+    expect(adjacentViews("/dashboard/scholars", mentor).prev?.href).toBe(
+      "/dashboard/career-readiness",
+    );
+    expect(adjacentViews("/dashboard/actors", mentor).next).toBeUndefined();
+  });
+
+  // The whole point of routing prev/next through can(): Finance has VIEW_DASHBOARD but
+  // not VIEW_SCHOLAR_TRACKING, so a naive "next" link from Home would land it on the
+  // Access denied card.
+  it("offers no next view to a role that cannot open any of them", () => {
+    expect(adjacentViews("/dashboard", u("FINANCE")).next).toBeUndefined();
+    expect(adjacentViews("/dashboard", u("SELECTION_TEAM")).next).toBeUndefined();
+  });
+
+  it("returns nothing for a signed-out user or an unknown route", () => {
+    expect(adjacentViews("/dashboard", null)).toEqual({});
+    expect(adjacentViews("/dashboard/unit-economics", u("ANALYST_ADMIN"))).toEqual({});
   });
 });

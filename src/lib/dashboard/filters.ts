@@ -45,7 +45,7 @@ export type FilterKey = "country" | "cohort" | "university" | "status" | "risk" 
 /**
  * Which TopFilters pills a given dashboard route should show. Per the Phase B indicator
  * spec: most views only need cohort/country/university; Home also gets a department
- * pill (for its department breakdown); Scholar Progress puts university first (its
+ * pill (for its department breakdown); Scholar Profile puts university first (its
  * search matches on university name too). Out-of-scope routes (unit-economics,
  * selection-pipeline, admin/**) keep today's full pill set.
  */
@@ -58,4 +58,57 @@ export function visiblePillsForPath(pathname: string): FilterKey[] {
     return ["university", "country", "cohort", "status", "risk"];
   }
   return ["country", "cohort", "university", "status", "risk", "period"];
+}
+
+/** The colour each filter reads as in the per-section scope chips. Pinned so a given
+ *  filter looks the same on every view — the design file is inconsistent about this and
+ *  the app should not inherit that. */
+export const FILTER_CHIP_TONE: Record<
+  FilterKey,
+  "black" | "green" | "purple" | "yellow" | "ghost"
+> = {
+  cohort: "black",
+  country: "green",
+  risk: "purple",
+  period: "yellow",
+  university: "ghost",
+  department: "ghost",
+  status: "ghost",
+};
+
+const FILTER_CHIP_LABEL: Record<FilterKey, string> = {
+  cohort: "Cohort",
+  country: "Country",
+  university: "University",
+  status: "Status",
+  risk: "Risk",
+  period: "Month",
+  department: "Department",
+};
+
+/**
+ * Scope chips for a section: what the top-bar filters are currently set to.
+ *
+ * These report scope rather than setting it. The design draws them as if they were
+ * per-section controls, but a chip that owns its own state would let a card disagree
+ * with the top bar about what it is showing — and a chip that looks clickable and is
+ * not is worse than a label.
+ */
+export function filterChipsFor(
+  filters: DashboardFilters,
+  keys: FilterKey[],
+): { label: string; tone: "black" | "green" | "purple" | "yellow" | "ghost" }[] {
+  const valueOf: Record<FilterKey, string | undefined> = {
+    cohort: filters.cohort,
+    country: filters.country,
+    university: filters.university,
+    status: filters.programStatus,
+    risk: filters.riskLevel,
+    period: filters.period,
+    department: filters.department,
+  };
+  return keys.map((key) => ({
+    label: `${FILTER_CHIP_LABEL[key]}: ${valueOf[key] ?? "all"}`,
+    tone: FILTER_CHIP_TONE[key],
+  }));
 }

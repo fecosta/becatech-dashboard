@@ -1,7 +1,28 @@
 // Dashboard query layer — reusable, typed server-side reads for every dashboard view.
 // Aggregation is done in JS over Prisma results: the dataset is small (~100 scholars) and
 // this keeps the logic readable and testable. Optimize with SQL only if data volume grows.
-import { bucketGpa } from "../academic/gpa-bucket";
+import { bucketGpa, GPA_SCALE_MAX } from "../academic/gpa-bucket";
+import { parseScholarProgress } from "../academic/academic-progress-label";
+import { ENGLISH_LEVELS, type EnglishLevel, parseEnglishLevel } from "../academic/english-level";
+import { parseSocioeconomicTier, type SocioeconomicTier, TIER_MAPPING_APPROVED } from "../scholars/socioeconomic-tier";
+import { dropoutBand } from "./bands";
+import {
+  ACTIVITY_GROUP_COLUMNS,
+  ACTIVITY_GROUP_ORDER,
+  RISK_TIER_ORDER,
+  type RiskTier,
+  riskTier,
+} from "./risk-tier";
+import {
+  CATEGORIES_BY_AXIS,
+  categorizeAlertAtom,
+  normalizeAlertAtom,
+  RISK_REASON_LABEL,
+  type RiskAxis,
+  type RiskReasonCategory,
+  splitAlertAtoms,
+} from "../risk/reason-taxonomy";
+import { cohortYear, normalizeOrigin, originKey } from "./origin";
 import { summarizeGpa } from "../academic/gpa-summary";
 import { type CurrentUser, scholarAccessWhere } from "../auth/authorization";
 import { deriveExpectedProgressStatus } from "../academic/progress";
@@ -19,7 +40,22 @@ import {
   SelectionStage,
 } from "../../generated/prisma/enums";
 import type {
+  AcademicProgressByCountryRow,
   AcademicProgressResult,
+  CohortRetention,
+  DropoutOverview,
+  EnglishLevelByCountryRow,
+  GpaByCohort,
+  OriginBreakdown,
+  OriginMatrix,
+  ContactPriorityRow,
+  ParticipationByActivityAndRisk,
+  RiskByGenderRow,
+  RiskReasonAxis,
+  RiskReasonBreakdown,
+  ScholarBaseCounts,
+  UniversityRetentionRow,
+  VulnerabilityTiers,
   CostGroup,
   DashboardFilters,
   ExecutiveOverview,
@@ -1268,4 +1304,674 @@ export async function getProgramEcosystem(
   }));
 
   return { universities, operators };
+}
+
+// ------------------------------------------------------------------
+// 9.10 AUGUST 4 home sections
+// ------------------------------------------------------------------
+
+/** Every scholar in scope regardless of status — the "selected" population. */
+async function loadAllStatuses(filters: DashboardFilters) {
+  return prisma.scholar.findMany({
+    where: geoScholarWhere(filters),
+    select: {
+      scholarId: true,
+      cohort: true,
+      country: true,
+      gender: true,
+      programStatus: true,
+      socioeconomicLevel: true,
+      departmentOrigin: true,
+      academicProgress: true,
+      currentEnglishLevel: true,
+      university: { select: { name: true } },
+    },
+    orderBy: { scholarId: "asc" },
+  });
+}
+
+const pct = (n: number, d: number) => (d ? Math.round((n / d) * 100) : 0);
+
+/**
+ * §1 Our Scholars.
+ *
+ * "Selected" is every scholar on record. ProgramStatus is only
+ * ACTIVE/WITHDRAWN/GRADUATED/PAUSED and the sheet carries just "BECARIO(A) ACTIVO"
+ * and "DESERTOR(A)", so there is no admitted-but-never-started state to separate out
+ * — the distinction the design draws is simply everyone vs. those still active.
+ */
+export async function getScholarBaseCounts(
+  filters: DashboardFilters = {},
+): Promise<ScholarBaseCounts> {
+  const scholars = await loadAllStatuses(filters);
+  const active = scholars.filter((s) => s.programStatus === ProgramStatus.ACTIVE);
+  const women = active.filter((s) => normalizeGender(s.gender) === "female");
+
+  const byKey = new Map<string, { cohort: string; country: Country; selected: number; active: number }>();
+  for (const s of scholars) {
+    const key = `${s.cohort}::${s.country}`;
+    const row = byKey.get(key) ?? { cohort: s.cohort, country: s.country, selected: 0, active: 0 };
+    row.selected += 1;
+    if (s.programStatus === ProgramStatus.ACTIVE) row.active += 1;
+    byKey.set(key, row);
+  }
+
+  return {
+    selectedTotal: scholars.length,
+    activeTotal: active.length,
+    cohortCount: new Set(scholars.map((s) => s.cohort)).size,
+    womenActive: {
+      total: women.length,
+      colombia: women.filter((s) => s.country === Country.COLOMBIA).length,
+      peru: women.filter((s) => s.country === Country.PERU).length,
+    },
+    byCohortCountry: [...byKey.values()].sort(
+      (a, b) => a.cohort.localeCompare(b.cohort) || a.country.localeCompare(b.country),
+    ),
+  };
+}
+
+/**
+ * §2 Drop Outs.
+ *
+ * `reasons` is null, not an empty list. No source carries a dropout reason: the sheet
+ * has no such column, and the mentor-report alert types only cover the current
+ * semester, so they say nothing about scholars who left in 2024 or 2025.
+ */
+export async function getDropoutOverview(
+  filters: DashboardFilters = {},
+): Promise<DropoutOverview> {
+  const scholars = await loadAllStatuses(filters);
+  const withdrawn = scholars.filter((s) => s.programStatus === ProgramStatus.WITHDRAWN);
+  return {
+    withdrawnTotal: withdrawn.length,
+    withdrawnWomen: withdrawn.filter((s) => normalizeGender(s.gender) === "female").length,
+    selectedTotal: scholars.length,
+    withdrawnPct: pct(withdrawn.length, scholars.length),
+    reasons: null,
+  };
+}
+
+/**
+ * §3 Program Retention — point in time, per cohort and country.
+ *
+ * `perTerm` is null on purpose. The design shows retention advancing term by term, but
+ * AcademicTerm.enrollmentStatus cannot support that: "Not applicable for this semester"
+ * means both "had not started yet" and "already left", the sheet forward-fills terms
+ * that have not happened, and some withdrawn scholars still read as enrolled in future
+ * terms. A survival curve built on it would be invented. It needs an explicit exit term
+ * on Scholar, which is a source-sheet change first.
+ *
+ * Retention is over the settled population (active + withdrawn); paused and graduated
+ * scholars are not a retention outcome either way.
+ */
+export async function getCohortRetention(
+  filters: DashboardFilters = {},
+): Promise<CohortRetention> {
+  const scholars = await loadAllStatuses(filters);
+  const settledOnly = scholars.filter(
+    (s) =>
+      s.programStatus === ProgramStatus.ACTIVE || s.programStatus === ProgramStatus.WITHDRAWN,
+  );
+
+  const byKey = new Map<string, { cohort: string; country: Country; settled: number; active: number }>();
+  for (const s of settledOnly) {
+    const key = `${s.cohort}::${s.country}`;
+    const row = byKey.get(key) ?? { cohort: s.cohort, country: s.country, settled: 0, active: 0 };
+    row.settled += 1;
+    if (s.programStatus === ProgramStatus.ACTIVE) row.active += 1;
+    byKey.set(key, row);
+  }
+
+  const rows = [...byKey.values()]
+    .map((r) => ({ ...r, retentionPct: pct(r.active, r.settled) }))
+    .sort((a, b) => a.cohort.localeCompare(b.cohort) || a.country.localeCompare(b.country));
+
+  const rollup = (subset: typeof settledOnly) => {
+    const active = subset.filter((s) => s.programStatus === ProgramStatus.ACTIVE).length;
+    return { settled: subset.length, active, retentionPct: pct(active, subset.length) };
+  };
+
+  const years = [...new Set(settledOnly.map((s) => cohortYear(s.cohort)).filter(Boolean))].sort() as string[];
+
+  return {
+    rows,
+    overall: settledOnly.length ? rollup(settledOnly) : null,
+    byCohortYear: years.map((year) => ({
+      year,
+      retentionPct: rollup(settledOnly.filter((s) => cohortYear(s.cohort) === year)).retentionPct,
+    })),
+    byCountry: (Object.values(Country) as Country[])
+      .map((country) => ({
+        country,
+        subset: settledOnly.filter((s) => s.country === country),
+      }))
+      .filter((g) => g.subset.length > 0)
+      .map((g) => ({ country: g.country, retentionPct: rollup(g.subset).retentionPct })),
+    perTerm: null,
+    target: null,
+  };
+}
+
+const emptyTierCounts = (): Record<SocioeconomicTier, number> => ({ TIER_1: 0, TIER_2: 0, TIER_3: 0 });
+
+/** §4 Vulnerability tiers. Renders as pending while the tier wording is unapproved. */
+export async function getVulnerabilityTiers(
+  filters: DashboardFilters = {},
+): Promise<VulnerabilityTiers> {
+  const scholars = await loadAllStatuses(filters);
+
+  const tally = (subset: typeof scholars) => {
+    const counts = emptyTierCounts();
+    let unclassified = 0;
+    for (const s of subset) {
+      const { tier } = parseSocioeconomicTier(s.socioeconomicLevel);
+      if (tier) counts[tier] += 1;
+      else unclassified += 1;
+    }
+    const classified = counts.TIER_1 + counts.TIER_2 + counts.TIER_3;
+    return {
+      counts,
+      classified,
+      unclassified,
+      pct: {
+        TIER_1: pct(counts.TIER_1, classified),
+        TIER_2: pct(counts.TIER_2, classified),
+        TIER_3: pct(counts.TIER_3, classified),
+      },
+    };
+  };
+
+  const keys = [...new Set(scholars.map((s) => `${s.cohort}::${s.country}`))].sort();
+  return {
+    mappingApproved: TIER_MAPPING_APPROVED,
+    rows: keys.map((key) => {
+      const [cohort, country] = key.split("::");
+      return {
+        cohort,
+        country: country as Country,
+        ...tally(scholars.filter((s) => `${s.cohort}::${s.country}` === key)),
+      };
+    }),
+    overall: scholars.length ? tally(scholars) : null,
+  };
+}
+
+/** §5 Where Our Scholars Are From — origin x cohort year, per country. */
+export async function getOriginBreakdown(
+  filters: DashboardFilters = {},
+): Promise<OriginBreakdown> {
+  const scholars = await loadAllStatuses(filters);
+  const TOP_ORIGINS = 4;
+
+  const matrix = (country: Country): OriginMatrix => {
+    const subset = scholars.filter((s) => s.country === country);
+    const years = [...new Set(subset.map((s) => cohortYear(s.cohort)).filter(Boolean))].sort() as string[];
+
+    const byOrigin = new Map<string, { origin: string; counts: Record<string, number>; total: number }>();
+    let notReported = 0;
+    for (const s of subset) {
+      const origin = normalizeOrigin(s.departmentOrigin);
+      const year = cohortYear(s.cohort);
+      if (!origin || !year) {
+        notReported += 1;
+        continue;
+      }
+      const key = originKey(origin);
+      const row =
+        byOrigin.get(key) ??
+        { origin, counts: Object.fromEntries(years.map((y) => [y, 0])), total: 0 };
+      row.counts[year] = (row.counts[year] ?? 0) + 1;
+      row.total += 1;
+      byOrigin.set(key, row);
+    }
+
+    const sorted = [...byOrigin.values()].sort((a, b) => b.total - a.total || a.origin.localeCompare(b.origin));
+    const head = sorted.slice(0, TOP_ORIGINS);
+    const tail = sorted.slice(TOP_ORIGINS);
+    if (tail.length > 0) {
+      // Colombia reports departments, Peru regions — the tail bucket has to match.
+      const tailLabel = country === Country.COLOMBIA ? "Other departments" : "Other regions";
+      head.push({
+        origin: tail.length === 1 ? tail[0].origin : tailLabel,
+        counts: Object.fromEntries(
+          years.map((y) => [y, tail.reduce((n, r) => n + (r.counts[y] ?? 0), 0)]),
+        ),
+        total: tail.reduce((n, r) => n + r.total, 0),
+      });
+    }
+
+    return {
+      cohortYears: years,
+      rows: head,
+      total: {
+        counts: Object.fromEntries(
+          years.map((y) => [y, head.reduce((n, r) => n + (r.counts[y] ?? 0), 0)]),
+        ),
+        total: head.reduce((n, r) => n + r.total, 0),
+      },
+      notReported,
+    };
+  };
+
+  return { colombia: matrix(Country.COLOMBIA), peru: matrix(Country.PERU) };
+}
+
+/** §7 Retention & dropout per university, worst dropout first, colour-banded. */
+export async function getUniversityRetention(
+  filters: DashboardFilters = {},
+): Promise<UniversityRetentionRow[]> {
+  const scholars = await prisma.scholar.findMany({
+    where: geoScholarWhere(filters),
+    select: { programStatus: true, country: true, university: { select: { name: true } } },
+  });
+
+  const agg = new Map<string, { country: Country; active: number; dropout: number }>();
+  for (const s of scholars) {
+    const name = s.university?.name;
+    if (!name) continue;
+    const row = agg.get(name) ?? { country: s.country, active: 0, dropout: 0 };
+    if (s.programStatus === ProgramStatus.ACTIVE) row.active += 1;
+    else if (s.programStatus === ProgramStatus.WITHDRAWN) row.dropout += 1;
+    agg.set(name, row);
+  }
+
+  return [...agg.entries()]
+    .filter(([, r]) => r.active + r.dropout > 0)
+    .map(([name, r]) => {
+      const settled = r.active + r.dropout;
+      const retentionPct = pct(r.active, settled);
+      const dropOutPct = 100 - retentionPct;
+      return {
+        name,
+        country: r.country,
+        activeCount: r.active,
+        dropOutCount: r.dropout,
+        retentionPct,
+        dropOutPct,
+        band: dropoutBand(dropOutPct),
+      };
+    })
+    .sort((a, b) => b.dropOutPct - a.dropOutPct || a.name.localeCompare(b.name));
+}
+
+/** §8.1 Academic progress by country, from Scholar.academicProgress. */
+export async function getAcademicProgressByCountry(
+  filters: DashboardFilters = {},
+): Promise<AcademicProgressByCountryRow[]> {
+  const scholars = (await loadAllStatuses(filters)).filter(
+    (s) => s.programStatus === ProgramStatus.ACTIVE,
+  );
+
+  const tally = (subset: typeof scholars, country: Country | "ALL"): AcademicProgressByCountryRow => {
+    const row: AcademicProgressByCountryRow = {
+      country,
+      onTrack: 0,
+      behind: 0,
+      critical: 0,
+      classified: 0,
+      pending: 0,
+      notApplicable: 0,
+      unknown: 0,
+    };
+    for (const s of subset) {
+      switch (parseScholarProgress(s.academicProgress)) {
+        case "ON_TRACK": row.onTrack += 1; row.classified += 1; break;
+        case "BEHIND": row.behind += 1; row.classified += 1; break;
+        case "CRITICAL": row.critical += 1; row.classified += 1; break;
+        case "PENDING": row.pending += 1; break;
+        case "NOT_APPLICABLE": row.notApplicable += 1; break;
+        default: row.unknown += 1;
+      }
+    }
+    return row;
+  };
+
+  const rows = (Object.values(Country) as Country[])
+    .map((c) => tally(scholars.filter((s) => s.country === c), c))
+    .filter((r) => r.classified + r.pending + r.notApplicable + r.unknown > 0);
+  if (scholars.length > 0) rows.push(tally(scholars, "ALL"));
+  return rows;
+}
+
+const emptyEnglishCounts = (): Record<EnglishLevel, number> =>
+  Object.fromEntries(ENGLISH_LEVELS.map((l) => [l, 0])) as Record<EnglishLevel, number>;
+
+/** §8.2 English level by country. Percentages must be shown over `classified`. */
+export async function getEnglishLevelByCountry(
+  filters: DashboardFilters = {},
+): Promise<EnglishLevelByCountryRow[]> {
+  const scholars = (await loadAllStatuses(filters)).filter(
+    (s) => s.programStatus === ProgramStatus.ACTIVE,
+  );
+
+  const tally = (subset: typeof scholars, country: Country | "ALL"): EnglishLevelByCountryRow => {
+    const row: EnglishLevelByCountryRow = {
+      country,
+      counts: emptyEnglishCounts(),
+      classified: 0,
+      pending: 0,
+      notApplicable: 0,
+      unrecognized: 0,
+    };
+    for (const s of subset) {
+      const parsed = parseEnglishLevel(s.currentEnglishLevel);
+      if (parsed.status === "OK") {
+        row.counts[parsed.level] += 1;
+        row.classified += 1;
+      } else if (parsed.status === "PENDING") row.pending += 1;
+      else if (parsed.status === "NOT_APPLICABLE") row.notApplicable += 1;
+      else row.unrecognized += 1;
+    }
+    return row;
+  };
+
+  const rows = (Object.values(Country) as Country[])
+    .map((c) => tally(scholars.filter((s) => s.country === c), c))
+    .filter((r) => r.classified + r.pending + r.notApplicable + r.unrecognized > 0);
+  if (scholars.length > 0) rows.push(tally(scholars, "ALL"));
+  return rows;
+}
+
+/**
+ * §8.3/8.4 Average GPA by cohort, per country, never blended across scales.
+ *
+ * Reads AcademicTerm.gpa, which the sheet sync does emit — not accumulatedGpa, which it
+ * does not. Terms a scholar was not enrolled in are stored as a literal 0, and
+ * summarizeGpa treats 0 as a valid GPA, so those are excluded explicitly and counted.
+ */
+export async function getGpaByCohort(filters: DashboardFilters = {}): Promise<GpaByCohort> {
+  const scholars = await prisma.scholar.findMany({
+    where: { AND: [geoScholarWhere(filters), { programStatus: ProgramStatus.ACTIVE }] },
+    select: { scholarId: true, cohort: true, country: true },
+  });
+  const terms = await prisma.academicTerm.findMany({
+    where: { scholarId: { in: scholars.map((s) => s.scholarId) } },
+    select: { scholarId: true, term: true, gpa: true },
+    orderBy: { term: "asc" },
+  });
+
+  // One GPA per scholar: their latest term with a real, in-scale, non-zero grade.
+  const byCountry = new Map(scholars.map((s) => [s.scholarId, s]));
+  const latest = new Map<string, number>();
+  let excludedZeroGpaCount = 0;
+  for (const t of terms) {
+    const scholar = byCountry.get(t.scholarId);
+    if (!scholar || t.gpa == null || !Number.isFinite(t.gpa)) continue;
+    if (t.gpa === 0) {
+      excludedZeroGpaCount += 1;
+      continue;
+    }
+    if (t.gpa < 0 || t.gpa > GPA_SCALE_MAX[scholar.country]) continue;
+    latest.set(t.scholarId, t.gpa); // terms are ascending, so the last write wins
+  }
+
+  const side = (country: Country) => {
+    const subset = scholars.filter((s) => s.country === country);
+    const cohorts = [...new Set(subset.map((s) => s.cohort))].sort();
+    const rows = cohorts.map((cohort) => {
+      const grades = subset
+        .filter((s) => s.cohort === cohort)
+        .map((s) => latest.get(s.scholarId))
+        .filter((g): g is number => g != null);
+      return {
+        cohort,
+        average: grades.length ? round2(grades.reduce((a, b) => a + b, 0) / grades.length) : null,
+        count: grades.length,
+      };
+    });
+    const all = subset.map((s) => latest.get(s.scholarId)).filter((g): g is number => g != null);
+    return {
+      scale: GPA_SCALE_MAX[country],
+      rows: rows.filter((r) => r.count > 0),
+      overall: all.length ? round2(all.reduce((a, b) => a + b, 0) / all.length) : null,
+    };
+  };
+
+  return {
+    colombia: side(Country.COLOMBIA),
+    peru: side(Country.PERU),
+    excludedZeroGpaCount,
+  };
+}
+
+// ------------------------------------------------------------------
+// 9.11 AUGUST 4 early-support sections
+// ------------------------------------------------------------------
+
+/**
+ * §2.2 Why scholars are at risk.
+ *
+ * Reads the two "situación específica" multi-selects already synced onto MentorReport,
+ * grouped by the taxonomy in lib/risk/reason-taxonomy.ts.
+ *
+ * Counts SCHOLARS, not report rows or selected options: a scholar with two options in
+ * the same reason counts once for that reason, and one who was reported twice in the
+ * period counts once overall.
+ *
+ * The two axes are reported independently because they overlap for most at-risk
+ * scholars. Do not add the two tables together.
+ */
+export async function getRiskReasonBreakdown(
+  filters: DashboardFilters = {},
+): Promise<RiskReasonBreakdown> {
+  const { currentPeriod, scholars, riskMap } = await loadScope(filters);
+
+  const atRisk = scholars.filter((s) => {
+    if (!riskEligible(s)) return false;
+    const level = riskMap.get(s.scholarId)?.globalRiskLevel;
+    return level != null && riskTier(level) !== "LOW";
+  });
+  const atRiskIds = atRisk.map((s) => s.scholarId);
+
+  const reports = atRiskIds.length
+    ? await prisma.mentorReport.findMany({
+        where: { scholarId: { in: atRiskIds } },
+        select: {
+          scholarId: true,
+          reportingMonth: true,
+          academicAlertType: true,
+          psychosocialAlertType: true,
+        },
+      })
+    : [];
+  const inPeriod = reports.filter((r) => (r.reportingMonth ?? currentPeriod) === currentPeriod);
+
+  // scholarId -> the reasons they were flagged with, per axis.
+  const byAxis: Record<RiskAxis, Map<string, Set<RiskReasonCategory>>> = {
+    academic: new Map(),
+    psychosocial: new Map(),
+  };
+  const unmapped = new Set<string>();
+  const unclassifiedOnly = new Set<string>();
+  const anyAtomSeen = new Set<string>();
+
+  for (const r of inPeriod) {
+    for (const axis of ["academic", "psychosocial"] as RiskAxis[]) {
+      const raw = axis === "academic" ? r.academicAlertType : r.psychosocialAlertType;
+      for (const atom of splitAlertAtoms(raw)) {
+        anyAtomSeen.add(r.scholarId);
+        const category = categorizeAlertAtom(atom, axis);
+        if (!category) {
+          unmapped.add(normalizeAlertAtom(atom));
+          unclassifiedOnly.add(r.scholarId);
+          continue;
+        }
+        const set = byAxis[axis].get(r.scholarId) ?? new Set<RiskReasonCategory>();
+        set.add(category);
+        byAxis[axis].set(r.scholarId, set);
+      }
+    }
+  }
+
+  const axisResult = (axis: RiskAxis): RiskReasonAxis => {
+    const scholarsOnAxis = byAxis[axis];
+    const counts = new Map<RiskReasonCategory, number>();
+    for (const categories of scholarsOnAxis.values()) {
+      for (const c of categories) counts.set(c, (counts.get(c) ?? 0) + 1);
+    }
+    const denominator = scholarsOnAxis.size;
+    return {
+      scholarsWithAnyReason: denominator,
+      rows: CATEGORIES_BY_AXIS[axis]
+        .map((category) => ({
+          category,
+          label: RISK_REASON_LABEL[category],
+          scholarCount: counts.get(category) ?? 0,
+          pct: denominator ? Math.round(((counts.get(category) ?? 0) / denominator) * 100) : 0,
+        }))
+        .filter((r) => r.scholarCount > 0)
+        .sort((a, b) => b.scholarCount - a.scholarCount),
+    };
+  };
+
+  let bothAxesCount = 0;
+  for (const id of byAxis.academic.keys()) {
+    if (byAxis.psychosocial.has(id)) bothAxesCount += 1;
+  }
+
+  // Only count a scholar as unclassified if NONE of their options were classified.
+  let unclassifiedScholarCount = 0;
+  for (const id of unclassifiedOnly) {
+    if (!byAxis.academic.has(id) && !byAxis.psychosocial.has(id)) unclassifiedScholarCount += 1;
+  }
+
+  return {
+    period: currentPeriod,
+    atRiskScholarCount: atRisk.length,
+    academic: axisResult("academic"),
+    psychosocial: axisResult("psychosocial"),
+    unclassifiedScholarCount,
+    unmappedAtoms: [...unmapped].sort(),
+    bothAxesCount,
+  };
+}
+
+/**
+ * §2.3 Participation by activity group and risk tier.
+ *
+ * A caveat worth carrying into the UI: these counts are `Int @default(0)` on
+ * MentorReport, so a blank cell and a real zero are indistinguishable at this grain.
+ * The "blank is not zero" rule in the sync contract applies to SupportActivity rows,
+ * not to these columns. Every percentage therefore ships with its denominator.
+ */
+export async function getParticipationByActivityAndRisk(
+  filters: DashboardFilters = {},
+): Promise<ParticipationByActivityAndRisk> {
+  const { currentPeriod, scholars, riskMap } = await loadScope(filters);
+  const eligible = scholars.filter(riskEligible);
+
+  const tierOf = new Map<string, RiskTier>();
+  for (const s of eligible) {
+    const level = riskMap.get(s.scholarId)?.globalRiskLevel;
+    if (level != null) tierOf.set(s.scholarId, riskTier(level));
+  }
+
+  const reports = tierOf.size
+    ? await prisma.mentorReport.findMany({
+        where: { scholarId: { in: [...tierOf.keys()] } },
+        select: {
+          scholarId: true,
+          reportingMonth: true,
+          individualTutoring: true,
+          groupTutoring: true,
+          individualMentoring: true,
+          groupMentoring: true,
+          workshops: true,
+        },
+      })
+    : [];
+  const inPeriod = reports.filter((r) => (r.reportingMonth ?? currentPeriod) === currentPeriod);
+
+  return {
+    period: currentPeriod,
+    groups: ACTIVITY_GROUP_ORDER.map((activity) => {
+      const participated = new Set<string>();
+      for (const r of inPeriod) {
+        const total = ACTIVITY_GROUP_COLUMNS[activity].reduce((n, col) => n + (r[col] ?? 0), 0);
+        if (total > 0) participated.add(r.scholarId);
+      }
+      return {
+        activity,
+        rows: RISK_TIER_ORDER.map((tier) => {
+          const ids = [...tierOf.entries()].filter(([, t]) => t === tier).map(([id]) => id);
+          const participatedCount = ids.filter((id) => participated.has(id)).length;
+          return {
+            tier,
+            scholarCount: ids.length,
+            participatedCount,
+            pct: ids.length ? Math.round((participatedCount / ids.length) * 100) : null,
+          };
+        }),
+      };
+    }),
+  };
+}
+
+/** §2.5 Risk tier by gender. */
+export async function getRiskByGender(
+  filters: DashboardFilters = {},
+): Promise<RiskByGenderRow[]> {
+  const { scholars, riskMap } = await loadScope(filters);
+  const eligible = scholars.filter(riskEligible);
+
+  const genders: RiskByGenderRow["gender"][] = ["female", "male", "other"];
+  return genders
+    .map((gender) => {
+      const subset = eligible.filter((s) => normalizeGender(s.gender) === gender);
+      const tiers: Record<RiskTier, number> = { LOW: 0, MEDIUM: 0, HIGH_CRITICAL: 0 };
+      let assessed = 0;
+      for (const s of subset) {
+        const level = riskMap.get(s.scholarId)?.globalRiskLevel;
+        if (level == null) continue;
+        tiers[riskTier(level)] += 1;
+        assessed += 1;
+      }
+      return {
+        gender,
+        scholarCount: assessed,
+        tiers,
+        tierPct: {
+          LOW: assessed ? Math.round((tiers.LOW / assessed) * 100) : 0,
+          MEDIUM: assessed ? Math.round((tiers.MEDIUM / assessed) * 100) : 0,
+          HIGH_CRITICAL: assessed ? Math.round((tiers.HIGH_CRITICAL / assessed) * 100) : 0,
+        },
+      };
+    })
+    .filter((r) => r.scholarCount > 0);
+}
+
+/**
+ * §1 Contact prioritisation — at-risk scholars with the details needed to reach them,
+ * highest risk first.
+ *
+ * Goes through loadScope with the caller's access filter, so a mentor sees only their
+ * own assigned scholars. That matters more here than anywhere else on the dashboard:
+ * this is the one view that puts personal email addresses and phone numbers on screen.
+ */
+export async function getContactPriority(
+  filters: DashboardFilters = {},
+  user: CurrentUser | null = null,
+): Promise<ContactPriorityRow[]> {
+  const { scholars, riskMap } = await loadScope(filters, scholarAccessWhere(user));
+
+  return scholars
+    .filter((s) => s.programStatus === ProgramStatus.ACTIVE)
+    .map((s) => {
+      const risk = riskMap.get(s.scholarId);
+      return { scholar: s, risk };
+    })
+    .filter((r) => r.risk != null && riskTier(r.risk.globalRiskLevel) !== "LOW")
+    .map(({ scholar, risk }) => ({
+      scholarId: scholar.scholarId,
+      fullName: scholar.fullName,
+      email: scholar.email1 ?? scholar.email2 ?? null,
+      mobilePhone: scholar.mobilePhone ?? null,
+      university: scholar.university.name,
+      cohort: scholar.cohort,
+      country: scholar.country,
+      riskLevel: risk!.globalRiskLevel,
+      riskValue: risk!.globalRiskValue,
+    }))
+    .sort((a, b) => b.riskValue - a.riskValue || a.fullName.localeCompare(b.fullName));
 }

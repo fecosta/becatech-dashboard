@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { preserveParams, type SearchParams } from "@/lib/dashboard/filters";
 
-// Merged into the Scholar Progress search-to-profile view — filters preserved, scholarId
+// Merged into the Scholar Profile search-to-profile view — filters preserved, scholarId
 // becomes the `q` param (an exact scholarId match resolves to exactly one directory row,
 // so it goes straight to the profile). The target route enforces its own guards
 // (VIEW_SCHOLAR_TRACKING, then canAccessScholar once resolved to one scholar).
