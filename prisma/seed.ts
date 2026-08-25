@@ -8,6 +8,7 @@
 // (which builds the Prisma pg adapter at module load) is evaluated.
 import "dotenv/config";
 import { deriveExpectedProgressStatus } from "../src/lib/academic/progress";
+import { GPA_SCALE_MAX } from "../src/lib/academic/gpa-bucket";
 import { defaultOperatorName, OPERATOR_NAMES } from "../src/lib/academic/operator-assignment";
 import { programStageFromSemester } from "../src/lib/academic/program-stage";
 import { prisma } from "../src/lib/db";
@@ -49,6 +50,14 @@ const rand = makeRng(20260702);
 
 const randInt = (min: number, max: number) => Math.floor(rand() * (max - min + 1)) + min;
 const pick = <T>(arr: readonly T[]): T => arr[Math.floor(rand() * arr.length)];
+/** "Ana María Ríos Vega" -> "ana.maria.rios.vega" — accent-free, safe in an address. */
+const slugName = (name: string): string =>
+  name
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, ".");
 const chance = (p: number) => rand() < p;
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -175,6 +184,67 @@ const MENTORS = [
 ] as const;
 
 const PM_NAMES = ["Carlos Méndez", "Lucía Fernández"] as const;
+
+// Distributions below mirror the shape of the real source export (see
+// docs/reference-data-audit.md), gaps included: the dashboard publishes coverage next to
+// these percentages, so a seed with 100% coverage would hide the very thing those
+// columns exist to show.
+const ACADEMIC_PROGRESS_VALUES: [string, number][] = [
+  ["SATISFACTORIO", 0.72],
+  ["REZAGADO(A)", 0.09],
+  ["CRÍTICO", 0.03],
+  ["PENDIENTE DE INFO", 0.16],
+];
+
+const ENGLISH_LEVELS: [string, number][] = [
+  ["A1", 0.12], ["A2", 0.09], ["B1", 0.17], ["B2", 0.2], ["C1", 0.03], ["C2", 0.01],
+  ["Pending", 0.33], ["Not applicable", 0.05],
+];
+
+const SOCIOECONOMIC_LEVELS: [string, number][] = [
+  ["Vulnerabilidad alta", 0.27],
+  ["Vulnerabilidad moderada", 0.32],
+  ["Vulnerabilidad baja", 0.21],
+  ["Pending", 0.2],
+];
+
+// Real options from the mentor-report "situación específica" multi-selects — the source
+// vocabulary that src/lib/risk/reason-taxonomy.ts groups into the seven reported reasons.
+// Kept in sync by hand with the full list transcribed in
+// tests/risk/reason-taxonomy.test.ts; if these drift, Early Support 2.2 starts reporting
+// unclassified scholars locally, which is the signal to re-check them.
+// At least one option per reason category, so the section renders more than a single row.
+const ACADEMIC_ALERT_OPTIONS = [
+  "BAJO: Presenta 1 parcial o examen con nota desaprobatoria.",
+  "MEDIO: Está perdiendo una asignatura/curso.",
+  "ALTO: Pierde dos o más materias/cursos.",
+  "BAJO: Tiene dificultades en hábitos y métodos de estudio.",
+  "MEDIO: No tiene buenos métodos ni hábitos de estudio.",
+  "ALTO: Inasistencia a las actividades de acompañamiento.",
+  "ALTO: Retiró/canceló 1 o 2 materias clave.",
+  "MEDIO: Canceló/retiró más de 1 asignatura.",
+] as const;
+
+const PSYCHOSOCIAL_ALERT_OPTIONS = [
+  "BAJO: Estrés académico ocasional.",
+  "ALTO: Crisis emocional que afecta directamente el desempeño académico.",
+  "BAJO: Desacuerdos familiares o relacionales.",
+  "MEDIO: Dificultades económicas que generan preocupación constante (afecta su desempeño).",
+  "ALTO: Desmotivación fuerte frente a la carrera o universidad.",
+  "ALTO: Está considerando abandonar la carrera.",
+] as const;
+
+/** The sheet's own no-alert marker; splitAlertAtoms() filters it out. */
+const NO_ALERT = "SIN ALERTA";
+
+/** One option, or occasionally two newline-joined — the source allows picking up to two,
+ *  so this exercises the multi-select split path rather than only the single-value one. */
+function alertSelection(options: readonly string[]): string {
+  const first = pick(options);
+  const rest = options.filter((o) => o !== first);
+  if (rest.length === 0 || !chance(0.3)) return first;
+  return `${first}\n${pick(rest)}`;
+}
 
 const ALL_MONTHS = ["2026-01", "2026-02", "2026-03", "2026-04", "2026-05", "2026-06"] as const;
 
@@ -402,6 +472,17 @@ async function main() {
       expectedEndDate: new Date(Date.UTC(startYear + durationYears, 11, 15)),
       driveFolderUrl: `https://drive.google.com/drive/folders/demo-${scholarId}`,
       operatorId,
+      // Contact details for the profile view's prioritisation list. Deliberately on a
+      // .test domain so a seeded address can never be mistaken for a real one.
+      email1: `${slugName(fullName)}@demo.test`,
+      mobilePhone:
+        country === Country.COLOMBIA
+          ? `+57 3${randInt(0, 9)}${randInt(0, 9)} ${randInt(100, 999)} ${randInt(1000, 9999)}`
+          : `+51 9${randInt(0, 9)}${randInt(0, 9)} ${randInt(100, 999)} ${randInt(100, 999)}`,
+      academicProgress: weighted(ACADEMIC_PROGRESS_VALUES),
+      currentEnglishLevel: weighted(ENGLISH_LEVELS),
+      socioeconomicLevel: weighted(SOCIOECONOMIC_LEVELS),
+      estimatedGraduationYear: startYear + durationYears,
     });
 
     // ---- Academic terms ----
@@ -413,7 +494,13 @@ async function main() {
       const creditsEnrolled = Math.max(6, perTermCredits + randInt(-3, 3));
       const creditsCompleted = Math.max(0, creditsEnrolled - failed * 3);
       accumulatedCredits += creditsCompleted;
-      const gpa = round2(2.5 + rand() * 2.5); // 2.5–5.0
+      // Colombia grades 0–5, Peru 0–20 — two different national systems, which the
+      // dashboard reports separately and never blends. Seeding both on the Colombian
+      // scale made Peru's average render as "3.78 / 20".
+      const gpa =
+        country === Country.PERU
+          ? round2(11 + rand() * 8) // 11.0–19.0
+          : round2(2.5 + rand() * 2.5); // 2.5–5.0
       gpaSum += gpa;
       const progressPercentage = round2(
         Math.min(100, (accumulatedCredits / totalProgramCredits) * 100),
@@ -438,7 +525,14 @@ async function main() {
         maxDeadline: failed > 0 ? new Date(Date.UTC(startYear + durationYears + 1, 5, 30)) : null,
         receivedSupport: chance(0.6),
         expectedProgressStatus: deriveExpectedProgressStatus(progressPercentage, expectedProgressPct),
-        academicStatus: gpa >= 4 ? "Al día" : gpa >= 3.2 ? "Con observaciones" : "En riesgo",
+        // Thresholds as a share of the country's own scale, so a Peru 15/20 and a
+        // Colombia 3.75/5 land in the same band.
+        academicStatus:
+          gpa / GPA_SCALE_MAX[country] >= 0.8
+            ? "Al día"
+            : gpa / GPA_SCALE_MAX[country] >= 0.64
+              ? "Con observaciones"
+              : "En riesgo",
         source: "seed:excel-general-info",
       });
     });
@@ -503,12 +597,14 @@ async function main() {
           modality: pick(["Virtual", "Presencial", "Híbrido"]),
           permanenceRisk: weighted([["Bajo", 0.5], ["Medio", 0.3], ["Alto", 0.2]]),
           academicStatus: weighted([["Al día", 0.5], ["Con observaciones", 0.3], ["En riesgo", 0.2]]),
-          academicAlertType: atRisk > 1 ? "Materias en riesgo" : "Sin alerta",
+          academicAlertType: atRisk > 0 ? alertSelection(ACADEMIC_ALERT_OPTIONS) : NO_ALERT,
           approvedCoursesCount: approved,
           atRiskCoursesCount: atRisk,
           difficultSubjects: atRisk > 0 ? "Cálculo, Programación" : null,
           psychosocialStatus: weighted([["Estable", 0.6], ["En observación", 0.3], ["En riesgo", 0.1]]),
-          psychosocialAlertType: chance(0.2) ? "Ansiedad / estrés" : "Sin alerta",
+          psychosocialAlertType: chance(0.28)
+            ? alertSelection(PSYCHOSOCIAL_ALERT_OPTIONS)
+            : NO_ALERT,
           accompanimentPlan: "Tutorías semanales y seguimiento de bienestar.",
           estimatedSupportTime: pick(["2 semanas", "1 mes", "El semestre"]),
           individualTutoring: randInt(0, 3),
