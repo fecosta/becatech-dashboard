@@ -183,7 +183,7 @@ legend) and [`ProfileCard`](./src/components/ProfileCard.tsx). Notes:
 ## Dashboard routes
 
 Navigation follows the Beca Tech+ narrative IA — **Home → Early Support → Career Readiness →
-Scholars → Program Ecosystem** as the primary flow — with secondary tools under **More** and data
+Scholar Profile → Program Ecosystem** as the primary flow — with secondary tools under **More** and data
 tools under **Admin**. The UI is in **English**.
 
 | Route                                | Nav item / View                                                 |
@@ -191,17 +191,22 @@ tools under **Admin**. The UI is in **English**.
 | `/dashboard`                         | **Home** — program health: KPI rows (Satisfaction shown as a `PROXY`/pending KPI), Program Health (risk + pace), Executive Attention. |
 | `/dashboard/early-support`           | **Early Support (Years 1–2)** — risk bar + legend, Critical+High dark callout, participation, monthly risk change, alert-type split, pace chips. Filtered to the Years 1–2 band. |
 | `/dashboard/career-readiness`        | **Career Readiness (Years 3–5)** — pace chips; Professional-Skills KPIs shown as explicit **pending** placeholders (no data source yet). Filtered to the Years 3–5 band. |
-| `/dashboard/scholars`                | **Scholars** — scholar directory (search + table). |
-| `/dashboard/scholars/[scholarId]`    | Scholar profile — `ProfileCard` + GPA/risk trends + full history tables (mentor-scoped). No "Age" field (none exists in the schema). |
+| `/dashboard/scholars`                | **Scholar Profile › Contact Prioritisation** — at-risk scholars with email and phone, highest risk first. The one view that puts personal contact details on screen. |
+| `/dashboard/scholars/find`           | **Scholar Profile › Find a Scholar** — search by name, ID or university over the scholar directory. A single match stays a one-row list. |
+| `/dashboard/scholars/[scholarId]`    | Scholar profile — `ProfileCard` + GPA/risk trends + full history tables (mentor-scoped). Opened in a **new tab** from either list above, so the list survives the click. Addressable by `scholarId`, so it survives a refresh or a pasted URL. No "Age" field (none exists in the schema). |
 | `/dashboard/actors`                  | **Program Ecosystem** — placeholder (universities + operators; no fake data). Phase 3. |
 | `/dashboard/unit-economics`          | **More › Unit Economics** — cost per active/retained scholar, by cohort/country/uni. |
 | `/dashboard/selection-pipeline`      | **More › Selection Pipeline** — candidates by stage, conversion. |
 | `/dashboard/admin/imports`           | **Admin › Data Imports** — import history + wizard.   |
 | `/dashboard/admin/data-quality`      | **Admin › Data Quality** — detected `DataQualityIssue`s (issue, source, severity, owner, status, resolution). |
 
+The sidebar keeps one **Scholar Profile** entry (the five-view walk is unchanged); its two list
+screens are reached through a tab row inside the section.
+
 Deprecated routes redirect (preserving filters), landing on their guarded targets:
 `/dashboard/risk-alerts` → `/dashboard/early-support`; `/dashboard/academic-progress` and
-`/dashboard/support-participation` → `/dashboard`. The former `/dashboard/tracking?tab=…` workspace
+`/dashboard/support-participation` → `/dashboard`; `/dashboard/scholars?q=…` (search's former home)
+→ `/dashboard/scholars/find?q=…`. The former `/dashboard/tracking?tab=…` workspace
 also redirects: `summary`/`scholars` → Home/Scholars, `years-1-2`/`years-3-5` → the two stage pages.
 
 All views share a top filter bar (country · cohort · university · status · risk · period) held in
