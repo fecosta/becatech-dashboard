@@ -1,432 +1,139 @@
 # Beca Tech+ Scholars Progress Dashboard
 
-Decision-support dashboard for the **ver+ Beca Tech** program. It centralizes scholar tracking,
-risk monitoring, academic progress, support participation, requests, unit economics, and a
-selection pipeline into a normalized PostgreSQL database with a Next.js dashboard on top.
+Decision-support dashboard for the Beca Tech program. It centralizes scholar tracking, risk
+monitoring, academic progress, support participation, requests, program operations, unit
+economics, selection, imports, and data quality into a normalized PostgreSQL database with a
+Next.js dashboard on top.
 
-The canonical program key is **`ID_becario`**, stored throughout as `scholarId`.
+Canonical ID: **`ID_becario`** → `Scholar.scholarId` (see
+[docs/adr/001-canonical-scholar-identifier.md](docs/adr/001-canonical-scholar-identifier.md)).
+
+## Architecture at a Glance
 
 ```
-JotForm forms → webhook/ingestion → PostgreSQL (Prisma) → dashboard query layer → dashboard UI
+Google Sheets (Apps Script, live) ──┐
+Manual admin upload ─────────────────┼─► parse/validate/commit ─► PostgreSQL ─► Prisma
+JotForm webhook (placeholder) ──────┘                                              │
+                                                                                     ▼
+                                                          domain/query layer (src/lib/*)
+                                                                                     │
+                                                                                     ▼
+                                                    Next.js App Router ─► Dashboard UI
 ```
+
+Full detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Stack
 
-| Layer     | Choice                                           |
-| --------- | ------------------------------------------------ |
-| Framework | Next.js (App Router) + TypeScript                |
-| Database  | PostgreSQL 16                                     |
-| ORM       | Prisma 7 (query compiler + `@prisma/adapter-pg`) |
-| Styling   | Tailwind CSS v4                                   |
-| Charts    | Recharts                                          |
-| Tests     | Vitest                                            |
-| Local DB  | Docker Compose                                    |
-| Auth      | Supabase Auth (Google sign-in)                    |
-| Deploy    | Vercel + Supabase (Postgres)                      |
+| Layer | Choice |
+|---|---|
+| Framework | Next.js 16.2.10 (App Router), React 19.2.4, TypeScript |
+| Database | PostgreSQL 16, Prisma 7.8.0 + `@prisma/adapter-pg` |
+| Auth | Supabase Auth (Google sign-in) |
+| Styling | Tailwind CSS 4 (CSS-based config, tokens in `src/app/globals.css`) |
+| Charts | Recharts |
+| Testing | Vitest (unit + integration) |
+| Deploy | Vercel + Supabase; local Postgres via Docker Compose |
 
-## Prerequisites
-
-- Node.js 20+ (developed on v22)
-- Docker Desktop (for the local Postgres)
-- npm
-
-## Quick start
+## Quick Start
 
 ```bash
 npm install
-cp .env.example .env          # defaults already match the docker-compose Postgres
-docker compose up -d          # local Postgres on host port 5433
+cp .env.example .env      # fill in DATABASE_URL, Supabase keys — see docs/DEVELOPMENT.md
+docker compose up -d      # Postgres on host port 5433
 npm run db:generate
-npm run db:migrate            # applies migrations
-npm run db:seed               # ~100 fake scholars + related records
-npm run dev                   # http://localhost:3000  →  /dashboard
+npm run db:migrate
+npm run db:seed
+npm run dev
 ```
 
-Optional: `npm test`, `npm run data-quality:scan`, `npm run db:studio`.
+Full setup, environment variables, and every `npm run` script:
+[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
-## Environment variables
+## Main Product Areas
 
-See [`.env.example`](./.env.example).
+- **Home** — program-level monitoring and executive attention
+- **Early Support** — scholars in semesters 1–4, risk and support signals
+- **Career Readiness** — scholars in semester 5+, progress toward graduation
+- **Scholar Profile** — Contact Prioritisation, Find a Scholar, and the individual profile
+  (`/dashboard/scholars`, `/dashboard/scholars/find`, `/dashboard/scholars/[scholarId]`)
+- **Program Ecosystem** — universities and delivery partners
+- **Unit Economics** — cost per active/retained scholar
+- **Selection Pipeline** — candidate progression
+- **Admin** — Data Imports, Data Quality
 
-| Variable                 | Purpose                                                                     |
-| ------------------------ | --------------------------------------------------------------------------- |
-| `DATABASE_URL`           | Postgres connection used by the app at runtime (Supabase Supavisor transaction pooler, port 6543, `?pgbouncer=true`, in production). |
-| `DIRECT_URL`             | Connection used by Prisma Migrate (Supabase Supavisor session pooler, port 5432, in production — not the raw direct host, which is IPv6-only). Locally same as `DATABASE_URL`. |
-| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL, used by Supabase Auth (Google sign-in). Leave unset locally to use `DEMO_USER_EMAIL` instead. |
-| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Supabase publishable API key, paired with the URL above. |
-| `DEMO_USER_EMAIL`        | Local-dev-only auth bypass: which seeded demo user the app acts as instead of a real Google sign-in. Inert whenever `NODE_ENV=production` (i.e. never applies on Vercel). |
-| `JOTFORM_API_KEY`        | Placeholder — the MVP does not call the live JotForm API.                   |
-| `JOTFORM_WEBHOOK_SECRET` | Optional shared secret for the webhook endpoint (skipped when unset).       |
-| `TEST_DATABASE_URL`      | Separate database for `npm run test:integration` (created + migrated by the vitest global setup). |
+Product detail and per-role access: [docs/PRODUCT.md](docs/PRODUCT.md).
 
-> **Prisma 7 note:** connection URLs are **not** in `schema.prisma`. Prisma Migrate reads the URL
-> from [`prisma.config.ts`](./prisma.config.ts) (which loads `.env` via `dotenv`), and the runtime
-> client builds a `pg` driver adapter from `DATABASE_URL` in [`src/lib/db.ts`](./src/lib/db.ts).
-
-## Scripts
-
-| Script                       | Description                                            |
-| ---------------------------- | ------------------------------------------------------ |
-| `npm run dev`                | Start the Next.js dev server.                          |
-| `npm run build` / `start`    | Production build / start.                              |
-| `npm run lint`               | ESLint.                                                |
-| `npm run test`               | Run unit tests (Vitest, no DB).                        |
-| `npm run test:integration`   | DB-backed import pipeline tests (needs Docker Postgres). |
-| `npm run db:generate`        | Generate the Prisma client.                            |
-| `npm run db:migrate`         | Create + apply a dev migration (`prisma migrate dev`). |
-| `npm run db:seed`            | Seed demo data (`tsx prisma/seed.ts`).                 |
-| `npm run db:reset`           | Drop, re-migrate, and re-seed.                         |
-| `npm run db:studio`          | Open Prisma Studio.                                    |
-| `npm run dashboard:check`    | Print every dashboard query against the seed.          |
-| `npm run data-quality:scan`  | Detect data-quality issues and record them.            |
-
-## Project structure
+## Repository Structure
 
 ```
-prisma/
-  schema.prisma          # 15 models + enums
-  migrations/            # Prisma Migrate history
-  seed.ts                # reproducible demo seed
 src/
-  proxy.ts               # session-existence redirect (Next.js 16's renamed middleware.ts)
-  app/
-    dashboard/           # layout + 8 dashboard routes
-    login/                # Google sign-in page
-    auth/callback/        # OAuth code-exchange route handler
-    not-authorized/        # shown when signed in but no matching AppUser
-    api/jotform/webhook/ # placeholder ingestion endpoint
-    api/auth/signout/     # sign-out route handler
-  components/            # KpiCard, RiskBadge, DataTable, Sidebar, TopFilters, charts,
-                          # GoogleSignInButton, SignOutButton…
-  lib/
-    db.ts                # Prisma client singleton (pg adapter)
-    supabase/             # browser/server Supabase client factories + config check
-    auth/                # authorization (roles), current-user (3-state result), guards, demo-mode
-    dashboard/           # queries + types + filter parsing
-    risk/risk.ts         # risk taxonomy + math
-    academic/progress.ts # expected-progress classification
-    selection/           # stage-transition rules
-    jotform/             # ingestion placeholder (types, mapper, processor, webhook)
-    data-quality/        # scanner
-  scripts/               # dashboard-check, data-quality-scan (tsx dev tools)
-tests/                   # authorization, current-user, guard, stage-transitions, risk
+├── app/            Next.js App Router — pages under dashboard/, API routes under api/
+├── components/     reusable UI (server components by default)
+├── lib/            domain logic — auth, dashboard queries, risk, academic, selection,
+│                   data-import, data-quality, jotform (placeholder)
+└── generated/      the Prisma client (customized output path)
+prisma/             schema.prisma + migrations
+apps-script/        Google Sheets sync scripts (Normalize.gs, Sync.gs) — deployed manually,
+                    not via git push; see docs/DEVELOPMENT.md
+tests/              unit tests (tests/**) + integration tests (tests/integration/**)
+docs/               architecture, data model, security, design system, ADRs
+specs/              feature specs (active / planned / completed)
 ```
 
-## Data model
+## Development Commands
 
-Normalized model (moves the wide Excel master file into longitudinal tables), keyed by `scholarId`:
+| Command | Purpose |
+|---|---|
+| `npm run dev` | start the dev server |
+| `npm run build` | production build |
+| `npm run lint` | ESLint |
+| `npm test` | unit tests |
+| `npm run test:integration` | DB-backed integration tests (needs Docker Postgres) |
+| `npm run db:migrate` | create + apply a Prisma migration |
+| `npm run db:seed` | seed mock demo data |
+| `npm run db:studio` | browse the database |
+| `npm run dashboard:check` | run every dashboard query against seeded data |
+| `npm run data-quality:scan` | run data-quality checks |
 
-`Scholar` · `AcademicTerm` · `MonthlyCheckin` · `MentorReport` · `SupportActivity` ·
-`ScholarRequest` · `RiskAssessment` · `FinancialInput` · `SelectionCandidate` +
-`SelectionStageHistory` · `RawJotformSubmission` · `DataQualityIssue` · `ControlValue` ·
-`AppUser` + `UserScholarAccess`.
+Full command list: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
-Notable constraints: `submissionId @unique` on JotForm-sourced tables (dedup); composite uniques
-on `AcademicTerm(scholarId,term)`, `RiskAssessment(scholarId,period)`, `ControlValue(category,value)`,
-`UserScholarAccess(userId,scholarId,accessType)`; scholar → children cascade for clean re-seeds;
-`FinancialInput` amounts as `Decimal`, raw payloads as `Json`.
+## Documentation
 
-## Risk logic
+- [docs/PRODUCT.md](docs/PRODUCT.md) — what the product is, for whom
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — how the system is structured
+- [docs/DATA_MODEL.md](docs/DATA_MODEL.md) — how program information is persisted
+- [docs/SECURITY.md](docs/SECURITY.md) — authentication, roles, access control
+- [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) — local setup, commands, testing, workflow
+- [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md) — tokens and visual conventions
+- [docs/adr/](docs/adr/README.md) — architecture decision records
+- [specs/](specs/README.md) — feature specs
+- [docs/prototype-comparison.md](docs/prototype-comparison.md) — design mockup vs. implementation
+  audit
+- [docs/reference-data-audit.md](docs/reference-data-audit.md) — source Google Sheet field
+  inventory
+- [docs/sync-contract.md](docs/sync-contract.md) — Sheets → dashboard field contract (note: this
+  document predates the 2026-08-06 switch to ingested risk classification — see
+  [docs/adr/006-authoritative-monthly-risk.md](docs/adr/006-authoritative-monthly-risk.md) for
+  the current, authoritative behavior)
+- [AGENTS.md](AGENTS.md) — operational contract for AI coding agents working in this repo
 
-Official five-level taxonomy (stored as integers 0–4):
+## Development Workflow
 
-| Level         | Value |
-| ------------- | ----- |
-| `SIN_RIESGO`  | 0     |
-| `RIESGO_BAJO` | 1     |
-| `RIESGO_MEDIO`| 2     |
-| `RIESGO_ALTO` | 3     |
-| `CRITICO`     | 4     |
+Spec (`specs/`, for anything beyond a small fix) → inspect existing implementation → implement →
+test → review the diff → update documentation → move the spec to `specs/completed/`. Full detail
+in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md); operational rules for AI agents in
+[AGENTS.md](AGENTS.md).
 
-Implemented in [`src/lib/risk/risk.ts`](./src/lib/risk/risk.ts):
+## Status / Known Incomplete Areas
 
-- `globalRiskValue = max(academic, psychosocial, participation)`
-- `riskChange = currentGlobal − previousGlobal` (null when no previous)
-- Change labels: `≤ -2` STRONG_IMPROVEMENT · `-1` IMPROVED · `0` STABLE · `1` WORSENED · `≥ 2` SIGNIFICANT_DETERIORATION
-- `alertType` = the dimension(s) driving the max (COMBINED on a tie, NONE at zero)
+Several design elements are deliberately unimplemented pending a data or product decision rather
+than filled with placeholder numbers — see
+[docs/PRODUCT.md](docs/PRODUCT.md#out-of-scope--not-yet-complete) and
+[docs/prototype-comparison.md](docs/prototype-comparison.md) for the current list and rationale
+(e.g. Program Satisfaction, retention term-by-term, D1–D6 MAKERS goal metrics, university/operator
+contact details).
 
-Expected academic progress ([`src/lib/academic/progress.ts`](./src/lib/academic/progress.ts)),
-by actual÷expected ratio: `≥0.90` ON_TRACK · `≥0.75` SLIGHTLY_BEHIND · `≥0.50` BEHIND · else CRITICAL_DELAY.
+## License / Ownership
 
-## Design system
-
-Visual identity follows the **Beca Tech+** prototype
-([`design-reference/BecaTech_Plus_Prototype.html`](./design-reference/BecaTech_Plus_Prototype.html)).
-Design tokens are centralized in [`src/app/globals.css`](./src/app/globals.css) — raw hex under
-`:root`, mapped onto Tailwind v4's `--color-*` namespace via `@theme inline`, so they're usable as
-utilities (`bg-cream`, `text-ink`, `text-purple`, `bg-surface-dark`, …). Do **not** hardcode hex in
-components; add or reuse a token.
-
-| Token | Hex | Use |
-| --- | --- | --- |
-| `cream` | `#F3F1E7` | page background |
-| `purple` | `#A62BFF` | primary brand accent |
-| `yellow` | `#F3FF00` | active nav + dark-callout values |
-| `green` | `#27CF77` | positive deltas, "on track" |
-| `surface-dark` | `#0A0A0A` | sidebar + dark callout |
-| `ink` / `muted` | `#33312B` / `#6F6C62` | primary / secondary text |
-| `card` / `border` | `#FFFFFF` / `#E4E0D2` | card surface / hairline |
-| `lavender` / `mint` / `chip-cream` | `#F5EAFF` / `#EAFBF2` / `#F8F6EF` | PROXY & activity chips / status badge / stat chips |
-| `risk-none…risk-critical` | green → `#8FE0B4` → purple → `#3A0A5C` → black | segmented **RiskBar** only |
-
-Reusable primitives live in [`src/components/ui.tsx`](./src/components/ui.tsx) (`Card`, `KpiCard`
-with optional PROXY badge + delta, `DarkCallout`, `StatChip`, `ActivityChip`, `StatusBadge`,
-`ProxyBadge`, `Badge`, `RiskBadge`), plus [`RiskBar`](./src/components/RiskBar.tsx) (5-segment bar +
-legend) and [`ProfileCard`](./src/components/ProfileCard.tsx). Notes:
-
-- **RiskBar vs. RiskBadge colors differ by design.** The segmented RiskBar uses the prototype's
-  brand-hued scale (`--risk-*`); the semantic RiskBadge pills keep a green→amber→red scale for
-  legibility in dense tables.
-- **`StoryCard` is deferred to Phase 3** — its only consumer (the Program Ecosystem "Featured Story")
-  is not built yet, so the component is intentionally not shipped rather than left as dead code.
-
-## Dashboard routes
-
-Navigation follows the Beca Tech+ narrative IA — **Home → Early Support → Career Readiness →
-Scholar Profile → Program Ecosystem** as the primary flow — with secondary tools under **More** and data
-tools under **Admin**. The UI is in **English**.
-
-| Route                                | Nav item / View                                                 |
-| ------------------------------------ | --------------------------------------------------------------- |
-| `/dashboard`                         | **Home** — program health: KPI rows (Satisfaction shown as a `PROXY`/pending KPI), Program Health (risk + pace), Executive Attention. |
-| `/dashboard/early-support`           | **Early Support (Years 1–2)** — risk bar + legend, Critical+High dark callout, participation, monthly risk change, alert-type split, pace chips. Filtered to the Years 1–2 band. |
-| `/dashboard/career-readiness`        | **Career Readiness (Years 3–5)** — pace chips; Professional-Skills KPIs shown as explicit **pending** placeholders (no data source yet). Filtered to the Years 3–5 band. |
-| `/dashboard/scholars`                | **Scholar Profile › Contact Prioritisation** — at-risk scholars with email and phone, highest risk first. The one view that puts personal contact details on screen. |
-| `/dashboard/scholars/find`           | **Scholar Profile › Find a Scholar** — search by name, ID or university over the scholar directory. A single match stays a one-row list. |
-| `/dashboard/scholars/[scholarId]`    | Scholar profile — `ProfileCard` + GPA/risk trends + full history tables (mentor-scoped). Opened in a **new tab** from either list above, so the list survives the click. Addressable by `scholarId`, so it survives a refresh or a pasted URL. No "Age" field (none exists in the schema). |
-| `/dashboard/actors`                  | **Program Ecosystem** — placeholder (universities + operators; no fake data). Phase 3. |
-| `/dashboard/unit-economics`          | **More › Unit Economics** — cost per active/retained scholar, by cohort/country/uni. |
-| `/dashboard/selection-pipeline`      | **More › Selection Pipeline** — candidates by stage, conversion. |
-| `/dashboard/admin/imports`           | **Admin › Data Imports** — import history + wizard.   |
-| `/dashboard/admin/data-quality`      | **Admin › Data Quality** — detected `DataQualityIssue`s (issue, source, severity, owner, status, resolution). |
-
-The sidebar keeps one **Scholar Profile** entry (the five-view walk is unchanged); its two list
-screens are reached through a tab row inside the section.
-
-Deprecated routes redirect (preserving filters), landing on their guarded targets:
-`/dashboard/risk-alerts` → `/dashboard/early-support`; `/dashboard/academic-progress` and
-`/dashboard/support-participation` → `/dashboard`; `/dashboard/scholars?q=…` (search's former home)
-→ `/dashboard/scholars/find?q=…`. The former `/dashboard/tracking?tab=…` workspace
-also redirects: `summary`/`scholars` → Home/Scholars, `years-1-2`/`years-3-5` → the two stage pages.
-
-All views share a top filter bar (country · cohort · university · status · risk · period) held in
-the URL. The Early Support / Career Readiness pages additionally inject a program-stage filter (see
-below). Data comes from the typed query layer in
-[`src/lib/dashboard/queries.ts`](./src/lib/dashboard/queries.ts).
-
-## API routes
-
-| Method / Path                 | Purpose                                                                 |
-| ----------------------------- | ----------------------------------------------------------------------- |
-| `POST /api/jotform/webhook`   | Placeholder ingestion. Accepts a submission, stores the raw payload, maps it to a table, dedups by `submissionId`, returns `PROCESSED` / `FAILED` / `IGNORED`. |
-| `POST /api/admin/imports`     | Data import: parse + validate an uploaded file, return a preview (batch id + counts + row errors). Multipart: `file`, `sourceType`, `entity`. |
-| `GET /api/admin/imports`      | List import batches. |
-| `GET /api/admin/imports/:id`  | Batch detail + error report. |
-| `POST /api/admin/imports/:id/commit`   | Commit a validated batch (upsert → data-quality scan → risk recompute). |
-| `POST /api/admin/imports/:id/rollback` | Insert-only rollback of a committed batch. |
-| `GET /api/admin/imports/template/:entity` | Download a blank `.xlsx` template for an entity. |
-| `POST /api/auth/signout`      | Signs out the current Supabase session (no-op if running in local demo mode). |
-
-Import routes are role-gated: `MANAGE_IMPORTS` (ANALYST_ADMIN) for writes, `VIEW_IMPORTS`
-(ANALYST_ADMIN + PROGRAM_MANAGER read-only) for reads. See the Data import section below.
-
-```bash
-curl -X POST http://localhost:3000/api/jotform/webhook -H "Content-Type: application/json" \
-  -d '{"submissionId":"DEMO-1","formType":"CHECKIN","data":{"scholarId":"BT-CO-002","reportingMonth":"2026-07","academicLevel":"Alto"}}'
-```
-
-`formType` may be `CHECKIN`, `MENTOR_REPORT`, or `SCHOLAR_REQUEST` (otherwise inferred from the form
-name). No live JotForm credentials are required.
-
-## Authorization
-
-Real auth via **Supabase Auth (Google sign-in)**. [`src/proxy.ts`](./src/proxy.ts) (Next.js 16's
-renamed `middleware.ts`) refreshes the session and redirects signed-out visitors from `/dashboard/*`
-to `/login`. [`src/lib/auth/current-user.ts`](./src/lib/auth/current-user.ts) resolves the signed-in
-Google email to a seeded `AppUser` row and returns one of three states: unauthenticated, signed-in
-but not provisioned (redirects to `/not-authorized` — contact an admin to be added), or a resolved
-`CurrentUser`. Pure role/permission helpers live in
-[`src/lib/auth/authorization.ts`](./src/lib/auth/authorization.ts) (unchanged by the auth rewrite);
-pages enforce them via [`guard.ts`](./src/lib/auth/guard.ts), which denies (not allows) whenever
-there's no resolved user.
-
-**Local dev without Google OAuth:** set `DEMO_USER_EMAIL` and leave `NEXT_PUBLIC_SUPABASE_URL`
-unset — the app acts as that seeded demo user instead. This bypass is inert whenever
-`NODE_ENV=production`, so it never applies on a real Vercel deployment (Preview or Production).
-
-| Role             | Access                                                        |
-| ---------------- | ------------------------------------------------------------- |
-| `EXECUTIVE`      | Dashboard, scholar tracking, unit economics, selection (no sensitive notes). |
-| `PROGRAM_MANAGER`| Everything except data management.                            |
-| `MENTOR`         | Scholar tracking; profiles limited to **assigned** scholars.  |
-| `ANALYST_ADMIN`  | Everything (superset, incl. data management).                 |
-| `FINANCE`        | Dashboard + unit economics.                                   |
-| `SELECTION_TEAM` | Dashboard + selection pipeline.                               |
-
-In local dev (no Supabase configured), switch roles by editing `DEMO_USER_EMAIL` in `.env` (see demo
-users below) and restarting the dev server. Against real deployments, switch roles by signing in with
-a different Google account whose email matches a different seeded `AppUser`.
-
-## Demo data & users
-
-`npm run db:seed` clears and repopulates the database (idempotent, fixed RNG — reproducible). All
-data is synthetic; no real personal data.
-
-- **Scholars**: 100 — Colombia 60 / Peru 40; cohorts 2024–2026; status Active 82 / Withdrawn 8 /
-  Paused 5 / Graduated 5.
-- Plus academic terms (~305), check-ins (~346), mentor reports (~340), support activities (~1,968),
-  monthly risk assessments (~448), requests (~39), financial inputs (~433), 140 selection candidates
-  + stage history (~751), 44 control values, 12 demo users, 100 mentor→scholar access rows.
-- Risk distribution ≈ 45 / 25 / 18 / 9 / 3 %; alerts across all dimensions.
-- **Deliberate testing seams**: ~7 active scholars with no check-ins and ~20 missing the latest
-  month; ~11 low-participation; ~7 high-cost scholars; ~30 with requests.
-
-| Email                                             | Role            | Name            |
-| ------------------------------------------------- | --------------- | --------------- |
-| `executive@becatech.test`                         | EXECUTIVE       | Ana Restrepo    |
-| `program.manager@becatech.test` (default)         | PROGRAM_MANAGER | Carlos Méndez   |
-| `program.manager2@becatech.test`                  | PROGRAM_MANAGER | Lucía Fernández |
-| `mentor1@becatech.test` … `mentor6@becatech.test` | MENTOR          | (6 mentors)     |
-| `analyst@becatech.test`                           | ANALYST_ADMIN   | Diego Ramírez   |
-| `finance@becatech.test`                           | FINANCE         | Sofía Torres    |
-| `selection@becatech.test`                         | SELECTION_TEAM  | Mateo Gómez     |
-
-## Data import (admin)
-
-An admin panel at **`/dashboard/admin/imports`** (ANALYST_ADMIN in the nav; PROGRAM_MANAGER
-read-only) uploads files to create/update scholars and their longitudinal records through one
-shared pipeline: **parse → adapter → validate → preview → commit → data-quality scan + risk
-recompute**.
-
-- **Two formats** feed the same validate/commit path:
-  - **Template** — one entity per file; headers are the Prisma field names (download blank
-    `.xlsx` templates from the panel). Supported entities: scholars, academic terms, monthly
-    check-ins, mentor reports, support activities, scholar requests, financial inputs.
-  - **Legacy wide Excel** — the "SCHOLAR GENERAL INFO" tab; repeating per-term columns
-    (`GPA 2024-1`, `CRÉDITOS 2024-1`, …) are detected by regex and normalized into academic-term
-    rows (new semesters are picked up automatically).
-- **Validation** checks required fields, types, GPA range, controlled values (against
-  `ControlValue`), and that each `scholarId` exists (or is created earlier in the same batch).
-  Invalid rows are reported per row/field; valid rows still commit (commit-valid).
-- **Idempotent**: rows upsert by natural key (`scholarId`, `scholarId+term`, `submissionId`,
-  `scholarId+period+activityType+source`), so re-uploading the same file does not duplicate.
-  Check-ins/mentor reports/requests without a `submissionId` get a deterministic synthetic one.
-- **Risk is never uploaded.** After a batch touches academic terms / check-ins / mentor reports /
-  support activities, the risk engine **recomputes** `RiskAssessment` for the affected
-  scholars/months (`src/lib/risk/derive.ts` — a documented, tunable heuristic).
-- **Rollback** is insert-only: it deletes the rows the batch *created* (tracked via
-  `importBatchId` / `insertedRefs`); updates are not reverted.
-
-Integration tests exercise the full pipeline (happy path, legacy `.xlsx`, partial failure,
-idempotent re-upload, risk-trigger, rollback): `npm run test:integration` (needs Docker Postgres;
-it creates + migrates `TEST_DATABASE_URL`).
-
-## Data quality
-
-[`npm run data-quality:scan`](./src/lib/data-quality/checks.ts) scans the database for the catalogued
-issue types (orphan check-ins/reports, invalid GPA/risk, missing reporting month, missing
-check-in/mentor report for active scholars, duplicate `submissionId`) and records them in
-`DataQualityIssue`. On the seed it finds ~41 issues (the deliberate reporting gaps). Issues that the
-schema makes impossible (missing/duplicate scholar id, unknown country) are intentionally skipped.
-The scan also runs automatically after every import commit/rollback, and the detected issues are
-surfaced in the UI at **Administración › Calidad de datos** (`/dashboard/admin/data-quality`,
-read-gated by `VIEW_IMPORTS`).
-
-## Testing
-
-`npm test` runs Vitest over the highest-risk areas (70 tests across 13 files), including:
-
-- `tests/authorization.test.ts` / `tests/import-authz.test.ts` — role access rules.
-- `tests/nav-permissions.test.ts` — nav visibility per role after the PES Phase A restructure
-  (Finance/Selection excluded from Seguimiento/Actores; the Tracking gate is also the guard the
-  deprecated-route redirects land on).
-- `tests/tracking.test.ts` — `parseTrackingTab` (unknown → summary) and the filter-preserving
-  `preserveParams` redirect/tab URL builder.
-- `tests/home-helpers.test.ts` — `normalizeGender` (free-text gender) and `latestCohort` (numeric
-  comparator).
-- `tests/current-user.test.ts` — the three-state auth result (unauthenticated / unprovisioned / ok),
-  the `DEMO_USER_EMAIL` fallback, and mentor `assignedScholarIds` resolution.
-- `tests/guard.test.ts` — pins down `guard.ts`'s fail-closed behavior (a null user must always be
-  denied, never fail open).
-- `tests/stage-transitions.test.ts` — selection stage transitions.
-- `tests/risk.test.ts` (+ `tests/risk/derive.test.ts`) — taxonomy, global risk, change labels, alert
-  type, and the data-import risk-derivation heuristic.
-- `tests/data-import/*.test.ts` — parse/adapter/validation for the import pipeline.
-
-## Deployment (Vercel + Supabase)
-
-1. Provision a Postgres project on [Supabase](https://supabase.com) — either via the
-   [Vercel Marketplace integration](https://vercel.com/marketplace/supabase) or a project created
-   directly at supabase.com. Use at least the Pro plan for production: the Free plan pauses
-   projects after 7 days of inactivity, unsuitable for a live app.
-2. From the Supabase dashboard's **Connect** dialog, copy the **Transaction pooler** connection
-   string (port 6543) and the **Session pooler** connection string (port 5432).
-3. On Vercel set env vars (Production **and** Preview): `DATABASE_URL` = transaction pooler URL +
-   `?pgbouncer=true`, `DIRECT_URL` = session pooler URL (not the "Direct connection" string, which
-   is IPv6-only and unreachable from Vercel builds), `NEXT_PUBLIC_SUPABASE_URL` /
-   `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (Project Settings → API Keys), and optional
-   `JOTFORM_WEBHOOK_SECRET`. Do **not** set `DEMO_USER_EMAIL` on Vercel — it only applies locally.
-4. Enable the Google provider in Supabase Auth (Authentication → Providers → Google), using a
-   Google Cloud Console OAuth client with Authorized redirect URI
-   `https://<project-ref>.supabase.co/auth/v1/callback`. In Supabase Auth → URL Configuration, add
-   this app's own callback to the redirect allowlist: the production URL
-   (`https://becatech-dashboard.vercel.app/auth/callback`) and a wildcard for Preview deployments
-   (`https://becatech-dashboard-*-<team-slug>.vercel.app/auth/callback`).
-5. Apply migrations during release: `npm run build` runs `prisma migrate deploy` (uses
-   `DIRECT_URL`) automatically, but **only when `VERCEL_ENV=production`** — Preview builds skip
-   it and just run `next build`. This matters because Preview and Production share the same
-   database here (step 3): if Preview ran migrations too, a schema-changing branch would alter
-   the live database before it's merged, breaking whatever's currently deployed to Production.
-   Test schema-changing branches locally (against the docker Postgres) before merging — a Preview
-   deployment for such a branch will build fine but error at runtime until it's merged and
-   deployed to Production.
-6. Seed once if desired: export `DATABASE_URL`/`DIRECT_URL` explicitly in your shell first (don't
-   rely on `.env`/`.env.local`, which won't override already-set process env vars), then run
-   `npm run db:seed` against the provisioned database.
-7. Deploy. Dashboard routes are server-rendered on demand (no build-time DB access).
-
-## Program-stage split (Early Support vs. Career Readiness)
-
-The Early Support (Years 1–2) and Career Readiness (Years 3–5) pages split scholars by a **documented,
-tunable default**: [`src/lib/academic/program-stage.ts`](./src/lib/academic/program-stage.ts) derives
-the stage from `Scholar.currentSemester` assuming ~2 semesters/year — semesters **1–4 = Years 1–2**,
-**5+ = Years 3–5** (`YEARS_1_2_MAX_SEMESTER = 4`). It is injected as an optional `programStage` filter
-on `DashboardFilters` and applied as a `currentSemester` range in `scholarWhere` (no schema change).
-
-- **Needs program-team sign-off** before being treated as final; adjust the threshold if a cohort's
-  semester system doesn't map cleanly.
-- **Caveat:** scholars with a null `currentSemester` fall outside **both** bands (surfaced as a data
-  gap, not guessed into a band).
-
-## Open decisions (flagged, not silently resolved)
-
-1. **Program-stage threshold** (`currentSemester ≤ 4`) + null-semester exclusion — needs program-team
-   sign-off (above).
-2. **Satisfaction** — no approved proxy formula exists; the Home KPI renders as `PROXY`/pending, never
-   an invented number.
-3. **Professional-Skills KPIs** (Employability Score, Internship/Placement Rate, Workshops Completed) —
-   no data source; Career Readiness renders them as explicit **pending** placeholders. Definitions are
-   owned by the professional-development team.
-4. **Program Ecosystem** (universities + operators + featured story) — needs new `University`/`Operator`
-   models and an ownership decision; **Phase 3**, shipped here as an honest placeholder.
-5. **"Data as of …"** in the Home header is derived from the latest data month (`getCurrentPeriod`),
-   not a real last-sync timestamp — decide whether to wire a true sync time or drop it.
-6. **UI language** switched Spanish → **English**. The Spanish column-name mappings for legacy-Excel /
-   JotForm ingestion are data keys and were intentionally left untouched.
-
-## Assumptions & known limitations
-
-- **Auth** is Supabase Auth (Google sign-in); Google Workspace-specific SSO was not required — any
-  Google account works, gated by a seeded `AppUser` row rather than a Workspace domain restriction.
-- Unit-economics amounts are normalized to **USD with demo FX rates** (`USD_PER_UNIT` in
-  `queries.ts`) — swap for real rates before using cost figures externally.
-- The scholar **list**/risk/academic pages are not yet scoped to a mentor's assigned scholars
-  (individual profiles are). Pass allowed ids into the query layer to scope them.
-- Live JotForm API sync, advanced analytics, and a full intervention workflow are out of MVP scope.
-- **Data import:** the risk-derivation heuristic in `src/lib/risk/derive.ts` is a documented
-  default meant to be tuned with the program team; insert-only rollback does not revert row
-  *updates* nor recomputed risk; the legacy adapter covers the "SCHOLAR GENERAL INFO" tab (other
-  wide tabs go through the template path); program-level (no-scholar) financials are not importable.
-- **`xlsx` dependency:** the npm-published SheetJS build (0.18.5) carries known advisories; imports
-  are restricted to authenticated ANALYST_ADMIN users and every row is validated, but consider
-  swapping to `exceljs` if that risk profile is unacceptable.
+Private repository (`"private": true`); no separate license is published.
