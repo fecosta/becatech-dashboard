@@ -69,8 +69,9 @@ plausible-looking placeholder in a goal row is worse than a visible gap.
 
 | Design element | Status | Notes |
 |---|---|---|
-| 1 · Contact prioritisation | **Implemented** | at-risk scholars with email and phone, risk-ordered. Access-scoped like every scholar read — this is the one view that puts personal contact details on screen |
-| 2 · Search with multi-match list | **Implemented** | existing directory table |
+| 1 · Contact prioritisation | **Implemented** | at-risk scholars with email and phone, risk-ordered, on its own route (`/dashboard/scholars`). Access-scoped like every scholar read — this is the one view that puts personal contact details on screen |
+| 2 · Search with multi-match list | **Implemented** | existing directory table, on its own route (`/dashboard/scholars/find`). A single match stays a one-row list rather than swapping itself for the profile — the search screen has to survive the click |
+| Individual profile as a route | **Implemented (beyond the design)** | `/dashboard/scholars/[scholarId]`, keyed on `Scholar.scholarId`. Both lists link to it with `target="_blank"`, so the list you were working through stays put. Survives refresh and direct URL entry; the design's one-HTML-file prototype has no equivalent |
 | Identity & Program, three panels | **Implemented** | Personal / Sociodemographic / Academic, under an avatar + name header |
 | Academic performance (GPA trend, snapshot) | **Implemented** | the two chips that both read "Academic Progress" now name what they measure |
 | Risk history by semester | **Defer** | `RiskAssessment` is keyed `(scholarId, period)` where period is a program month, so the same month in two semesters shares one key. Rolling up would merge semesters |

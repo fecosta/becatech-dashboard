@@ -72,6 +72,15 @@ describe("visiblePillsForPath", () => {
       "status",
       "risk",
     ]);
+    // The section's three screens share one pill set — matched by prefix, so the split
+    // into /dashboard/scholars, /find and /[scholarId] needed no change here.
+    expect(visiblePillsForPath("/dashboard/scholars/find")).toEqual([
+      "university",
+      "country",
+      "cohort",
+      "status",
+      "risk",
+    ]);
   });
 
   it("out-of-scope routes keep the full pill set", () => {

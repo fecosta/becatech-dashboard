@@ -1,29 +1,19 @@
 import Link from "next/link";
-import { type Column, DataTable } from "@/components/DataTable";
-import { ScholarProfileView } from "@/components/ScholarProfileView";
-import { ScholarSearch } from "@/components/ScholarSearch";
+import { redirect } from "next/navigation";
 import { ExecTable, type ExecRow } from "@/components/ExecTable";
-import { AccessDenied, Badge, Card, PageHeader, RiskBadge, SectionTitle } from "@/components/ui";
+import { ScholarSectionTabs } from "@/components/ScholarSectionTabs";
+import { AccessDenied, Card, PageHeader, RiskBadge, SectionTitle } from "@/components/ui";
 import { SectionNav } from "@/components/SectionNav";
-import { canAccessScholar, type CurrentUser, Permission } from "@/lib/auth/authorization";
+import { type CurrentUser, Permission } from "@/lib/auth/authorization";
 import { requirePermission } from "@/lib/auth/guard";
 import { parseFilters, preserveParams, type SearchParams } from "@/lib/dashboard/filters";
-import { getContactPriority, getScholarDirectory } from "@/lib/dashboard/queries";
-import type { DashboardFilters, ScholarDirectoryRow } from "@/lib/dashboard/types";
-import type { ProgramStatus } from "@/generated/prisma/enums";
-import { fmtGpa } from "@/lib/format";
-import { COUNTRY_LABEL, PROGRAM_STATUS_LABEL } from "@/lib/labels";
+import { getContactPriority } from "@/lib/dashboard/queries";
+import { SCHOLAR_SECTION, scholarProfileHref } from "@/lib/dashboard/scholar-routes";
+import type { DashboardFilters } from "@/lib/dashboard/types";
 
 export const dynamic = "force-dynamic";
 
-const STATUS_TONE: Record<ProgramStatus, "green" | "red" | "amber" | "blue"> = {
-  ACTIVE: "green",
-  WITHDRAWN: "red",
-  PAUSED: "amber",
-  GRADUATED: "blue",
-};
-
-export default async function ScholarsPage({
+export default async function ContactPrioritisationPage({
   searchParams,
 }: {
   searchParams: Promise<SearchParams>;
@@ -32,24 +22,30 @@ export default async function ScholarsPage({
   if (!allowed) {
     return (
       <div>
-        <PageHeader title="Scholar Profile" tag="Individual record" />
+        <PageHeader title="Contact Prioritisation" tag="Scholar Profile" />
         <AccessDenied />
       </div>
     );
   }
 
   const sp = await searchParams;
+
+  // Legacy links: search used to live on this route as `?q=`, and the old
+  // /dashboard/scholars/[scholarId] stub bounced through it. Send those to Find a Scholar
+  // rather than dropping the term silently.
+  if (sp.q) redirect(`${SCHOLAR_SECTION.find.href}?${preserveParams(sp)}`);
+
   const filters = parseFilters(sp);
-  const qRaw = Array.isArray(sp.q) ? sp.q[0] : sp.q;
-  const q = qRaw?.trim();
 
   return (
     <div>
       <PageHeader
-        title="Scholar Profile"
-        tag="Individual record"
-        subtitle="Who is this scholar, and how are they doing? Search any scholar, or browse the full list below."
+        title="Contact Prioritisation"
+        tag="Scholar Profile"
+        subtitle="Who needs reaching first, and how to reach them. Open a scholar to see their full record."
       />
+
+      <ScholarSectionTabs active="contact" sp={sp} />
 
       <SectionTitle size="lg" id="profile-sec-1">
         1 · Contact Prioritisation
@@ -59,82 +55,7 @@ export default async function ScholarsPage({
       </p>
       <ContactPriority filters={filters} sp={sp} user={user!} />
 
-      <SectionTitle size="lg" id="profile-sec-2">
-        2 · Find a Scholar
-      </SectionTitle>
-      <p className="mb-3.5 text-sm text-muted">
-        Search by name, ID or university. The ID is the scholar&rsquo;s national identity number.
-      </p>
-      <ScholarSearch />
-      <ScholarResults q={q} filters={filters} sp={sp} user={user!} />
-
-      <SectionNav current="/dashboard/scholars" sp={sp} user={user} />
-    </div>
-  );
-}
-
-const columns = (sp: SearchParams): Column<ScholarDirectoryRow>[] => [
-  {
-    header: "Scholar",
-    cell: (r) => (
-      <Link href={`?${preserveParams(sp, { q: r.scholarId })}`} className="font-medium text-purple hover:underline">
-        {r.fullName}
-        <span className="ml-1 text-xs text-muted">{r.scholarId}</span>
-      </Link>
-    ),
-  },
-  { header: "Country", cell: (r) => COUNTRY_LABEL[r.country] },
-  { header: "Cohort", cell: (r) => r.cohort },
-  { header: "University", cell: (r) => r.university },
-  { header: "Program", cell: (r) => r.academicProgram },
-  {
-    header: "Status",
-    cell: (r) => <Badge tone={STATUS_TONE[r.programStatus]}>{PROGRAM_STATUS_LABEL[r.programStatus]}</Badge>,
-  },
-  {
-    header: "Risk",
-    cell: (r) => (r.currentRiskLevel ? <RiskBadge level={r.currentRiskLevel} /> : <span className="text-muted">—</span>),
-  },
-  { header: "GPA", cell: (r) => fmtGpa(r.latestGpa) },
-];
-
-async function ScholarResults({
-  q,
-  filters,
-  sp,
-  user,
-}: {
-  q?: string;
-  filters: DashboardFilters;
-  sp: SearchParams;
-  user: CurrentUser;
-}) {
-  const results = await getScholarDirectory(filters, q, user);
-
-  if (results.length === 1) {
-    const scholarId = results[0].scholarId;
-    if (!canAccessScholar(user, scholarId)) {
-      return <AccessDenied message="You don't have access to this scholar." />;
-    }
-    return <ScholarProfileView scholarId={scholarId} user={user} />;
-  }
-
-  return (
-    <div className="mt-4">
-      <div className="mb-2 text-xs text-muted">
-        {results.length} scholar{results.length === 1 ? "" : "s"}
-        {q ? (
-          <>
-            {" "}
-            matching &quot;{q}&quot;
-          </>
-        ) : null}
-      </div>
-      <DataTable
-        columns={columns(sp)}
-        rows={results}
-        empty={q ? `No scholars found matching "${q}".` : "No scholars found."}
-      />
+      <SectionNav current={SCHOLAR_SECTION.contact.href} sp={sp} user={user} />
     </div>
   );
 }
@@ -164,10 +85,13 @@ async function ContactPriority({
           key: r.scholarId,
           label: (
             <Link
-              href={`/dashboard/scholars?${preserveParams(sp, { q: r.scholarId })}`}
+              href={scholarProfileHref(r.scholarId, sp)}
+              target="_blank"
+              rel="noopener noreferrer"
               className="underline-offset-2 hover:underline"
             >
               {r.fullName}
+              <span className="sr-only"> (opens in a new tab)</span>
             </Link>
           ),
           cells: [
@@ -179,7 +103,7 @@ async function ContactPriority({
           ],
         }))}
         empty="No scholars at medium risk or above in this selection."
-        caption="Combine the filters above to narrow down who to contact first."
+        caption="Combine the filters above to narrow down who to contact first. Selecting a scholar opens their profile in a new tab."
       />
     </Card>
   );
