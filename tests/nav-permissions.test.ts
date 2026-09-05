@@ -3,18 +3,21 @@ import type { UserRole } from "@/generated/prisma/enums";
 import { can, type CurrentUser, Permission } from "@/lib/auth/authorization";
 import { adjacentViews, VIEW_ORDER } from "@/lib/dashboard/views";
 
-// Permission gating each nav item after the Beca Tech+ IA restructure. Kept in lockstep
-// with the NAV config in src/app/dashboard/layout.tsx — a regression here means a role
+// Permission gating each SIDEBAR nav item after the Beca Tech+ IA restructure (SPEC-003). Kept in
+// lockstep with the NAV config in src/app/dashboard/layout.tsx — a regression here means a role
 // gained or lost a nav entry. VIEW_SCHOLAR_TRACKING is also the guard the deprecated-route
 // redirects land on, so it doubles as the "redirect doesn't bypass the target guard" check.
+//
+// Unit Economics and Selection Pipeline are deliberately absent from this map: per SPEC-003
+// they're hidden from the sidebar unconditionally, regardless of permission (still fully
+// routable/permissioned — see each page's own requirePermission() guard, untouched by this
+// change). This map only tracks items that can ever appear in the sidebar.
 const NAV_PERMISSION = {
   home: Permission.VIEW_DASHBOARD,
   earlySupport: Permission.VIEW_SCHOLAR_TRACKING,
   careerReadiness: Permission.VIEW_SCHOLAR_TRACKING,
   scholars: Permission.VIEW_SCHOLAR_TRACKING,
   programEcosystem: Permission.VIEW_SCHOLAR_TRACKING,
-  unitEconomics: Permission.VIEW_UNIT_ECONOMICS,
-  selectionPipeline: Permission.VIEW_SELECTION_PIPELINE,
   dataImports: Permission.VIEW_IMPORTS,
   dataQuality: Permission.VIEW_IMPORTS,
 } as const;
@@ -26,8 +29,6 @@ const ALL_FALSE: Record<NavKey, boolean> = {
   careerReadiness: false,
   scholars: false,
   programEcosystem: false,
-  unitEconomics: false,
-  selectionPipeline: false,
   dataImports: false,
   dataQuality: false,
 };
@@ -49,45 +50,37 @@ function visibleNav(role: UserRole): Record<NavKey, boolean> {
 }
 
 describe("nav visibility per role (Beca Tech+ IA)", () => {
-  it("Finance: Home + Unit Economics only", () => {
-    expect(visibleNav("FINANCE")).toEqual({ ...ALL_FALSE, home: true, unitEconomics: true });
+  it("Finance: Home only — Unit Economics is hidden from the sidebar (still directly routable)", () => {
+    expect(visibleNav("FINANCE")).toEqual({ ...ALL_FALSE, home: true });
+    expect(can(u("FINANCE"), Permission.VIEW_UNIT_ECONOMICS)).toBe(true);
   });
 
-  it("Selection Team: Home + Selection Pipeline only", () => {
-    expect(visibleNav("SELECTION_TEAM")).toEqual({
-      ...ALL_FALSE,
-      home: true,
-      selectionPipeline: true,
-    });
+  it("Selection Team: Home only — Selection Pipeline is hidden from the sidebar (still directly routable)", () => {
+    expect(visibleNav("SELECTION_TEAM")).toEqual({ ...ALL_FALSE, home: true });
+    expect(can(u("SELECTION_TEAM"), Permission.VIEW_SELECTION_PIPELINE)).toBe(true);
   });
 
-  it("Mentor: Home + all tracking pages — no economics/pipeline/admin", () => {
+  it("Mentor: Home + all tracking pages — no admin", () => {
     expect(visibleNav("MENTOR")).toEqual({ ...ALL_FALSE, home: true, ...TRACKING });
   });
 
-  it("Program Manager: tracking + secondary tools + read-only admin", () => {
+  it("Program Manager: tracking + read-only admin", () => {
     expect(visibleNav("PROGRAM_MANAGER")).toEqual({
       ...ALL_FALSE,
       home: true,
       ...TRACKING,
-      unitEconomics: true,
-      selectionPipeline: true,
       dataImports: true,
       dataQuality: true,
     });
   });
 
-  it("Executive: tracking + economics + pipeline, but not admin", () => {
-    expect(visibleNav("EXECUTIVE")).toEqual({
-      ...ALL_FALSE,
-      home: true,
-      ...TRACKING,
-      unitEconomics: true,
-      selectionPipeline: true,
-    });
+  it("Executive: tracking only in the sidebar — economics/pipeline permissions remain, just hidden", () => {
+    expect(visibleNav("EXECUTIVE")).toEqual({ ...ALL_FALSE, home: true, ...TRACKING });
+    expect(can(u("EXECUTIVE"), Permission.VIEW_UNIT_ECONOMICS)).toBe(true);
+    expect(can(u("EXECUTIVE"), Permission.VIEW_SELECTION_PIPELINE)).toBe(true);
   });
 
-  it("Analyst/Admin: everything", () => {
+  it("Analyst/Admin: everything the sidebar can show", () => {
     expect(Object.values(visibleNav("ANALYST_ADMIN")).every(Boolean)).toBe(true);
   });
 });
