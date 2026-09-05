@@ -104,112 +104,114 @@ export default async function CareerReadinessPage({
         ]}
       />
 
-      <div className="mt-6">
-        <SectionTitle>MAKERS Beca Tech Program</SectionTitle>
+      {/* ---------- 1 · MAKERS Beca Tech Program ---------- */}
+      <SectionTitle size="lg" id="career-sec-1">
+        1 · MAKERS Beca Tech Program
+      </SectionTitle>
+      <Card>
+        <p className="text-[13.5px] leading-relaxed text-muted">
+          A two-year program of virtual sessions, mentorships, and workshops that builds the
+          professional and entrepreneurial skills scholars need for the transition into the
+          workforce.
+        </p>
+      </Card>
+
+      {/* ---------- 2 · Growth & Development Metrics ---------- */}
+      <SectionTitle size="lg" id="career-sec-2" note="— goal vs. actual (illustrative)">
+        2 · Growth &amp; Development Metrics
+      </SectionTitle>
+      {/* No data source exists for these yet. Rendered as an explicit pending state — never
+          invented numbers. Goal shape only, per the professional-development team's own mockup. */}
+      <Card>
+        {SKILLS_METRICS.map((m) => (
+          <BulletTrackGoal
+            key={`${m.tag}-${m.label}`}
+            tag={m.tag}
+            label={m.label}
+            goalLabel={m.goalLabel}
+            pending
+          />
+        ))}
+      </Card>
+
+      {/* ---------- 3 · Skills by City ---------- */}
+      {/* Stays a pending card rather than an empty branded table: a table with headers and no
+          rows implies data that does not exist anywhere. */}
+      <SectionTitle size="lg" id="career-sec-3">
+        3 · Skills by City
+      </SectionTitle>
+      <Card className="flex items-center justify-between gap-4">
+        <p className="text-sm text-muted">
+          A per-city breakdown across {SKILL_DIMENSIONS} appears once the
+          professional-development team&rsquo;s data is available.
+        </p>
+        <ProxyBadge>PENDING</ProxyBadge>
+      </Card>
+
+      {/* ---------- 4 · Skills by University ---------- */}
+      <SectionTitle size="lg" id="career-sec-4">
+        4 · Skills by University
+      </SectionTitle>
+      <Card className="flex items-center justify-between gap-4">
+        <p className="text-sm text-muted">
+          The same {SKILL_DIMENSIONS} breakdown per partner university, to show where
+          professional-skills support needs reinforcing.
+        </p>
+        <ProxyBadge>PENDING</ProxyBadge>
+      </Card>
+
+      {/* ---------- 5 · Academic Progress ---------- */}
+      <SectionTitle size="lg" id="career-sec-5">
+        5 · Academic Progress
+      </SectionTitle>
+      <div className="grid gap-4 lg:grid-cols-2">
         <Card>
-          <p className="text-[13.5px] leading-relaxed text-muted">
-            A two-year program of virtual sessions, mentorships, and workshops that builds the
-            professional and entrepreneurial skills scholars need for the transition into the
-            workforce.
-          </p>
+          <div className="mb-1.5 text-[13.5px] font-bold text-surface-dark">On track vs. behind</div>
+          <div className="mb-3">
+            <StatChip
+              value={fmtPct(support.participationRate)}
+              label="Participate in program activities"
+            />
+          </div>
+          <PaceBarChart
+            data={[
+              {
+                label: "On track",
+                note: "Following their study plan",
+                valueLabel: `${progressPct(onTrack)}%`,
+                heightPct: progressPct(onTrack),
+                color: "#27cf77",
+              },
+              {
+                label: "Behind",
+                note: "One course behind",
+                valueLabel: `${progressPct(behind)}%`,
+                heightPct: progressPct(behind),
+                color: "#8fe0b4",
+              },
+              {
+                label: "Critical",
+                note: "More than one course behind",
+                valueLabel: `${progressPct(critical)}%`,
+                heightPct: progressPct(critical),
+                color: "#a62bff",
+              },
+            ]}
+          />
         </Card>
-      </div>
-
-      <div className="mt-6">
-        <SectionTitle note="— goal vs. actual (illustrative)">
-          Growth &amp; Development Metrics
-        </SectionTitle>
-        {/* No data source exists for these yet. Rendered as an explicit pending state — never
-            invented numbers. Goal shape only, per the professional-development team's own mockup. */}
         <Card>
-          {SKILLS_METRICS.map((m) => (
-            <BulletTrackGoal
-              key={`${m.tag}-${m.label}`}
-              tag={m.tag}
-              label={m.label}
-              goalLabel={m.goalLabel}
-              pending
-            />
-          ))}
+          <div className="mb-3.5 flex flex-wrap items-baseline justify-between gap-1.5">
+            <div className="text-[13.5px] font-bold text-surface-dark">GPA distribution</div>
+            <div className="text-xs text-muted">
+              {gpaKpi.label} <b className="text-sm text-surface-dark">{gpaKpi.value}</b>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-4">
+            <StatChip value={`${gpaPct(gpaDist.below3_5)}%`} label="Below 3.5" />
+            <StatChip value={`${gpaPct(gpaDist.from3_5To3_9)}%`} label="GPA 3.5 – 3.9" />
+            <StatChip value={`${gpaPct(gpaDist.from4_0To5_0)}%`} label="GPA 4.0 – 5.0" />
+          </div>
         </Card>
-      </div>
-
-      {/* Both breakdowns stay a pending card rather than an empty branded table: a table
-          with headers and no rows implies data that does not exist anywhere. */}
-      <div className="mt-6 grid gap-4 lg:grid-cols-2">
-        <div>
-          <SectionTitle>Skills by City</SectionTitle>
-          <Card className="flex items-center justify-between gap-4">
-            <p className="text-sm text-muted">
-              A per-city breakdown across {SKILL_DIMENSIONS} appears once the
-              professional-development team&rsquo;s data is available.
-            </p>
-            <ProxyBadge>PENDING</ProxyBadge>
-          </Card>
-        </div>
-        <div>
-          <SectionTitle>Skills by University</SectionTitle>
-          <Card className="flex items-center justify-between gap-4">
-            <p className="text-sm text-muted">
-              The same {SKILL_DIMENSIONS} breakdown per partner university, to show where
-              professional-skills support needs reinforcing.
-            </p>
-            <ProxyBadge>PENDING</ProxyBadge>
-          </Card>
-        </div>
-      </div>
-
-      <div className="mt-6">
-        <SectionTitle>Academic Progress</SectionTitle>
-        <div className="grid gap-4 lg:grid-cols-2">
-          <Card>
-            <div className="mb-1.5 text-[13.5px] font-bold text-surface-dark">On track vs. behind</div>
-            <div className="mb-3">
-              <StatChip
-                value={fmtPct(support.participationRate)}
-                label="Participate in program activities"
-              />
-            </div>
-            <PaceBarChart
-              data={[
-                {
-                  label: "On track",
-                  note: "Following their study plan",
-                  valueLabel: `${progressPct(onTrack)}%`,
-                  heightPct: progressPct(onTrack),
-                  color: "#27cf77",
-                },
-                {
-                  label: "Behind",
-                  note: "One course behind",
-                  valueLabel: `${progressPct(behind)}%`,
-                  heightPct: progressPct(behind),
-                  color: "#8fe0b4",
-                },
-                {
-                  label: "Critical",
-                  note: "More than one course behind",
-                  valueLabel: `${progressPct(critical)}%`,
-                  heightPct: progressPct(critical),
-                  color: "#a62bff",
-                },
-              ]}
-            />
-          </Card>
-          <Card>
-            <div className="mb-3.5 flex flex-wrap items-baseline justify-between gap-1.5">
-              <div className="text-[13.5px] font-bold text-surface-dark">GPA distribution</div>
-              <div className="text-xs text-muted">
-                {gpaKpi.label} <b className="text-sm text-surface-dark">{gpaKpi.value}</b>
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-4">
-              <StatChip value={`${gpaPct(gpaDist.below3_5)}%`} label="Below 3.5" />
-              <StatChip value={`${gpaPct(gpaDist.from3_5To3_9)}%`} label="GPA 3.5 – 3.9" />
-              <StatChip value={`${gpaPct(gpaDist.from4_0To5_0)}%`} label="GPA 4.0 – 5.0" />
-            </div>
-          </Card>
-        </div>
       </div>
 
       <SectionNav current="/dashboard/career-readiness" sp={sp} user={user} />
