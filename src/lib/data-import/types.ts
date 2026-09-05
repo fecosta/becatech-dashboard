@@ -20,6 +20,57 @@ export interface RowError {
   rowNumber: number;
   field: string;
   message: string;
+  /** Which stage produced this error. Optional/additive — existing errors (all from validate.ts)
+   *  read as "VALIDATION" when absent, so this never breaks a consumer that only reads
+   *  entity/rowNumber/field/message. "SOURCE" = the raw sheet's shape/columns (drift.ts);
+   *  "VALIDATION" = a row's field/relational checks (validate.ts); "PERSISTENCE" = a commit-time
+   *  failure (commit.ts). */
+  stage?: "SOURCE" | "VALIDATION" | "PERSISTENCE";
+}
+
+/**
+ * A source-specific translator from one operational spreadsheet shape into canonical ingestion
+ * entities. Exactly two first-class operational adapters exist today (Scholar General Info,
+ * Mentor Reports) — this is not a generic plugin system, just a shared shape for those two plus
+ * the schema-drift reporting they both need. `TInput` is normally `ParsedSheet` (one sheet).
+ */
+export interface SourceAdapter<TInput> {
+  /** Stable identifier for this source, e.g. "SCHOLAR_GENERAL_INFO". Used only for logging/
+   *  reporting — never persisted as a new enum. */
+  source: string;
+  /** Does this input look like this adapter's source shape? (header-based self-detection). */
+  canHandle(input: TInput): boolean;
+  /** Translate the raw input into canonical rows. Only called after `canHandle` returns true. */
+  adapt(input: TInput): CanonicalBatch;
+  /** Classify this input's columns against the adapter's source contract (see source-contracts/
+   *  and validation/drift.ts). Optional because not every adapter needs drift reporting. */
+  inspectSchema?(input: TInput): SourceSchemaReport;
+}
+
+/** A source's expected columns, by normalized header key (see adapters/shared.ts's `normKey`) or
+ *  bilingual alias group. Drives `classifyColumns` (validation/drift.ts). */
+export interface SourceContract {
+  /** Alias groups for columns the adapter requires to produce a usable row (e.g. the identity
+   *  column). Each inner array is one logical column's accepted header spellings — only one needs
+   *  to be present. */
+  required: string[][];
+  /** Alias groups for columns the adapter reads but that may be absent without failing the row. */
+  optional: string[][];
+  /** Normalized header keys already reviewed and deliberately left unmapped (documented, with a
+   *  reason, at the call site) — present so they never produce an "unknown column" warning. */
+  ignored: string[];
+  /** Patterns for repeating per-period columns (e.g. `gpa 2026-1`) — matched in addition to the
+   *  fixed alias groups above; never counted toward `missingRequired`. */
+  repeating?: RegExp[];
+}
+
+/** Schema-drift classification of one sheet's header row against a `SourceContract`. Recognized/
+ *  ignored/unknown are informational; a non-empty `missingRequired` is a SOURCE-stage error. */
+export interface SourceSchemaReport {
+  recognized: string[];
+  ignored: string[];
+  unknown: string[];
+  missingRequired: string[];
 }
 
 /** Lookups the validator needs (existing scholars, controlled-value lists). */

@@ -13,27 +13,15 @@ export const dynamic = "force-dynamic";
 type NavConfigItem = NavItem & { permission: Permission };
 type NavConfigSection = { heading?: string; items: NavConfigItem[] };
 
-// Beca Tech+ narrative IA: the five primary views come straight from VIEW_ORDER, which
-// the per-page prev/next SectionNav also reads — so the sidebar order and the walk
-// order cannot drift. Secondary tools sit under "More", data tools under "Admin".
-// Permissions are unchanged from the prior IA so no role loses access.
+// Beca Tech+ narrative IA (SPEC-003): the five primary views come straight from VIEW_ORDER, which
+// the per-page prev/next SectionNav also reads — so the sidebar order and the walk order cannot
+// drift. Unit Economics and Selection Pipeline are deliberately NOT listed here — per SPEC-003
+// they're hidden from the sidebar (still fully routable, permissioned, and tested; only their
+// nav entry was removed). Data Imports/Data Quality stay visible under "Admin" for roles that can
+// already open them — an explicit product decision to keep operational tooling reachable from the
+// sidebar, unlike the two hidden secondary-tool routes.
 const NAV: NavConfigSection[] = [
   { items: [...VIEW_ORDER] },
-  {
-    heading: "More",
-    items: [
-      {
-        href: "/dashboard/unit-economics",
-        label: "Unit Economics",
-        permission: Permission.VIEW_UNIT_ECONOMICS,
-      },
-      {
-        href: "/dashboard/selection-pipeline",
-        label: "Selection Pipeline",
-        permission: Permission.VIEW_SELECTION_PIPELINE,
-      },
-    ],
-  },
   {
     heading: "Admin",
     items: [

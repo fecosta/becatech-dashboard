@@ -6,9 +6,13 @@ worksheets may be Spanish; canonical field names and all user-facing output are 
 Pipeline: `apps-script/Normalize.gs` (reads messy tabs, writes hidden `NORMALIZED_*` tabs) →
 `apps-script/Sync.gs` (CSV POST with `x-entity`) → `/api/sync/import` → `templateAdapter` →
 `validateBatch` (`src/lib/data-import/validate.ts`) → `commit.ts` (bulk upsert) →
-`runDataQualityScan` → `recomputeRiskForScholars`. The typed field list is
-`TEMPLATE_COLUMNS` in `src/lib/data-import/templates.ts`; see also
-[`reference-data-audit.md`](./reference-data-audit.md).
+`runDataQualityScan`. The typed field list is `TEMPLATE_COLUMNS` in
+`src/lib/data-import/templates.ts`; see also [`reference-data-audit.md`](./reference-data-audit.md).
+Global risk is **ingested**, not recomputed — see
+[`adr/006-authoritative-monthly-risk.md`](./adr/006-authoritative-monthly-risk.md): on commit,
+`MentorReport.mentorReportedGlobalStatus` maps directly to a `RiskAssessment` row
+(`src/lib/risk/from-mentor-report.ts`). No import path calls the retired derive engine
+(`src/lib/risk/derive.ts`/`recompute.ts`).
 
 ## Cross-cutting rules
 
@@ -83,10 +87,10 @@ computed **after** identity resolution).
 | `mentorName` | Mentor's Name | string (sensitive) | |
 | `semester`, `reportingMonth` | Semester · ¿Qué mes reportas? | string | |
 | `sessionDate`, `sessionType`, `sessionSummary`, `modality` | Date of the Session · Session · Resume · Modalidad | mixed | modality display via `source-values` |
-| `permanenceRisk`, `academicStatus`, `psychosocialStatus` | ¿Tiene riesgo…? · Academic Status · Psychosocial Status | string | feed the **derived** risk engine |
+| `permanenceRisk`, `academicStatus`, `psychosocialStatus` | ¿Tiene riesgo…? · Academic Status · Psychosocial Status | string | stored as supporting detail; not a risk input (see below) |
 | `approvedCoursesCount`, `atRiskCoursesCount` | Nº aprobados · Nº en riesgo | int | |
 | activity counts (`individualTutoring`, …, `workshops`) | Tutorías/Mentorías/Talleres | int | **blank ≠ 0** (see risk engine) |
-| `mentorReportedGlobalStatus` | GLOBAL STATUS | string | **quarantined** — never used by risk derivation |
+| `mentorReportedGlobalStatus` | GLOBAL STATUS | string | **authoritative** — ingested verbatim into `RiskAssessment` (ADR-006), never re-derived |
 
 `MENTOR ID`, `MONTH`, `DATE`, `ACADEMIC CAUSE`, `PSYCHOSOCIAL CAUSE`, and the three "plan" columns
 are intentionally unmapped (see `Normalize.gs` unmapped list).

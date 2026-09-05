@@ -14,11 +14,11 @@ Technical architecture: see [ARCHITECTURE.md](ARCHITECTURE.md).
 Six roles exist in the codebase (`UserRole` in `prisma/schema.prisma`, permissions in
 `src/lib/auth/authorization.ts`):
 
-- **Executive** — program-wide health: Home, Early Support, Career Readiness, Scholar Profile,
+- **Executive** — program-wide health: Home, Early Support, Growth & Development, Scholar Profile,
   Program Ecosystem, Unit Economics, Selection Pipeline.
 - **Program Manager** — the same tracking views as Executive, plus read-only visibility into
   import history (`VIEW_IMPORTS`).
-- **Mentor** — Home and the four scholar-tracking views (Early Support, Career Readiness,
+- **Mentor** — Home and the four scholar-tracking views (Early Support, Growth & Development,
   Scholar Profile, Program Ecosystem), scoped to their own assigned scholars only
   (`UserScholarAccess`). Also has `VIEW_SENSITIVE_NOTES`.
 - **Analyst/Admin** — the superset: every tracking view, Unit Economics, Selection Pipeline, and
@@ -38,7 +38,7 @@ executive attention callouts.
 Scholars in their earlier program years (semesters 1–4). Risk and support-participation signals,
 alert-type breakdowns, pace-vs-plan chips.
 
-### Career Readiness
+### Growth & Development
 Scholars in later program years (semester 5+). Progress toward graduation/professional
 readiness; several Professional-Skills KPIs are explicit pending placeholders (no data source
 yet — see Out of Scope below).
@@ -78,7 +78,7 @@ rejected, or withdrawn.
 The narrative flow used by the dashboard, shared by the sidebar and each page's prev/next
 footer (`src/lib/dashboard/views.ts`):
 
-**Home → Early Support → Career Readiness → Scholar Profile → Program Ecosystem**
+**Home → Early Support → Growth & Development → Scholar Profile → Program Ecosystem**
 
 Secondary tools: Unit Economics, Selection Pipeline.
 Administrative tools: Data Imports, Data Quality.

@@ -127,7 +127,10 @@ export default async function EarlySupportPage({
   const onTrack = pace.progressStatusDistribution.ON_TRACK;
   const behind = pace.progressStatusDistribution.SLIGHTLY_BEHIND + pace.progressStatusDistribution.BEHIND;
   const critical = pace.progressStatusDistribution.CRITICAL_DELAY;
-  const progressTotal = onTrack + behind + critical;
+  // Denominator = total active scholars in scope (not just the ones with a classified progress
+  // status), so a scholar the sheet hasn't reported academic-term data for yet shows up as missing
+  // from the picture rather than being silently excluded from the percentage base.
+  const progressTotal = stageOverview.activeScholars;
   const progressPct = (n: number) => (progressTotal ? Math.round((n / progressTotal) * 100) : 0);
 
   // Denominator for the level percentages = active, ≠Cohorte-2024 scholars (the program's official
@@ -481,7 +484,9 @@ export default async function EarlySupportPage({
       <Card className="mt-4">
         <div className="mb-3.5 flex flex-wrap items-baseline justify-between gap-1.5">
           <div className="text-[13.5px] font-bold text-surface-dark">Participation by Risk Level</div>
-          <div className="text-xs text-muted">% of scholars in each tier with ≥1 support activity to date</div>
+          <div className="text-xs text-muted">
+            % of all active scholars in each tier with ≥1 support activity to date
+          </div>
         </div>
         <div className="flex flex-wrap gap-4">
           {support.byRiskLevel
@@ -491,7 +496,7 @@ export default async function EarlySupportPage({
                 key={r.riskLevel}
                 tone={PARTICIPATION_TONE[r.riskLevel]}
                 value={fmtPct(r.participatedPct)}
-                label={`${RISK_LEVEL_LABEL[r.riskLevel]} · ${r.participatedCount}/${r.scholarCount} scholars`}
+                label={`${RISK_LEVEL_LABEL[r.riskLevel]} · ${r.participatedCount}/${r.totalActiveScholars} scholars`}
               />
             ))}
         </div>

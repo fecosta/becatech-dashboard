@@ -1037,11 +1037,15 @@ export async function getSupportParticipation(
     }
   }
 
-  // Participation by current risk level.
+  // Participation by current risk level — same denominator population (active, ≠Cohorte-2024) as
+  // every other risk-based percentage in this file (riskEligible()); withdrawn/graduated/paused
+  // scholars, and Cohorte 2024, were previously included here (unlike everywhere else), which
+  // could inflate/dilute a tier's count with scholars no longer part of the active program.
   const perLevelTotals = emptyRiskDistribution();
   const perLevelCounts = emptyRiskDistribution();
   const perLevelParticipated = emptyRiskDistribution();
   for (const s of scholars) {
+    if (!riskEligible(s)) continue;
     const level = riskMap.get(s.scholarId)?.globalRiskLevel;
     if (!level) continue;
     perLevelCounts[level] += 1;
@@ -1096,9 +1100,12 @@ export async function getSupportParticipation(
       riskLevel,
       scholarCount: perLevelCounts[riskLevel],
       participatedCount: perLevelParticipated[riskLevel],
-      participatedPct: perLevelCounts[riskLevel]
-        ? round2(perLevelParticipated[riskLevel] / perLevelCounts[riskLevel])
-        : 0,
+      totalActiveScholars: activeIds.length,
+      // Denominator = ALL active scholars, shared across every tier — not just this tier's own
+      // count — so a small, fully-engaged tier (e.g. Critical 4/4) doesn't wash out to the same
+      // 100% as a large one; its percentage instead reflects how much of the whole active
+      // population it represents once engagement is accounted for.
+      participatedPct: activeIds.length ? round2(perLevelParticipated[riskLevel] / activeIds.length) : 0,
       averageActivitiesPerScholar: perLevelCounts[riskLevel]
         ? round2(perLevelTotals[riskLevel] / perLevelCounts[riskLevel])
         : 0,

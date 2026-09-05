@@ -2,89 +2,56 @@
 // then commit it (transactional upsert → data-quality scan → risk recompute).
 import type { Prisma } from "../../generated/prisma/client";
 import type { DataImportSourceType } from "../../generated/prisma/enums";
-import { OPERATOR_NAMES } from "../academic/operator-assignment";
 import { runDataQualityScan } from "../data-quality/checks";
 import { prisma } from "../db";
 import { legacyAdapter } from "./adapters/legacy";
-import { normKey } from "./adapters/shared";
+import { mentorReportsAdapter } from "./adapters/mentor-reports";
+import { scholarGeneralInfoAdapter } from "./adapters/scholar-general-info";
 import { templateAdapter } from "./adapters/template";
 import { type CommitResult, commitValidated } from "./commit";
+import type { ParsedSheet } from "./parse";
 import { parseWorkbook } from "./parse";
 import {
   type CanonicalBatch,
   emptyValidatedBatch,
   type ImportEntity,
+  type SourceSchemaReport,
   type ValidatedBatch,
-  type ValidationContext,
   type ValidationResult,
 } from "./types";
 import { validateBatch } from "./validate";
+import { loadValidationContext } from "./validation-context";
 
-/** Approved operator name aliases (source label → canonical Operator.name). The sheet uses short
- *  codes; only explicitly-approved aliases resolve, never a fuzzy/auto-created match. */
-const OPERATOR_ALIASES: Record<string, string> = {
-  FATV: OPERATOR_NAMES.EARLY_SUPPORT_COLOMBIA, // "Fundación Antivirus para la Deserción"
-};
+export interface NamedSchemaReport extends SourceSchemaReport {
+  /** Which sheet this report is for, e.g. "SCHOLAR GENERAL INFO.csv#1" — not a new stored entity,
+   *  just enough for the admin preview UI / sync-route logs to say which sheet a warning is about. */
+  sheetName: string;
+  source: string;
+}
 
-/** Approved university name aliases (source label → canonical University.name already in the
- *  catalog). The catalog was hand-seeded with abbreviations (UDEA, UNAL) while the sheet spells the
- *  full names — map them so a naming variant resolves to the existing row instead of rejecting the
- *  scholar (university is a required FK). Controlled list only; never fuzzy-matched or auto-created.
- *  Add a line here when a new sheet spelling appears rather than duplicating a catalog row. */
-const UNIVERSITY_ALIASES: Record<string, string> = {
-  "Universidad de Antioquia": "UDEA",
-  "Universidad Nacional": "UNAL",
-};
-
-async function loadValidationContext(): Promise<ValidationContext> {
-  const [scholars, controls, universities, operators] = await Promise.all([
-    prisma.scholar.findMany({ select: { scholarId: true, fullName: true, country: true } }),
-    prisma.controlValue.findMany({ where: { isActive: true }, select: { category: true, value: true } }),
-    prisma.university.findMany({ select: { id: true, name: true } }),
-    prisma.operator.findMany({ select: { id: true, name: true } }),
-  ]);
-  const controlMap = new Map<string, Set<string>>();
-  for (const c of controls) {
-    let set = controlMap.get(c.category);
-    if (!set) {
-      set = new Set<string>();
-      controlMap.set(c.category, set);
+/** Schema-drift report per recognized sheet, for a raw (LEGACY_WIDE_EXCEL) upload — one of the two
+ *  first-class operational adapters (Scholar General Info, Mentor Reports) that declare a source
+ *  contract. Purely informational (never blocks a commit): row-level validation already produces
+ *  an explicit error for a missing required *field* (e.g. "University not found"); this is the
+ *  column-level view of the same sheet, surfaced for the admin preview UI and sync-route logs. */
+function inspectLegacySheets(sheets: ParsedSheet[]): NamedSchemaReport[] {
+  const reports: NamedSchemaReport[] = [];
+  for (const sheet of sheets) {
+    if (scholarGeneralInfoAdapter.canHandle(sheet)) {
+      reports.push({
+        sheetName: sheet.sheetName,
+        source: scholarGeneralInfoAdapter.source,
+        ...scholarGeneralInfoAdapter.inspectSchema!(sheet),
+      });
+    } else if (mentorReportsAdapter.canHandle(sheet)) {
+      reports.push({
+        sheetName: sheet.sheetName,
+        source: mentorReportsAdapter.source,
+        ...mentorReportsAdapter.inspectSchema!(sheet),
+      });
     }
-    set.add(c.value);
   }
-  const universityMap = new Map<string, string>();
-  for (const u of universities) universityMap.set(u.name.trim().toLowerCase(), u.id);
-  // Register approved aliases → the same catalog id (e.g. "Universidad de Antioquia" → UDEA row).
-  for (const [alias, canonical] of Object.entries(UNIVERSITY_ALIASES)) {
-    const id = universityMap.get(canonical.trim().toLowerCase());
-    if (id) universityMap.set(alias.trim().toLowerCase(), id);
-  }
-  const operatorMap = new Map<string, string>();
-  for (const o of operators) operatorMap.set(o.name.trim().toLowerCase(), o.id);
-  // Approved operator aliases: the source sheet uses short codes that don't equal the seeded
-  // canonical name (e.g. "FATV" for "Fundación Antivirus para la Deserción"). Register each alias
-  // pointing at the same Operator id — a controlled mapping, never an auto-created operator.
-  for (const [alias, canonical] of Object.entries(OPERATOR_ALIASES)) {
-    const id = operatorMap.get(canonical.trim().toLowerCase());
-    if (id) operatorMap.set(alias.trim().toLowerCase(), id);
-  }
-  const scholarIdsByNormalizedName = new Map<string, string[]>();
-  for (const s of scholars) {
-    const key = normKey(s.fullName);
-    if (!key) continue;
-    const arr = scholarIdsByNormalizedName.get(key) ?? [];
-    arr.push(s.scholarId);
-    scholarIdsByNormalizedName.set(key, arr);
-  }
-  const countryByScholarId = new Map(scholars.map((s) => [s.scholarId, s.country] as const));
-  return {
-    existingScholarIds: new Set(scholars.map((s) => s.scholarId)),
-    controls: controlMap,
-    universities: universityMap,
-    operatorsByName: operatorMap,
-    scholarIdsByNormalizedName,
-    countryByScholarId,
-  };
+  return reports;
 }
 
 export interface CreateBatchInput {
@@ -98,15 +65,29 @@ export interface CreateBatchInput {
 /** Parse + validate an upload and persist it as a VALIDATED batch (no target writes yet). */
 export async function createImportBatch(
   input: CreateBatchInput,
-): Promise<{ batchId: string; result: ValidationResult }> {
+): Promise<{ batchId: string; result: ValidationResult; schemaReports: NamedSchemaReport[] }> {
   const sheets = parseWorkbook(input.data);
 
   let canonical: CanonicalBatch;
+  let schemaReports: NamedSchemaReport[] = [];
   if (input.sourceType === "TEMPLATE") {
     if (!input.entity) throw new Error("An entity is required for TEMPLATE imports.");
     canonical = templateAdapter(input.entity, sheets[0]?.records ?? []);
   } else {
     canonical = legacyAdapter(sheets);
+    schemaReports = inspectLegacySheets(sheets);
+  }
+
+  // Informational only (see inspectLegacySheets) — never blocks ingestion. Logged the same way
+  // Apps Script logs an unrecognized-column WARN to its Sync Log, so an unexpected sheet change is
+  // visible in server logs even on the automated sync path, which has no UI to render a warning in.
+  for (const report of schemaReports) {
+    if (report.unknown.length > 0) {
+      console.warn(`[data-import] ${report.source} (${report.sheetName}): unrecognized columns: ${report.unknown.join(", ")}`);
+    }
+    if (report.missingRequired.length > 0) {
+      console.warn(`[data-import] ${report.source} (${report.sheetName}): missing expected columns: ${report.missingRequired.join(", ")}`);
+    }
   }
 
   const ctx = await loadValidationContext();
@@ -128,7 +109,7 @@ export async function createImportBatch(
     select: { id: true },
   });
 
-  return { batchId: batch.id, result };
+  return { batchId: batch.id, result, schemaReports };
 }
 
 export interface CommitOutcome {
@@ -181,6 +162,23 @@ export async function commitImportBatch(batchId: string): Promise<CommitOutcome>
     });
     throw error;
   }
+}
+
+export interface IngestResult {
+  batchId: string;
+  result: ValidationResult;
+  commit: CommitOutcome;
+}
+
+/** Parse+validate+commit in one call — what the automated Google Sheets sync needs (no human
+ *  preview step); manual imports keep using createImportBatch/commitImportBatch separately so the
+ *  admin UI can show a preview before committing. Pure composition, same behavior as calling both
+ *  in sequence — returns both the validation result (entities/row counts/errors) and the commit
+ *  outcome, since the sync route's response needs both. */
+export async function ingestAndCommit(input: CreateBatchInput): Promise<IngestResult> {
+  const { batchId, result } = await createImportBatch(input);
+  const commit = await commitImportBatch(batchId);
+  return { batchId, result, commit };
 }
 
 export function listImportBatches() {

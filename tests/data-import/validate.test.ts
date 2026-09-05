@@ -142,6 +142,25 @@ describe("import validation", () => {
       expect(res.errorRows).toBe(1);
       expect(res.errors[0].field).toBe("scholarName");
     });
+
+    it("resolves by name alone when the scholarId cell is entirely blank, not rejected as Required", () => {
+      // A real production shape: the mentor left the ID cell empty but filled in the name. Before
+      // the checkFields carve-out, this was rejected with a generic "Required" before the name
+      // resolution below ever ran.
+      const batch = templateAdapter("MENTOR_REPORT", [{ scholarName: "Ana Pérez Gómez" }]);
+      const res = validateBatch(batch, identityCtx());
+      expect(res.errorRows).toBe(0);
+      expect(res.errors).toEqual([]);
+      expect((res.validated.MENTOR_REPORT ?? [])[0].scholarId).toBe("BT-CO-001");
+    });
+
+    it("still rejects with a specific message (not Required) when both the id and the name fail to resolve", () => {
+      const batch = templateAdapter("MENTOR_REPORT", [{ scholarName: "Nombre Con Error De Tipeo" }]);
+      const res = validateBatch(batch, identityCtx());
+      expect(res.errorRows).toBe(1);
+      expect(res.errors[0].field).toBe("scholarName");
+      expect(res.errors[0].message).toContain("Scholar not found by name");
+    });
   });
 
   it("flags a missing required field", () => {

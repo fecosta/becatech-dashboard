@@ -1,165 +1,18 @@
-// Legacy wide-Excel adapter. Normalizes the "SCHOLAR GENERAL INFO" tab — one row per
-// scholar with repeating per-term columns (GPA 2024-1, CRÉDITOS 2024-1, …) — into
-// SCHOLAR + ACADEMIC_TERM canonical rows. Term columns are detected by regex, so new
-// semesters are picked up automatically with no code change.
-//
-// Also dispatches, per sheet, to the MENTOR REPORTS and SUPPORT ACTIVITY LOG adapters — each
-// self-detects its own tab from its header shape, the same way this adapter self-detects
-// SCHOLAR GENERAL INFO — so a single LEGACY_WIDE_EXCEL upload (or sync call) handles whichever
-// of the three tabs it's given with no explicit entity/tab parameter.
-import * as XLSX from "xlsx";
-import { coerceValue } from "../coerce";
+// Multi-tab dispatcher for a raw "LEGACY_WIDE_EXCEL" upload/sync payload. Each of the three
+// operational tabs self-detects its own shape via its own adapter — SCHOLAR GENERAL INFO
+// (./scholar-general-info), MENTOR REPORTS (./mentor-reports), SUPPORT ACTIVITY LOG
+// (./legacy-support-activity) — so a single upload (or sync call) handles whichever of the three
+// it's given with no explicit entity/tab parameter. The per-tab field-mapping logic itself lives
+// in those adapter modules now (see docs/adr/007-spreadsheet-source-adapters.md); this file only
+// dispatches between them.
 import type { ParsedSheet } from "../parse";
-import type { CanonicalBatch, CanonicalRow, FieldType, RawRecord } from "../types";
-import { isMentorReportsSheet, mentorReportsLegacyAdapter } from "./legacy-mentor-reports";
+import type { CanonicalBatch, CanonicalRow } from "../types";
 import { isSupportActivityLogSheet, supportActivityLogLegacyAdapter } from "./legacy-support-activity";
-import { getAny, indexRecord, mapCountry, mapStatus, normKey } from "./shared";
+import { isMentorReportsSheet, mentorReportsLegacyAdapter } from "./mentor-reports";
+import { isGeneralInfoSheet, scholarGeneralInfoAdapter } from "./scholar-general-info";
+import { mapCountry } from "./shared";
 
-export { mapCountry };
-
-const TERM = String.raw`(\d{4}-\d)`;
-// Keep in sync with apps-script/Normalize.gs's TERM_RE_/CREDITS_RE_/ENROLLMENT_RE_/FAILED_RE_/
-// FAILED_DETAIL_RE_ (Task 5, header-migration plan) — two separate runtimes, no shared source.
-// "gpa" and the bare "materias reprobadas..." prefix are unchanged between the old Spanish and
-// new English sheet headers, so those two need no bilingual alternation.
-const RE = {
-  gpa: new RegExp(`^gpa ${TERM}$`),
-  credits: new RegExp(`^(?:creditos|credits) ${TERM}$`),
-  enrollment: new RegExp(`^(?:estado matricula|enrollment status) ${TERM}$`),
-  failed: new RegExp(`^materias reprobadas.*${TERM}$`),
-  failedDetail: new RegExp(`^mencionar las asignaturas ${TERM}$`),
-};
-// NOTE: unlike Normalize.gs (which reads cells positionally via getValues() arrays), this adapter
-// goes through XLSX.utils.sheet_to_json, which keys each row by its (normalized) header text —
-// duplicate literal header text collapses to one property, silently dropping the others. The new
-// sheet's bare "ESTADO FINAL" column repeats identically up to 4 times, so it CANNOT be resolved
-// here the way Normalize.gs's findAcademicStatusColumns_ resolves it positionally; academicStatus
-// stays unmapped for this (manual-upload) path until legacy.ts's row model is reworked to read
-// positionally too. Flagged, not fixed, in this pass — see Task 8's unmapped-columns list.
-
-/** A general-info header row has an ID column and at least one `GPA <term>` column. */
-function looksLikeGeneralInfoHeader(keys: string[]): boolean {
-  const hasId = keys.some((k) => k === "id" || k === "id_becario");
-  const hasTermGpa = keys.some((k) => RE.gpa.test(k));
-  return hasId && hasTermGpa;
-}
-
-export function isGeneralInfoSheet(records: Record<string, unknown>[]): boolean {
-  const sample = records[0];
-  if (!sample) return false;
-  return looksLikeGeneralInfoHeader(Object.keys(sample).map(normKey));
-}
-
-const HEADER_SCAN_LIMIT = 20;
-
-/**
- * Fallback for a raw export with decorative rows above the real header (e.g. a title row and a
- * block-label row before "ID, PAÍS, COHORTE, ..."), which `isGeneralInfoSheet`'s row-1 check
- * misses. Scans the first ~20 rows for the real header and, if found, returns records re-anchored
- * there plus that header's physical row index (for accurate rowNumber reporting) — same technique
- * as the MENTOR REPORTS adapter's dynamic header detection.
- */
-function findGeneralInfoRecords(sheet: ParsedSheet): { records: RawRecord[]; headerRowIndex: number } | null {
-  if (!sheet.sheet) return null;
-  const rawRows = XLSX.utils.sheet_to_json<unknown[]>(sheet.sheet, {
-    header: 1,
-    defval: null,
-    raw: true,
-    blankrows: true,
-  });
-  const startRow = sheet.sheet["!ref"] ? XLSX.utils.decode_range(sheet.sheet["!ref"]).s.r : 0;
-  const limit = Math.min(rawRows.length, HEADER_SCAN_LIMIT);
-  for (let i = 0; i < limit; i++) {
-    const keys = (rawRows[i] ?? []).map(normKey);
-    if (looksLikeGeneralInfoHeader(keys)) {
-      const headerRowIndex = startRow + i;
-      const records = XLSX.utils.sheet_to_json<RawRecord>(sheet.sheet, {
-        range: headerRowIndex,
-        defval: null,
-        raw: true,
-        blankrows: false,
-      });
-      return { records, headerRowIndex };
-    }
-  }
-  return null;
-}
-
-/**
- * First value whose normalized key starts with `prefix`. Needed for columns like "GÉNERO" whose
- * real-export header cell is actually "GÉNERO\n(M o F)" — a merged hint line that normKey folds
- * into "genero (m o f)", not the exact "genero" an equality lookup expects.
- */
-function getByKeyPrefix(idx: Map<string, unknown>, prefix: string): unknown {
-  for (const [k, v] of idx) {
-    if (k.startsWith(prefix)) return v;
-  }
-  return undefined;
-}
-
-
-function scholarRow(idx: Map<string, unknown>, rowNumber: number): CanonicalRow {
-  const c = (v: unknown, t: FieldType) => coerceValue(v, t);
-  return {
-    rowNumber,
-    data: {
-      scholarId: c(idx.get("id") ?? idx.get("id_becario"), "string"),
-      fullName: c(getAny(idx, ["nombre completo", "scholars name"]), "string"),
-      country: mapCountry(getAny(idx, ["pais", "country"])),
-      cohort: c(getAny(idx, ["cohorte", "cohort"]), "string"),
-      university: c(getAny(idx, ["universidad", "university"]), "string"),
-      academicProgram: c(getAny(idx, ["programa academico", "academic program"]), "string"),
-      gender: c(getByKeyPrefix(idx, "genero") ?? getByKeyPrefix(idx, "gender"), "string"),
-      programStatus: mapStatus(getAny(idx, ["estado actual", "current status"])),
-      // "current semester" (new sheet) is a distinct exact string, not a substring of
-      // "semester"/"semestre" (old sheet) — needs its own alias, not just the ?? fallback.
-      currentSemester: c(getAny(idx, ["semester", "semestre", "current semester"]), "int"),
-      startDate: c(getAny(idx, ["fecha de inicio", "started date"]), "date"),
-      // No new-sheet equivalent exists (only a bare "Estimated Graduation Year") — intentionally
-      // left null for new-sheet rows rather than derived from other fields.
-      expectedEndDate: c(idx.get("fecha de finalizacion"), "date"),
-    },
-  };
-}
-
-function generalInfoRows(
-  records: RawRecord[],
-  rowNumberOffset = 0,
-): { scholars: CanonicalRow[]; terms: CanonicalRow[] } {
-  const scholars: CanonicalRow[] = [];
-  const terms: CanonicalRow[] = [];
-
-  records.forEach((rec, i) => {
-    const rowNumber = rowNumberOffset + i + 2;
-    const idx = indexRecord(rec);
-    const scholarId = coerceValue(idx.get("id") ?? idx.get("id_becario"), "string");
-    if (typeof scholarId !== "string" || scholarId === "") return; // skip blank rows
-
-    scholars.push(scholarRow(idx, rowNumber));
-
-    // Collect per-term fields from the repeating wide columns.
-    const byTerm = new Map<string, Record<string, unknown>>();
-    const ensure = (term: string) => {
-      let e = byTerm.get(term);
-      if (!e) {
-        e = { scholarId, term };
-        byTerm.set(term, e);
-      }
-      return e;
-    };
-    for (const [key, value] of idx) {
-      let m: RegExpExecArray | null;
-      if ((m = RE.gpa.exec(key))) ensure(m[1]).gpa = coerceValue(value, "float");
-      else if ((m = RE.credits.exec(key))) ensure(m[1]).creditsEnrolled = coerceValue(value, "int");
-      else if ((m = RE.enrollment.exec(key))) ensure(m[1]).enrollmentStatus = coerceValue(value, "string");
-      else if ((m = RE.failed.exec(key))) ensure(m[1]).failedSubjectsCount = coerceValue(value, "int");
-      else if ((m = RE.failedDetail.exec(key))) ensure(m[1]).failedSubjectsDetail = coerceValue(value, "string");
-    }
-    for (const data of byTerm.values()) terms.push({ rowNumber, data });
-  });
-
-  return { scholars, terms };
-}
+export { isGeneralInfoSheet, mapCountry };
 
 export function legacyAdapter(sheets: ParsedSheet[]): CanonicalBatch {
   const scholars: CanonicalRow[] = [];
@@ -168,18 +21,10 @@ export function legacyAdapter(sheets: ParsedSheet[]): CanonicalBatch {
   const supportActivities: CanonicalRow[] = [];
 
   for (const sheet of sheets) {
-    if (isGeneralInfoSheet(sheet.records)) {
-      const rows = generalInfoRows(sheet.records);
-      scholars.push(...rows.scholars);
-      terms.push(...rows.terms);
-      continue;
-    }
-
-    const reAnchored = findGeneralInfoRecords(sheet);
-    if (reAnchored) {
-      const rows = generalInfoRows(reAnchored.records, reAnchored.headerRowIndex);
-      scholars.push(...rows.scholars);
-      terms.push(...rows.terms);
+    if (scholarGeneralInfoAdapter.canHandle(sheet)) {
+      const adapted = scholarGeneralInfoAdapter.adapt(sheet);
+      if (adapted.SCHOLAR) scholars.push(...adapted.SCHOLAR);
+      if (adapted.ACADEMIC_TERM) terms.push(...adapted.ACADEMIC_TERM);
     } else if (isMentorReportsSheet(sheet)) {
       mentorReports.push(...mentorReportsLegacyAdapter(sheet));
     } else if (isSupportActivityLogSheet(sheet)) {

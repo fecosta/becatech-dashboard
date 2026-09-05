@@ -117,8 +117,10 @@ Single flat header (no category row); one row per Jotform submission; `Submissio
 - **Reporting period columns:** `SEMESTER` (`2026-1`), `MONTH` (`MES 1`), `¿Qué mes reportas?` — the
   last feeds `reportingMonth`; the bare `MONTH`/`DATE` columns are left unmapped pending owner
   clarification.
-- **`GLOBAL STATUS`** (mentor's self-reported overall assessment) is stored as
-  `mentorReportedGlobalStatus` but **quarantined** — never fed into the derived risk engine.
+- **`GLOBAL STATUS`** (the program's own computed per-report risk classification) is stored as
+  `mentorReportedGlobalStatus` and is the **authoritative** risk source (see
+  `docs/adr/006-authoritative-monthly-risk.md`) — ingested verbatim into a `RiskAssessment` row on
+  commit, never recalculated by a derived risk engine.
 
 ## 4. HTML prototype (`design-reference/MVP_Dashboard JULY 2.html`)
 
