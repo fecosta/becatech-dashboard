@@ -123,6 +123,9 @@ export const TEMPLATE_COLUMNS: Record<ImportEntity, FieldDef[]> = {
   MONTHLY_STATUS: [
     { field: "scholarId", type: "string", required: true, example: "BT-CO-001" },
     { field: "period", type: "string", required: true, example: "MES 1" },
+    // Optional: disambiguates period across semesters (see docs/adr/008-risk-period-identity.md).
+    // This entity is currently unreachable via any live adapter (ADR-007) — no lookup fallback.
+    { field: "semester", type: "string", example: "2026-1" },
     { field: "globalRisk", type: "string", required: true, example: "SIN RIESGO" },
     { field: "academicAxis", type: "string", example: "SIN ALERTAS" },
     { field: "psychosocialAxis", type: "string", example: "BAJO" },

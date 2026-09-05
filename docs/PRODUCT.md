@@ -131,9 +131,9 @@ rationale per item.
 - **D1–D6 goal-vs-actual metrics, Skills by City/University** — the underlying `MAKERS` and
   `CONFIDENT ENGLISH` sheet columns are entirely empty; module tags and thresholds render, values
   stay `PENDING`.
-- **Risk history by semester** — `RiskAssessment` is keyed `(scholarId, period)` where `period`
-  is a program month; the same month number in two semesters shares one key, so rolling this up
-  would merge semesters.
+- **Risk history by semester** — `RiskAssessment` is now keyed `(scholarId, semester, period)`
+  (ADR-008), so the collision that used to merge semesters is fixed at the data layer; the
+  per-semester rollup UI itself just isn't built yet.
 - **University/operator contact details** — no source column.
 - **Every `META`/target row** — no approved program targets exist yet; renders `PENDING` rather
   than a guessed number.

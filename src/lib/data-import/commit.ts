@@ -108,14 +108,17 @@ export async function commitValidated(
         for (const r of results) if (r.wasInserted) recordCreate("MentorReport", r.id);
 
         // Ingest the authoritative risk from each report's GLOBAL STATUS (col Y) → RiskAssessment,
-        // keyed by the program month (MES n). Dedupe by [scholarId, period] — a scholar may have >1
-        // report in a MES; keep the last, since bulkUpsert can't touch the same conflict key twice
-        // in one statement. Unclassified reports (blank/unparseable GLOBAL STATUS, non-MES month)
-        // map to null and are skipped.
+        // keyed by (scholarId, semester, period) — see docs/adr/008-risk-period-identity.md.
+        // Dedupe by that same key — a scholar may have >1 report in a MES; keep the last, since
+        // bulkUpsert can't touch the same conflict key twice in one statement. Folding semester into
+        // this key (not just [scholarId, period]) is load-bearing, not defensive: two reports from
+        // different semesters for the same scholar+period must NOT collapse to one row here, or the
+        // other semester's row would be lost before ever reaching the database. Unclassified reports
+        // (blank/unparseable GLOBAL STATUS, non-MES month) map to null and are skipped.
         const riskByKey = new Map<string, Prisma.RiskAssessmentUncheckedCreateInput>();
         for (const m of validated.MENTOR_REPORT) {
           const risk = mentorReportToRisk(m);
-          if (risk) riskByKey.set(`${risk.scholarId}::${risk.period}`, risk);
+          if (risk) riskByKey.set(`${risk.scholarId}::${risk.semester ?? ""}::${risk.period}`, risk);
         }
         if (riskByKey.size > 0) {
           const riskRows = [...riskByKey.values()].map((r) => ({
@@ -123,7 +126,13 @@ export async function commitValidated(
             id: randomUUID(),
             updatedAt: new Date(),
           }));
-          const riskRes = await bulkUpsert(tx, "RiskAssessment", "id", ["scholarId", "period"], riskRows);
+          const riskRes = await bulkUpsert(
+            tx,
+            "RiskAssessment",
+            "id",
+            ["scholarId", "semester", "period"],
+            riskRows,
+          );
           for (const r of riskRes) if (r.wasInserted) recordCreate("RiskAssessment", r.id);
         }
         successRows += validated.MENTOR_REPORT.length;
@@ -131,17 +140,24 @@ export async function commitValidated(
 
       if (validated.MONTHLY_STATUS.length > 0) {
         // Manual risk-classification import → RiskAssessment. Upsert on the natural key
-        // [scholarId, period]; dedupe first (bulkUpsert can't touch the same conflict key twice in
-        // one statement). RiskAssessment has no importBatchId, so these rows aren't
-        // insert-rollback-tracked (acceptable: they're a mirror of the sheet, re-set on next sync).
+        // [scholarId, semester, period] (see docs/adr/008-risk-period-identity.md); dedupe first
+        // (bulkUpsert can't touch the same conflict key twice in one statement). RiskAssessment has
+        // no importBatchId, so these rows aren't insert-rollback-tracked (acceptable: they're a
+        // mirror of the sheet, re-set on next sync).
         const byKey = new Map<string, (typeof validated.MONTHLY_STATUS)[number]>();
-        for (const r of validated.MONTHLY_STATUS) byKey.set(`${r.scholarId}::${r.period}`, r);
+        for (const r of validated.MONTHLY_STATUS) byKey.set(`${r.scholarId}::${r.semester ?? ""}::${r.period}`, r);
         const rows = [...byKey.values()].map((r) => ({
           ...r,
           id: randomUUID(),
           updatedAt: new Date(),
         }));
-        const results = await bulkUpsert(tx, "RiskAssessment", "id", ["scholarId", "period"], rows);
+        const results = await bulkUpsert(
+          tx,
+          "RiskAssessment",
+          "id",
+          ["scholarId", "semester", "period"],
+          rows,
+        );
         for (const r of results) if (r.wasInserted) recordCreate("RiskAssessment", r.id);
         successRows += rows.length;
       }

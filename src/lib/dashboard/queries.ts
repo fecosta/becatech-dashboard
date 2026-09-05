@@ -153,9 +153,15 @@ function financialWhere(filters: DashboardFilters): Prisma.FinancialInputWhereIn
   };
 }
 
-// The "current period" is the latest month on record. Program months ("MES n") order by number,
-// not lexically; if the sheet reports calendar months instead ("2026-03"), those sort
-// chronologically as strings. Prefer the latest MES, else the latest value.
+// The "current period" is the latest month on record, across ALL semesters — semester-agnostic by
+// design today (unchanged by ADR-008). RiskAssessment.semester now exists and is populated, so a
+// semester-scoped "current period" is a matter of filtering an existing column, not a schema gap —
+// but doing so needs a semester dimension threaded through DashboardFilters/the URL/UI, which is
+// out of scope here. See docs/adr/008-risk-period-identity.md.
+//
+// Program months ("MES n") order by number, not lexically; if the sheet reports calendar months
+// instead ("2026-03"), those sort chronologically as strings. Prefer the latest MES, else the
+// latest value.
 async function getCurrentPeriod(): Promise<string> {
   const rows = await prisma.riskAssessment.findMany({ select: { period: true }, distinct: ["period"] });
   const periods = rows.map((r) => r.period);
@@ -208,6 +214,11 @@ export async function getFilterOptions(): Promise<FilterOptions> {
 // Mentor reports are spread across months, so "latest ≤ current" shows every scholar's standing
 // (not just those who happened to report in the newest month). Period ordering is program-month
 // aware (MES n by number; calendar months as strings).
+//
+// Semester-agnostic by design today (unchanged by ADR-008): if a scholar has rows in two different
+// semesters at the same MES n, picking between them here is ambiguous. Fixing that needs a
+// semester dimension in DashboardFilters/the URL, out of scope for the identity fix — see
+// docs/adr/008-risk-period-identity.md.
 async function currentRiskByScholar(
   scholarIds: string[],
   currentPeriod: string,
@@ -773,6 +784,12 @@ export async function getRiskBreakdowns(filters: DashboardFilters = {}): Promise
 /**
  * Early Support's "Monthly Change in Risk Level" line chart — the % of in-scope scholars
  * at Medium+ risk per month, across every period on record (not just the latest one).
+ *
+ * Aggregates by bare `period` across ALL semesters, unchanged by ADR-008 — a "MES 3" from two
+ * different semesters still merges into one point today. Deferred alongside the M1→M6 trend graph
+ * (docs/prototype-comparison.md, docs/PRODUCT.md); RiskAssessment.semester now exists and is
+ * populated, so scoping this by semester is unblocked at the data layer whenever that UI work
+ * happens. See docs/adr/008-risk-period-identity.md.
  */
 export async function getMonthlyRiskTrend(
   filters: DashboardFilters = {},

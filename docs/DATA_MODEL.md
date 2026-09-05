@@ -57,9 +57,12 @@ Real `@@unique`/`@@index` entries from the schema (not exhaustive field-level `@
 
 - `AcademicTerm` — `@@unique([scholarId, term])`
 - `SupportActivity` — `@@unique([scholarId, period, activityType, source])`
-- `RiskAssessment` — `@@unique([scholarId, period])` — one classification per scholar per period;
-  this is why risk history cannot currently be rolled up by semester (the same program month in
-  two semesters shares one key — see `docs/PRODUCT.md`'s Out of Scope section)
+- `RiskAssessment` — `@@unique([scholarId, semester, period])` — one classification per scholar per
+  semester per period. `semester` (nullable — see `docs/adr/008-risk-period-identity.md`) closes
+  the prior collision where the same program month in two different semesters shared one key;
+  `period` is unchanged in meaning and computation. Identity now supports a per-semester risk
+  rollup, but the query/UI layer doesn't build one yet — see ADR-008 and `docs/PRODUCT.md`'s Out of
+  Scope section.
 - `ControlValue` — `@@unique([category, value])`
 - `UserScholarAccess` — `@@unique([userId, scholarId, accessType])`
 

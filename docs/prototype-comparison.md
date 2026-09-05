@@ -74,7 +74,7 @@ plausible-looking placeholder in a goal row is worse than a visible gap.
 | Individual profile as a route | **Implemented (beyond the design)** | `/dashboard/scholars/[scholarId]`, keyed on `Scholar.scholarId`. Both lists link to it with `target="_blank"`, so the list you were working through stays put. Survives refresh and direct URL entry; the design's one-HTML-file prototype has no equivalent |
 | Identity & Program, three panels | **Implemented** | Personal / Sociodemographic / Academic, under an avatar + name header |
 | Academic performance (GPA trend, snapshot) | **Implemented** | the two chips that both read "Academic Progress" now name what they measure |
-| Risk history by semester | **Defer** | `RiskAssessment` is keyed `(scholarId, period)` where period is a program month, so the same month in two semesters shares one key. Rolling up would merge semesters |
+| Risk history by semester | **Defer** | `RiskAssessment` is now keyed `(scholarId, semester, period)` (ADR-008), so the identity collision that used to merge semesters is fixed — the rollup UI itself just isn't built yet |
 | Monthly detail | **Implemented** | |
 | Scholar "Age" | **Reject as stored** | derived from `dateOfBirth` at query time, not a stored field |
 | Full Record | **Implemented (beyond the design)** | collapsed behind a `<details>`; holds the only copy of terms, check-ins, mentor reports, requests and financial records |
@@ -104,5 +104,8 @@ plausible-looking placeholder in a goal row is worse than a visible gap.
 ## Known defects this pass surfaced but did not fix
 
 Deferred deliberately (see the plan): GPA and progress fields absent from the sheet sync's
-`ACADEMIC_TERM_HEADER_`; `RiskAssessment`'s two-column unique key overwriting across semesters;
-the unmapped bare `MONTH` column; and `parseFilters` rejecting `"MES n"` periods.
+`ACADEMIC_TERM_HEADER_`; the unmapped bare `MONTH` column; and `parseFilters` rejecting `"MES n"`
+periods. `RiskAssessment`'s two-column unique key overwriting across semesters is now **fixed**
+(ADR-008, `docs/adr/008-risk-period-identity.md`) — the identity is trustworthy, though the
+semester-scoped views built on top of it (M1→M6 trend, profile risk-history rollup) remain
+deferred.

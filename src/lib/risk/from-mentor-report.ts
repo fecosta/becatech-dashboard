@@ -27,6 +27,14 @@ export function programMonthKey(month: string | null | undefined): string | null
  *
  * The period is the report's month: a canonical "MES n" when it's a program-month label, otherwise
  * the month value as-is (some sheets report a calendar month like "2026-03"). Either keys risk fine.
+ *
+ * `semester` (see docs/adr/008-risk-period-identity.md) is carried through when the report has one,
+ * but is deliberately NOT part of this function's null-guard: MentorReport.semester is an optional
+ * sheet column with no working calendar-window fallback for any semester past 2026-1 (see
+ * src/lib/program-calendar.ts), so refusing to classify a scholar-month over a missing semester
+ * would silently drop it from every risk dashboard instead of merely leaving it unable to
+ * disambiguate against another semester's same-numbered month -- a strictly worse failure mode
+ * than the collision this field exists to fix.
  */
 export function mentorReportToRisk(
   r: Prisma.MentorReportUncheckedCreateInput,
@@ -36,6 +44,7 @@ export function mentorReportToRisk(
   const period = programMonthKey(rawMonth) ?? (rawMonth || null);
   if (!global || !period) return null;
 
+  const semester = typeof r.semester === "string" ? r.semester.trim() || null : null;
   const academic = parseRiskClassification(r.academicStatus ?? null);
   const psychosocial = parseRiskClassification(r.psychosocialStatus ?? null);
   const academicValue = academic ? riskValueFromLevel(academic) : null;
@@ -44,6 +53,7 @@ export function mentorReportToRisk(
   return {
     scholarId: r.scholarId,
     period,
+    semester,
     globalRiskLevel: global,
     globalRiskValue: riskValueFromLevel(global),
     academicRiskLevel: academic ?? "SIN_RIESGO",
