@@ -35,7 +35,7 @@ plausible-looking placeholder in a goal row is worse than a visible gap.
 | 5 · Where Our Scholars Are From | **Implemented** | reads `departmentOrigin` (where they grew up), replacing the by-city chart which read `currentMunicipality` |
 | 6 · Program Satisfaction | **Unsupported** | no approved formula or data; the design self-labels it `PROXY` |
 | 7 · Retention & Dropout by University | **Implemented** | ranked worst dropout first and colour-banded, per the design's legend |
-| 8.1 Academic standing by country | **Implemented** | reads `Scholar.academicProgress`, which was synced but read by nothing. **Not** `AcademicTerm.expectedProgressStatus` — see the audit note below |
+| 8.1 Academic standing by country | **Implemented** | reads `Scholar.academicProgress`, which was synced but read by nothing. **Not** `AcademicTerm.expectedProgressStatus`/`accumulatedGpa`/`progressPercentage` — those are populated by the manual-upload adapter (`src/lib/data-import/adapters/scholar-general-info.ts`) but still absent from the automated Google Sheets sync's `ACADEMIC_TERM_HEADER_` (`apps-script/Normalize.gs`), so they remain empty on any scholar imported only via the live sync |
 | 8.2 English level by country | **Adapt** | the design's A1–C2 table sums to 100%; roughly a quarter of scholars have no level recorded, so ours publishes coverage beside the percentages |
 | 8.3/8.4 GPA by cohort per country | **Implemented** | reads `AcademicTerm.gpa`; terms stored as a literal `0` mean "not enrolled" and are excluded with the count published. Colombia /5 and Peru /20 are never blended |
 | Narrative intro band, FactStrip | **Reject (dropped by the design)** | the framing moved into the page subtitle and section 1 |

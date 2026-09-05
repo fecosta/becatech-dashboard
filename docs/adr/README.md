@@ -54,3 +54,5 @@ than fabricate one.
 | [004](004-role-and-scholar-access-control.md) | Role and Scholar Access Control | Accepted |
 | [005](005-prisma-migrations.md) | Prisma Migrations | Accepted |
 | [006](006-authoritative-monthly-risk.md) | Authoritative Monthly Risk Source | Accepted |
+| [007](007-spreadsheet-source-adapters.md) | Spreadsheet Source Adapters and Canonical Ingestion | Proposed |
+| [008](008-risk-period-identity.md) | Risk Period Identity Across Semesters | Proposed |
