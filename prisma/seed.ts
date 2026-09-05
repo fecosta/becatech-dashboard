@@ -589,6 +589,7 @@ async function main() {
           country,
           cohort,
           university,
+          semester: "2026-1",
           reportingMonth: month,
           registrationDate: monthToDate(month, randInt(20, 28)),
           sessionDate: monthToDate(month, randInt(3, 18)),
@@ -681,6 +682,7 @@ async function main() {
       riskAssessments.push({
         scholarId,
         period,
+        semester: "2026-1",
         country,
         cohort,
         university,

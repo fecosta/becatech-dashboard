@@ -436,6 +436,12 @@ model RiskAssessment {
   id                      String           @id @default(cuid())
   scholarId               String
   period                  String
+  // Sheet's own SEMESTER column value (e.g. "2026-1"), sourced from MentorReport.semester at
+  // commit time. Nullable: MentorReport.semester is itself optional (source-contract "optional"
+  // group) with no working calendar-window fallback for any semester past 2026-1 (see
+  // src/lib/program-calendar.ts), and legacy pre-migration rows may be unresolved. See
+  // docs/adr/008-risk-period-identity.md.
+  semester                String?
   country                 Country?
   cohort                  String?
   university              String?
@@ -469,9 +475,10 @@ model RiskAssessment {
 
   scholar Scholar @relation(fields: [scholarId], references: [scholarId], onDelete: Cascade)
 
-  @@unique([scholarId, period])
+  @@unique([scholarId, semester, period])
   @@index([globalRiskLevel])
   @@index([period])
+  @@index([semester, period])
 }
 
 model FinancialInput {

@@ -155,6 +155,10 @@ async function recomputeOneScholar(scholarId: string, batchPeriods: string[]): P
         participation,
       );
 
+      // This function has no semester derivation of its own (it operates on raw calendar-month
+      // periods from checkins/mentor reports, not "MES n" labels) and is unwired from the commit
+      // pipeline (ADR-006) with zero live callers — kept compiling after ADR-008's identity change,
+      // not re-wired. `semester: null` below is a deliberate, honest placeholder, not a guess.
       const prev = await prisma.riskAssessment.findFirst({
         where: { scholarId, period: { lt: period } },
         orderBy: { period: "desc" },
@@ -183,18 +187,30 @@ async function recomputeOneScholar(scholarId: string, batchPeriods: string[]): P
         source: "import-recompute",
       };
 
-      await prisma.riskAssessment.upsert({
-        where: { scholarId_period: { scholarId, period } },
-        update: fields,
-        create: {
-          scholarId,
-          period,
-          country: scholar.country,
-          cohort: scholar.cohort,
-          university: scholar.university.name,
-          ...fields,
-        },
+      // Prisma's compound-unique `where` shorthand for (scholarId, semester, period) can't express a
+      // null `semester` (a unique lookup can never match on NULL = NULL), so this can't use
+      // `upsert()`'s compound-key form the way the pre-ADR-008 (scholarId, period) key could. Falls
+      // back to findFirst + create/update — non-atomic, but this path is unwired from the commit
+      // pipeline with no concurrent callers, so that's an acceptable trade for dead code.
+      const existingRisk = await prisma.riskAssessment.findFirst({
+        where: { scholarId, semester: null, period },
+        select: { id: true },
       });
+      if (existingRisk) {
+        await prisma.riskAssessment.update({ where: { id: existingRisk.id }, data: fields });
+      } else {
+        await prisma.riskAssessment.create({
+          data: {
+            scholarId,
+            semester: null,
+            period,
+            country: scholar.country,
+            cohort: scholar.cohort,
+            university: scholar.university.name,
+            ...fields,
+          },
+        });
+      }
       count += 1;
     }
   }
