@@ -48,7 +48,7 @@ plausible-looking placeholder in a goal row is worse than a visible gap.
 | 2.1 Status donut + companion table | **Implemented** | description column reuses `RISK_LEVEL_NOTE` |
 | 2.2 Reasons for risk, academic vs psychosocial | **Implemented (newly unblocked)** | `MentorReport.academicAlertType` / `psychosocialAlertType` were already synced and read by nothing. Grouped by `lib/risk/reason-taxonomy.ts`. The two axes overlap for most at-risk scholars, so each table carries its own denominator — they do not sum to the at-risk total, and the UI says so |
 | 2.3 Participation by activity and risk tier | **Implemented** | one group-by over the mentor-report counts; every percentage ships with its denominator, because those columns default to zero and a blank report is indistinguishable from a real zero |
-| 2.3 M1→M6 trend | **Defer** | risk periods are keyed two ways — the sheet column carrying the first two program months is unmapped, so the fallback keys them to a calendar month. An M1→M6 line would compare unlike periods |
+| 2.3 M1→M6 trend | **Implemented** | scoped to one semester (`RiskAssessment.semester`, ADR-008); a line chart + trend table comparing % participation (≥1 activity) against % Medium+ risk, per program month, with month-over-month deltas. A missing month (no scholar classified that month) renders as an explicit no-data gap, never a misleading 0% |
 | 2.4 Status per university | **Implemented** | |
 | 2.5 Risk level by gender | **Implemented** | now a table, per the design |
 | 2.6 Risk by socioeconomic condition | **Implemented (beyond the design)** | the design drops it; kept because whether vulnerability predicts risk is the program's core thesis and nothing else answers it. Confirm with the client |
@@ -74,7 +74,7 @@ plausible-looking placeholder in a goal row is worse than a visible gap.
 | Individual profile as a route | **Implemented (beyond the design)** | `/dashboard/scholars/[scholarId]`, keyed on `Scholar.scholarId`. Both lists link to it with `target="_blank"`, so the list you were working through stays put. Survives refresh and direct URL entry; the design's one-HTML-file prototype has no equivalent |
 | Identity & Program, three panels | **Implemented** | Personal / Sociodemographic / Academic, under an avatar + name header |
 | Academic performance (GPA trend, snapshot) | **Implemented** | the two chips that both read "Academic Progress" now name what they measure |
-| Risk history by semester | **Defer** | `RiskAssessment` is keyed `(scholarId, period)` where period is a program month, so the same month in two semesters shares one key. Rolling up would merge semesters |
+| Risk history by semester | **Defer** | `RiskAssessment` is now keyed `(scholarId, semester, period)` (ADR-008), so the identity collision that used to merge semesters is fixed — the rollup UI itself just isn't built yet |
 | Monthly detail | **Implemented** | |
 | Scholar "Age" | **Reject as stored** | derived from `dateOfBirth` at query time, not a stored field |
 | Full Record | **Implemented (beyond the design)** | collapsed behind a `<details>`; holds the only copy of terms, check-ins, mentor reports, requests and financial records |
@@ -104,5 +104,8 @@ plausible-looking placeholder in a goal row is worse than a visible gap.
 ## Known defects this pass surfaced but did not fix
 
 Deferred deliberately (see the plan): GPA and progress fields absent from the sheet sync's
-`ACADEMIC_TERM_HEADER_`; `RiskAssessment`'s two-column unique key overwriting across semesters;
-the unmapped bare `MONTH` column; and `parseFilters` rejecting `"MES n"` periods.
+`ACADEMIC_TERM_HEADER_`; the unmapped bare `MONTH` column; and `parseFilters` rejecting `"MES n"`
+periods. `RiskAssessment`'s two-column unique key overwriting across semesters is now **fixed**
+(ADR-008, `docs/adr/008-risk-period-identity.md`), and the M1→M6 participation-vs-risk trend built
+on top of it now **shipped** (Early Support, section 2.3). The Scholar Profile's semester-scoped
+risk-history rollup remains deferred — the identity is trustworthy for it too, it just isn't built.

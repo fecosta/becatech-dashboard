@@ -259,6 +259,7 @@ function buildMonthlyStatus(row: CanonicalRow): Prisma.RiskAssessmentUncheckedCr
   return {
     scholarId: gS(row, "scholarId")!,
     period: gS(row, "period")!,
+    semester: gS(row, "semester"),
     globalRiskLevel: global,
     globalRiskValue: riskValueFromLevel(global),
     academicRiskLevel: academic ?? "SIN_RIESGO",

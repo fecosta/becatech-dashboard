@@ -36,6 +36,12 @@ export interface DashboardFilters {
   riskLevel?: RiskLevel;
   period?: string;
   /**
+   * RiskAssessment.semester ("2026-1"). Chooses which semester a semester-scoped view (e.g. the
+   * M1→M6 participation/risk trend) resolves against; defaults to the latest semester with data.
+   * See docs/adr/008-risk-period-identity.md.
+   */
+  semester?: string;
+  /**
    * Program stage (Early Support vs. Career Readiness). Injected by the stage pages,
    * not parsed from the URL; applied as a `Scholar.currentSemester` range. Scholars
    * with a null currentSemester match neither stage. See lib/academic/program-stage.ts.
@@ -252,6 +258,8 @@ export interface FilterOptions {
   periods: string[];
   /** Distinct Scholar.currentDepartment values (Home's department filter pill). */
   departments: string[];
+  /** Distinct RiskAssessment.semester values, chronologically sorted (Early Support's semester pill). */
+  semesters: string[];
 }
 
 export interface ScholarDirectoryRow {
@@ -330,6 +338,36 @@ export interface MonthlyRiskTrendPoint {
   period: string;
   /** % of in-scope scholars with a risk row this period at RIESGO_MEDIO or above. */
   mediumPlusPct: number;
+}
+
+/**
+ * One M1..M6 point of the Early Support participation-vs-risk trend, scoped to a single semester
+ * (see docs/adr/008-risk-period-identity.md). Both metrics share one per-month denominator: the
+ * risk-eligible scholars who actually have a RiskAssessment row for that (semester, program month)
+ * — i.e. were classified that month. A scholar who reported activity but wasn't validly classified
+ * that month (blank/unrecognized GLOBAL STATUS) counts toward neither metric, keeping the two
+ * series directly comparable against the same base population every month.
+ *
+ * `*Pct` is null exactly when its denominator is 0 (no scholar classified that month — genuinely
+ * no data, e.g. the month hasn't been reported yet), never a misleading 0%. A real zero (someone
+ * was classified, but nobody in that set participated) renders as `participationPct: 0`.
+ */
+export interface MonthlyParticipationRiskPoint {
+  /** 1..6 ("MES n" canonicalized to a number) — not a calendar month. */
+  programMonth: number;
+  participationCount: number;
+  participationDenominator: number;
+  participationPct: number | null;
+  mediumPlusRiskCount: number;
+  riskDenominator: number;
+  mediumPlusRiskPct: number | null;
+}
+
+export interface MonthlyParticipationRiskTrend {
+  /** The semester these 6 points are scoped to (filters.semester, or the latest with data). */
+  semester: string;
+  /** Always 6 entries, programMonth 1..6 in order — missing months still appear, with null pcts. */
+  points: MonthlyParticipationRiskPoint[];
 }
 
 /** One low-risk-% row for a risk breakdown (by city / gender / socioeconomic). */

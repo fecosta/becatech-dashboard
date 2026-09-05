@@ -42,9 +42,11 @@ describe("import pipeline (integration)", () => {
   it("ingests the stored monthly risk classification into RiskAssessment (MONTHLY_STATUS)", async () => {
     // Global risk is now INGESTED from the SUPPORT ACTIVITY LOG (its sheet-computed classification),
     // not derived. A MONTHLY_STATUS row maps the Spanish levels straight onto RiskAssessment.
+    // `semester` is an optional column on this entity (see docs/adr/008-risk-period-identity.md) —
+    // when present it passes straight through onto the RiskAssessment row.
     const data = csvBuffer(
-      "scholarId,period,globalRisk,academicAxis,psychosocialAxis\n" +
-        "BT-CO-001,MES 1,RIESGO ALTO,ALTO,SIN ALERTAS\n",
+      "scholarId,period,semester,globalRisk,academicAxis,psychosocialAxis\n" +
+        "BT-CO-001,MES 1,2026-1,RIESGO ALTO,ALTO,SIN ALERTAS\n",
     );
     const { batchId, result } = await createImportBatch({
       data,
@@ -58,7 +60,7 @@ describe("import pipeline (integration)", () => {
     expect(recomputed).toBe(0); // ingested, never recomputed
 
     const risk = await prisma.riskAssessment.findUnique({
-      where: { scholarId_period: { scholarId: "BT-CO-001", period: "MES 1" } },
+      where: { scholarId_semester_period: { scholarId: "BT-CO-001", semester: "2026-1", period: "MES 1" } },
     });
     expect(risk?.source).toBe("sheet");
     expect(risk?.globalRiskLevel).toBe("RIESGO_ALTO");
@@ -113,8 +115,11 @@ describe("import pipeline (integration)", () => {
     const { recomputed } = await commitImportBatch(batchId);
     expect(recomputed).toBe(0); // ingested from GLOBAL STATUS, never recomputed
 
-    const risk = await prisma.riskAssessment.findUnique({
-      where: { scholarId_period: { scholarId: "BT-CO-001", period: "MES 1" } },
+    // No `semester` column and no `country` (so the calendar-derived fallback can't resolve one
+    // either) — the risk row is still created (graceful degradation, see
+    // docs/adr/008-risk-period-identity.md), just with a null semester.
+    const risk = await prisma.riskAssessment.findFirst({
+      where: { scholarId: "BT-CO-001", semester: null, period: "MES 1" },
     });
     expect(risk?.source).toBe("mentor-report");
     expect(risk?.globalRiskLevel).toBe("RIESGO_ALTO");
@@ -152,8 +157,9 @@ describe("import pipeline (integration)", () => {
       uploadedById: uploaderId,
     });
     await commitImportBatch(batchId);
-    const risk = await prisma.riskAssessment.findUnique({
-      where: { scholarId_period: { scholarId: "BT-CO-001", period: "2026-03" } },
+    // No country/semester column → graceful degradation, semester stays null.
+    const risk = await prisma.riskAssessment.findFirst({
+      where: { scholarId: "BT-CO-001", semester: null, period: "2026-03" },
     });
     expect(risk?.source).toBe("mentor-report");
     expect(risk?.globalRiskLevel).toBe("RIESGO_ALTO");
@@ -179,7 +185,7 @@ describe("import pipeline (integration)", () => {
     // Additive: reportingMonth (calendar) still drives the risk period, untouched by programMonth.
     expect(report?.reportingMonth).toBe("2026-05");
     const risk = await prisma.riskAssessment.findUnique({
-      where: { scholarId_period: { scholarId: "BT-CO-001", period: "2026-05" } },
+      where: { scholarId_semester_period: { scholarId: "BT-CO-001", semester: "2026-1", period: "2026-05" } },
     });
     expect(risk?.globalRiskLevel).toBe("RIESGO_ALTO");
   });
@@ -202,10 +208,100 @@ describe("import pipeline (integration)", () => {
     const report = await prisma.mentorReport.findUnique({ where: { submissionId: "sub-pm-2" } });
     expect(report).not.toBeNull(); // report still committed
     expect(report?.programMonth).toBeNull(); // out of window → null
-    const risk = await prisma.riskAssessment.findUnique({
-      where: { scholarId_period: { scholarId: "BT-CO-001", period: "2026-01" } },
+    expect(report?.semester).toBeNull(); // same out-of-window gap: no calendar fallback either
+    // Risk still commits (graceful degradation) with a null semester, not a fabricated one.
+    const risk = await prisma.riskAssessment.findFirst({
+      where: { scholarId: "BT-CO-001", semester: null, period: "2026-01" },
     });
     expect(risk?.globalRiskLevel).toBe("RIESGO_ALTO");
+  });
+
+  it("two semesters' reports at the same MES n coexist as separate RiskAssessment rows (collision fix)", async () => {
+    const data = csvBuffer(
+      "scholarId,reportingMonth,submissionId,mentorReportedGlobalStatus,semester\n" +
+        "BT-CO-001,MES 3,sub-collision-1,RIESGO ALTO,2026-1\n" +
+        "BT-CO-001,MES 3,sub-collision-2,RIESGO BAJO,2026-2\n",
+    );
+    const { batchId } = await createImportBatch({
+      data,
+      filename: "mentor.csv",
+      sourceType: "TEMPLATE",
+      entity: "MENTOR_REPORT",
+      uploadedById: uploaderId,
+    });
+    await commitImportBatch(batchId);
+
+    expect(await prisma.riskAssessment.count({ where: { scholarId: "BT-CO-001", period: "MES 3" } })).toBe(2);
+
+    const first = await prisma.riskAssessment.findUnique({
+      where: { scholarId_semester_period: { scholarId: "BT-CO-001", semester: "2026-1", period: "MES 3" } },
+    });
+    const second = await prisma.riskAssessment.findUnique({
+      where: { scholarId_semester_period: { scholarId: "BT-CO-001", semester: "2026-2", period: "MES 3" } },
+    });
+    expect(first?.globalRiskLevel).toBe("RIESGO_ALTO");
+    expect(second?.globalRiskLevel).toBe("RIESGO_BAJO");
+  });
+
+  it("isolation: querying one semester's MES n never returns another semester's same-numbered month", async () => {
+    const data = csvBuffer(
+      "scholarId,reportingMonth,submissionId,mentorReportedGlobalStatus,semester\n" +
+        "BT-CO-001,MES 3,sub-iso-1,RIESGO ALTO,2026-1\n" +
+        "BT-CO-001,MES 3,sub-iso-2,RIESGO BAJO,2026-2\n",
+    );
+    const { batchId } = await createImportBatch({
+      data,
+      filename: "mentor.csv",
+      sourceType: "TEMPLATE",
+      entity: "MENTOR_REPORT",
+      uploadedById: uploaderId,
+    });
+    await commitImportBatch(batchId);
+
+    const scopedTo2026_1 = await prisma.riskAssessment.findMany({
+      where: { scholarId: "BT-CO-001", semester: "2026-1", period: "MES 3" },
+    });
+    expect(scopedTo2026_1).toHaveLength(1);
+    expect(scopedTo2026_1[0].globalRiskLevel).toBe("RIESGO_ALTO");
+    expect(scopedTo2026_1[0].semester).toBe("2026-1");
+  });
+
+  it("idempotent re-import: same scholar/semester/period updates the same RiskAssessment row", async () => {
+    const first = csvBuffer(
+      "scholarId,reportingMonth,submissionId,mentorReportedGlobalStatus,semester\n" +
+        "BT-CO-001,MES 4,sub-idem-risk-1,RIESGO ALTO,2026-1\n",
+    );
+    const { batchId: batch1 } = await createImportBatch({
+      data: first,
+      filename: "mentor.csv",
+      sourceType: "TEMPLATE",
+      entity: "MENTOR_REPORT",
+      uploadedById: uploaderId,
+    });
+    await commitImportBatch(batch1);
+
+    // A later sync of the SAME scholar/semester/period with an updated GLOBAL STATUS (a different
+    // submissionId, as a re-sync of the same report would use if the sheet regenerated it).
+    const second = csvBuffer(
+      "scholarId,reportingMonth,submissionId,mentorReportedGlobalStatus,semester\n" +
+        "BT-CO-001,MES 4,sub-idem-risk-2,RIESGO BAJO,2026-1\n",
+    );
+    const { batchId: batch2 } = await createImportBatch({
+      data: second,
+      filename: "mentor.csv",
+      sourceType: "TEMPLATE",
+      entity: "MENTOR_REPORT",
+      uploadedById: uploaderId,
+    });
+    await commitImportBatch(batch2);
+
+    expect(
+      await prisma.riskAssessment.count({ where: { scholarId: "BT-CO-001", semester: "2026-1", period: "MES 4" } }),
+    ).toBe(1);
+    const risk = await prisma.riskAssessment.findUnique({
+      where: { scholarId_semester_period: { scholarId: "BT-CO-001", semester: "2026-1", period: "MES 4" } },
+    });
+    expect(risk?.globalRiskLevel).toBe("RIESGO_BAJO"); // updated in place, not duplicated
   });
 
   it("legacy wide .xlsx: normalizes into scholar + academic terms", async () => {

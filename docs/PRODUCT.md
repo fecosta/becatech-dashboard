@@ -126,14 +126,17 @@ rationale per item.
 - **Vulnerability tiers** — the tier mapping exists but is behind an unapproved flag
   (`TIER_MAPPING_APPROVED` in `src/lib/scholars/socioeconomic-tier.ts`) pending a naming decision.
 - **Program Satisfaction** — no approved formula or data source; shown as `PROXY`.
-- **M1→M6 risk trend** — deferred; risk periods are keyed two different ways (program month vs.
-  calendar-month fallback), so a straight trend line would compare unlike periods.
+- **M1→M6 risk trend** — implemented (Early Support, section 2.3), scoped to one semester via
+  `RiskAssessment.semester` (ADR-008). Only "MES n"-labeled scholar-months plot on the M1→M6 axis;
+  a report whose period fell back to a calendar month (the sheet's bare `MONTH` column is still
+  unmapped) simply doesn't appear on this trend, rather than being compared as if it were the same
+  program month.
 - **D1–D6 goal-vs-actual metrics, Skills by City/University** — the underlying `MAKERS` and
   `CONFIDENT ENGLISH` sheet columns are entirely empty; module tags and thresholds render, values
   stay `PENDING`.
-- **Risk history by semester** — `RiskAssessment` is keyed `(scholarId, period)` where `period`
-  is a program month; the same month number in two semesters shares one key, so rolling this up
-  would merge semesters.
+- **Risk history by semester** — `RiskAssessment` is now keyed `(scholarId, semester, period)`
+  (ADR-008), so the collision that used to merge semesters is fixed at the data layer; the
+  per-semester rollup UI itself just isn't built yet.
 - **University/operator contact details** — no source column.
 - **Every `META`/target row** — no approved program targets exist yet; renders `PENDING` rather
   than a guessed number.

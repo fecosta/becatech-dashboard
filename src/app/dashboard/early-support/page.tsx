@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import type { AlertType, RiskLevel } from "@/generated/prisma/enums";
 import { ComboBarLineCard, Donut, LineCard } from "@/components/charts";
 import { PaceBarChart } from "@/components/PaceBarChart";
@@ -24,6 +25,7 @@ import {
   getAcademicProgress,
   getExecutiveOverview,
   getHomeOverview,
+  getMonthlyParticipationRiskTrend,
   getMonthlyRiskTrend,
   getRiskBreakdowns,
   getParticipationByActivityAndRisk,
@@ -40,6 +42,7 @@ import {
   RISK_TIER_LABEL,
   RISK_TIER_ORDER,
 } from "@/lib/dashboard/risk-tier";
+import { computeDelta, deltaTone } from "@/lib/dashboard/trend-delta";
 import { fmtInt, fmtPct } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -67,6 +70,33 @@ const PARTICIPATION_TONE: Record<RiskLevel, "green" | "default" | "red"> = {
   RIESGO_ALTO: "red",
   CRITICO: "red",
 };
+
+const toWholePct = (pct: number | null): number | null => (pct == null ? null : Math.round(pct * 100));
+
+/**
+ * One trend-table cell: the percent (or "—" if this month has no data), with a delta arrow against
+ * the previous month — colored by whether that direction is an improvement for THIS metric
+ * (participation rising is good; risk rising isn't). No prior point (M1, or a preceding missing
+ * month) renders a plain percent with no arrow. Business logic lives here, not inline in JSX.
+ */
+function trendCell(pct: number | null, prevPct: number | null, goodDirection: "up" | "down"): ReactNode {
+  const cur = toWholePct(pct);
+  if (cur == null) return "—";
+  const delta = computeDelta(cur, toWholePct(prevPct));
+  if (delta == null) return `${cur}%`;
+  const tone = deltaTone(delta, goodDirection);
+  const colorClass = tone === "positive" ? "text-green" : tone === "negative" ? "text-red-700" : "text-muted";
+  const arrow = delta > 0 ? "▲" : delta < 0 ? "▼" : "•";
+  return (
+    <>
+      {cur}%{" "}
+      <span className={`text-[10.5px] font-bold ${colorClass}`}>
+        {arrow}
+        {delta === 0 ? "" : Math.abs(delta)}
+      </span>
+    </>
+  );
+}
 
 export default async function EarlySupportPage({
   searchParams,
@@ -101,6 +131,7 @@ export default async function EarlySupportPage({
     reasons,
     participation,
     byGender,
+    monthlyTrend,
   ] = await Promise.all([
     getRiskStageSummary(stageFilters),
     getSupportParticipation(stageFilters),
@@ -115,6 +146,7 @@ export default async function EarlySupportPage({
     getRiskReasonBreakdown(stageFilters),
     getParticipationByActivityAndRisk(stageFilters),
     getRiskByGender(stageFilters),
+    getMonthlyParticipationRiskTrend(stageFilters),
   ]);
 
   const scopeChips = filterChipsFor(filters, ["cohort", "country", "university"]);
@@ -404,11 +436,62 @@ export default async function EarlySupportPage({
           }))}
           caption="Share of scholars in each tier with at least one session this month, with the counts behind it. These columns are integers with a zero default, so a blank report and a genuine zero look the same — which is why the denominator is always shown."
         />
-        <div className="mt-3.5 rounded-xl bg-chip-cream px-3.5 py-3 text-xs text-muted">
-          <b className="text-ink">The month-by-month trend is not shown yet.</b> Risk periods are
-          currently keyed two different ways — the first two program months fall back to a calendar
-          month because the sheet column that carries them is unmapped — so an M1→M6 line would
-          compare unlike periods.
+        <div className="mt-5">
+          <div className="mb-3.5 flex flex-wrap items-baseline justify-between gap-1.5">
+            <div className="text-[13.5px] font-bold text-surface-dark">Monthly Trend (M1 → M6)</div>
+            <div className="text-xs text-muted">Semester {monthlyTrend.semester}</div>
+          </div>
+          {monthlyTrend.points.every(
+            (p) => p.participationPct == null && p.mediumPlusRiskPct == null,
+          ) ? (
+            <p className="text-sm text-muted">
+              No participation/risk data for semester {monthlyTrend.semester} in this selection.
+            </p>
+          ) : (
+            <>
+              <LineCard
+                title="Participation vs. Medium+ Risk"
+                data={monthlyTrend.points.map((p) => ({
+                  month: `M${p.programMonth}`,
+                  participation: toWholePct(p.participationPct),
+                  mediumPlusRisk: toWholePct(p.mediumPlusRiskPct),
+                }))}
+                xKey="month"
+                lines={[
+                  { key: "participation", name: "% Participation (≥1 activity)", color: "#a62bff" },
+                  { key: "mediumPlusRisk", name: "% Medium+ risk", color: "#dc2626" },
+                ]}
+              />
+              <ExecTable
+                headers={["Metric", ...monthlyTrend.points.map((p) => `M${p.programMonth}`)]}
+                rows={[
+                  {
+                    key: "participation",
+                    label: "Participation (≥1 activity)",
+                    cells: monthlyTrend.points.map((p, i) =>
+                      trendCell(
+                        p.participationPct,
+                        i > 0 ? monthlyTrend.points[i - 1].participationPct : null,
+                        "up",
+                      ),
+                    ),
+                  },
+                  {
+                    key: "risk",
+                    label: "Medium+ Risk",
+                    cells: monthlyTrend.points.map((p, i) =>
+                      trendCell(
+                        p.mediumPlusRiskPct,
+                        i > 0 ? monthlyTrend.points[i - 1].mediumPlusRiskPct : null,
+                        "down",
+                      ),
+                    ),
+                  },
+                ]}
+                caption="Both rows share one denominator per month: risk-eligible scholars actually classified (had a GLOBAL STATUS) that program month, within this semester. A scholar who reported activity but wasn't classified that month counts toward neither row. Green = improvement (participation up or risk down); red = the opposite."
+              />
+            </>
+          )}
         </div>
       </Card>
 

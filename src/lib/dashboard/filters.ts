@@ -1,5 +1,6 @@
 // Parse Next.js searchParams into validated DashboardFilters.
 import { Country, ProgramStatus, RiskLevel } from "../../generated/prisma/enums";
+import { parseSemester } from "./semester";
 import type { DashboardFilters } from "./types";
 
 export type SearchParams = Record<string, string | string[] | undefined>;
@@ -13,6 +14,7 @@ function asEnum<T extends string>(values: Record<string, T>, v: string | undefin
 
 export function parseFilters(sp: SearchParams): DashboardFilters {
   const period = first(sp.period);
+  const semester = first(sp.semester);
   return {
     country: asEnum(Country, first(sp.country)),
     cohort: first(sp.cohort),
@@ -22,6 +24,7 @@ export function parseFilters(sp: SearchParams): DashboardFilters {
     programStatus: asEnum(ProgramStatus, first(sp.status)),
     riskLevel: asEnum(RiskLevel, first(sp.risk)),
     period: period && /^\d{4}-\d{2}$/.test(period) ? period : undefined,
+    semester: semester && parseSemester(semester) ? semester : undefined,
   };
 }
 
@@ -40,7 +43,15 @@ export function preserveParams(sp: SearchParams, overrides: Record<string, strin
   return params.toString();
 }
 
-export type FilterKey = "country" | "cohort" | "university" | "status" | "risk" | "period" | "department";
+export type FilterKey =
+  | "country"
+  | "cohort"
+  | "university"
+  | "status"
+  | "risk"
+  | "period"
+  | "department"
+  | "semester";
 
 /**
  * Which TopFilters pills a given dashboard route should show. Per the Phase B indicator
@@ -51,7 +62,9 @@ export type FilterKey = "country" | "cohort" | "university" | "status" | "risk" 
  */
 export function visiblePillsForPath(pathname: string): FilterKey[] {
   if (pathname === "/dashboard") return ["cohort", "country", "university", "department"];
-  if (pathname.startsWith("/dashboard/early-support")) return ["cohort", "country", "university"];
+  if (pathname.startsWith("/dashboard/early-support")) {
+    return ["cohort", "country", "university", "semester"];
+  }
   if (pathname.startsWith("/dashboard/career-readiness")) return ["cohort", "country", "university"];
   if (pathname.startsWith("/dashboard/actors")) return ["cohort", "country", "university"];
   if (pathname.startsWith("/dashboard/scholars")) {
@@ -74,6 +87,7 @@ export const FILTER_CHIP_TONE: Record<
   university: "ghost",
   department: "ghost",
   status: "ghost",
+  semester: "yellow",
 };
 
 const FILTER_CHIP_LABEL: Record<FilterKey, string> = {
@@ -84,6 +98,7 @@ const FILTER_CHIP_LABEL: Record<FilterKey, string> = {
   risk: "Risk",
   period: "Month",
   department: "Department",
+  semester: "Semester",
 };
 
 /**
@@ -106,6 +121,7 @@ export function filterChipsFor(
     risk: filters.riskLevel,
     period: filters.period,
     department: filters.department,
+    semester: filters.semester,
   };
   return keys.map((key) => ({
     label: `${FILTER_CHIP_LABEL[key]}: ${valueOf[key] ?? "all"}`,

@@ -173,8 +173,9 @@ No dashboard behavior changes are part of this spec.
   `Normalize.gs`'s business-mapping role. Requires proving output parity against the real sheet —
   a manually-verified, separate change (see ADR-007).
 - Removing any now-duplicate Apps Script logic (only safe after the above).
-- `RiskAssessment` period-key redesign and the `MONTHLY_STATUS` reachability gap — documented in
-  ADR-007's Consequences, not resolved here.
+- `RiskAssessment` period-key redesign — documented in ADR-007's Consequences, not resolved here;
+  shipped separately under ADR-008 (`docs/adr/008-risk-period-identity.md`). The `MONTHLY_STATUS`
+  reachability gap remains unresolved.
 
 ## Testing
 
