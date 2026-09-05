@@ -9,10 +9,13 @@ import { dropoutBand } from "./bands";
 import {
   ACTIVITY_GROUP_COLUMNS,
   ACTIVITY_GROUP_ORDER,
+  hasParticipated,
   RISK_TIER_ORDER,
   type RiskTier,
   riskTier,
+  sumActivityCounts,
 } from "./risk-tier";
+import { compareSemesters, latestSemester } from "./semester";
 import {
   CATEGORIES_BY_AXIS,
   categorizeAlertAtom,
@@ -62,6 +65,8 @@ import type {
   FilterOptions,
   GpaGroupStat,
   HomeOverview,
+  MonthlyParticipationRiskPoint,
+  MonthlyParticipationRiskTrend,
   MonthlyRiskTrendPoint,
   ProgramEcosystemResult,
   ProgressDistribution,
@@ -168,6 +173,18 @@ async function getCurrentPeriod(): Promise<string> {
   return latestProgramMonth(periods) ?? [...periods].sort().at(-1) ?? "MES 1";
 }
 
+/** The latest semester with any RiskAssessment data — the default for semester-scoped views (e.g.
+ *  getMonthlyParticipationRiskTrend) when `filters.semester` isn't set. See ADR-008. */
+async function getCurrentSemester(): Promise<string> {
+  const rows = await prisma.riskAssessment.findMany({
+    where: { semester: { not: null } },
+    select: { semester: true },
+    distinct: ["semester"],
+  });
+  const semesters = rows.map((r) => r.semester).filter((s): s is string => !!s);
+  return latestSemester(semesters) ?? "2026-1";
+}
+
 /**
  * Whether a scholar counts toward the program's official risk/retention denominators: ACTIVE and
  * NOT in Cohorte 2024 (the sheet's `BECARIO(A) ACTIVO` + `<>Cohorte 2024`). Distribution KPIs count
@@ -193,7 +210,7 @@ export async function getDataFreshness(now: Date): Promise<Freshness> {
 
 /** Distinct values that populate the dashboard filter dropdowns. */
 export async function getFilterOptions(): Promise<FilterOptions> {
-  const [scholars, universities, periods] = await Promise.all([
+  const [scholars, universities, periods, semesters] = await Promise.all([
     prisma.scholar.findMany({ select: { cohort: true, currentDepartment: true } }),
     prisma.university.findMany({ select: { name: true }, orderBy: { name: "asc" } }),
     prisma.riskAssessment.findMany({
@@ -201,13 +218,23 @@ export async function getFilterOptions(): Promise<FilterOptions> {
       distinct: ["period"],
       orderBy: { period: "asc" },
     }),
+    prisma.riskAssessment.findMany({
+      where: { semester: { not: null } },
+      select: { semester: true },
+      distinct: ["semester"],
+    }),
   ]);
   return {
     cohorts: [...new Set(scholars.map((s) => s.cohort))].sort(),
     universities: universities.map((u) => u.name),
     periods: periods.map((p) => p.period),
     departments: [...new Set(scholars.map((s) => s.currentDepartment).filter((d): d is string => !!d))].sort(),
+    semesters: sortSemesters(semesters.map((s) => s.semester).filter((s): s is string => !!s)),
   };
+}
+
+function sortSemesters(semesters: string[]): string[] {
+  return [...semesters].sort(compareSemesters);
 }
 
 // Each scholar's current risk = their most recent classification at or before the selected period.
@@ -827,6 +854,102 @@ export async function getMonthlyRiskTrend(
     });
 }
 
+const PROGRAM_MONTH_NUMBERS = [1, 2, 3, 4, 5, 6];
+const PROGRAM_MONTH_LABELS = PROGRAM_MONTH_NUMBERS.map((n) => `MES ${n}`);
+
+/**
+ * Early Support's M1→M6 participation-vs-risk trend, scoped to one semester (see
+ * docs/adr/008-risk-period-identity.md and MonthlyParticipationRiskPoint's doc comment for the
+ * shared-denominator design). Resolves `filters.semester`, or defaults to the latest semester with
+ * data — the semester is always concrete, never "all".
+ *
+ * `filters.period` is deliberately ignored here: this view's entire purpose is showing all six
+ * program months at once, so narrowing to one would defeat it. (Early Support doesn't expose a
+ * `period` pill today, so this is a documented edge case rather than a live conflict.) Every other
+ * scholar-scoping filter (country/cohort/university/programStage) applies as usual via loadScope().
+ */
+export async function getMonthlyParticipationRiskTrend(
+  filters: DashboardFilters = {},
+): Promise<MonthlyParticipationRiskTrend> {
+  const semester = filters.semester ?? (await getCurrentSemester());
+  const { scholars } = await loadScope(filters);
+  const scholarIds = scholars.filter(riskEligible).map((s) => s.scholarId);
+
+  const emptyPoints = (): MonthlyParticipationRiskPoint[] =>
+    PROGRAM_MONTH_NUMBERS.map((n) => ({
+      programMonth: n,
+      participationCount: 0,
+      participationDenominator: 0,
+      participationPct: null,
+      mediumPlusRiskCount: 0,
+      riskDenominator: 0,
+      mediumPlusRiskPct: null,
+    }));
+
+  if (scholarIds.length === 0) return { semester, points: emptyPoints() };
+
+  const [riskRows, reports] = await Promise.all([
+    prisma.riskAssessment.findMany({
+      where: { scholarId: { in: scholarIds }, semester, period: { in: PROGRAM_MONTH_LABELS } },
+      select: { scholarId: true, period: true, globalRiskValue: true },
+    }),
+    prisma.mentorReport.findMany({
+      where: { scholarId: { in: scholarIds }, semester, reportingMonth: { in: PROGRAM_MONTH_LABELS } },
+      select: {
+        scholarId: true,
+        reportingMonth: true,
+        individualTutoring: true,
+        groupTutoring: true,
+        individualMentoring: true,
+        groupMentoring: true,
+        workshops: true,
+      },
+    }),
+  ]);
+
+  // The per-month population for BOTH metrics: risk-eligible scholars actually classified
+  // (RiskAssessment row present) for this semester+month. A scholar isn't counted at all for a
+  // month they weren't validly classified in — see the type's doc comment for why.
+  const classifiedByMonth = new Map<number, Set<string>>();
+  const mediumPlusByMonth = new Map<number, number>();
+  for (const r of riskRows) {
+    const n = programMonthNumber(r.period);
+    if (n == null) continue;
+    const set = classifiedByMonth.get(n) ?? new Set<string>();
+    set.add(r.scholarId);
+    classifiedByMonth.set(n, set);
+    if (r.globalRiskValue >= 2) mediumPlusByMonth.set(n, (mediumPlusByMonth.get(n) ?? 0) + 1);
+  }
+
+  const participatedByMonth = new Map<number, Set<string>>();
+  for (const r of reports) {
+    const n = programMonthNumber(r.reportingMonth);
+    if (n == null) continue;
+    if (!classifiedByMonth.get(n)?.has(r.scholarId)) continue; // only within the classified set
+    if (!hasParticipated(r)) continue;
+    const set = participatedByMonth.get(n) ?? new Set<string>();
+    set.add(r.scholarId);
+    participatedByMonth.set(n, set);
+  }
+
+  const points = PROGRAM_MONTH_NUMBERS.map((n): MonthlyParticipationRiskPoint => {
+    const denom = classifiedByMonth.get(n)?.size ?? 0;
+    const participationCount = participatedByMonth.get(n)?.size ?? 0;
+    const mediumPlusRiskCount = mediumPlusByMonth.get(n) ?? 0;
+    return {
+      programMonth: n,
+      participationCount,
+      participationDenominator: denom,
+      participationPct: denom ? round2(participationCount / denom) : null,
+      mediumPlusRiskCount,
+      riskDenominator: denom,
+      mediumPlusRiskPct: denom ? round2(mediumPlusRiskCount / denom) : null,
+    };
+  });
+
+  return { semester, points };
+}
+
 /** Scholar list for the directory/search page (current risk + latest GPA). */
 export async function getScholarDirectory(
   filters: DashboardFilters = {},
@@ -1035,11 +1158,10 @@ export async function getSupportParticipation(
       [ActivityType.GROUP_MENTORING, r.groupMentoring],
       [ActivityType.WORKSHOP, r.workshops],
     ];
-    let rowTotal = 0;
-    for (const [t, c] of perType) {
-      byType.set(t, (byType.get(t) ?? 0) + c);
-      rowTotal += c;
-    }
+    for (const [t, c] of perType) byType.set(t, (byType.get(t) ?? 0) + c);
+    // Shared with getMonthlyParticipationRiskTrend's per-month check (src/lib/dashboard/risk-tier.ts)
+    // so "participated" never means something different in two places.
+    const rowTotal = sumActivityCounts(r);
     totalByScholar.set(r.scholarId, (totalByScholar.get(r.scholarId) ?? 0) + rowTotal);
     if (r.reportingMonth) {
       byMonth.set(r.reportingMonth, (byMonth.get(r.reportingMonth) ?? 0) + rowTotal);

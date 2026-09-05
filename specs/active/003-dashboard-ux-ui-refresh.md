@@ -35,10 +35,12 @@ same tests for the pages themselves. Only their sidebar entries were removed. `h
 
 ## Early Support
 
-Already implements the required information hierarchy and graphs against real production data
-(numbered 1 / 2.1–2.6 / 3, `ExecTable`/`Donut`/`LineCard`/`ComboBarLineCard`) — see
-`docs/prototype-comparison.md`'s Early Support table. The one deliberately-deferred item is the
-M1→M6 participation-vs-risk monthly trend graph — see "Deferred" below.
+Implements the required information hierarchy and graphs against real production data (numbered
+1 / 2.1–2.6 / 3, `ExecTable`/`Donut`/`LineCard`/`ComboBarLineCard`) — see
+`docs/prototype-comparison.md`'s Early Support table. The M1→M6 participation-vs-risk monthly trend
+graph, previously deferred pending `RiskAssessment`'s period-identity fix, is now implemented in
+section 2.3 (`getMonthlyParticipationRiskTrend`, scoped to one semester via ADR-008's `semester`
+column) — see "Deferred" below for what it does *not* cover.
 
 ## Scholar Profile
 
@@ -76,10 +78,12 @@ identity number (e.g. `"1023524767"`) — not a synthetic program-assigned code;
 
 ## Deferred
 
-- **M1→M6 participation-vs-risk trend graph** — blocked by `RiskAssessment`'s period identity
-  colliding across semesters and the sheet's unmapped `MONTH` column. See
-  `docs/adr/008-risk-period-identity.md` (Status: Proposed) for the proposed fix — not implemented
-  here; needs its own approved migration.
+- **M1→M6 participation-vs-risk trend graph — now implemented** (Early Support, section 2.3), once
+  `docs/adr/008-risk-period-identity.md` (Status: Accepted) closed the semester-collision defect
+  that blocked it. The sheet's bare `MONTH` column remains unmapped/unclarified — unaffected by
+  either change. Still out of scope: a global semester *rollup* view (e.g. comparing semesters
+  side by side) and the Scholar Profile's semester-scoped risk history, which ADR-008 unblocked at
+  the data layer but didn't build.
 - **Sensitive-notes permission gap** (found during this audit, unrelated to the redesign):
   `VIEW_SENSITIVE_NOTES`/`canViewSensitiveNotes()` (`src/lib/auth/authorization.ts`) is defined and
   unit-tested in isolation but never actually called from any page or query — so `EXECUTIVE` (and

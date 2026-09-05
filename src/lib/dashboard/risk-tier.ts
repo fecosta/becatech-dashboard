@@ -42,3 +42,28 @@ export const ACTIVITY_GROUP_COLUMNS: Record<
   MENTORING: ["individualMentoring", "groupMentoring"],
   WORKSHOPS: ["workshops"],
 };
+
+/** All five MentorReport activity-count columns, the canonical "did they do anything this month"
+ *  signal — the union of every ACTIVITY_GROUP_COLUMNS entry. */
+export const ALL_ACTIVITY_COLUMNS = [
+  "individualTutoring",
+  "groupTutoring",
+  "individualMentoring",
+  "groupMentoring",
+  "workshops",
+] as const;
+
+type ActivityCounts = Record<(typeof ALL_ACTIVITY_COLUMNS)[number], number>;
+
+/** Total logged activity count across all five columns for one MentorReport row. */
+export function sumActivityCounts(report: ActivityCounts): number {
+  return ALL_ACTIVITY_COLUMNS.reduce((n, col) => n + (report[col] ?? 0), 0);
+}
+
+/** Whether a MentorReport row shows at least one logged activity of any kind. These columns are
+ *  Int @default(0), so a blank cell and a real zero are indistinguishable at this grain (same
+ *  caveat as getParticipationByActivityAndRisk) — this is the single, shared definition every
+ *  participation calculation in the dashboard reuses, so it never diverges from itself. */
+export function hasParticipated(report: ActivityCounts): boolean {
+  return sumActivityCounts(report) > 0;
+}
