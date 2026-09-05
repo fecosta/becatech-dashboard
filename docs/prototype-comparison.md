@@ -48,7 +48,7 @@ plausible-looking placeholder in a goal row is worse than a visible gap.
 | 2.1 Status donut + companion table | **Implemented** | description column reuses `RISK_LEVEL_NOTE` |
 | 2.2 Reasons for risk, academic vs psychosocial | **Implemented (newly unblocked)** | `MentorReport.academicAlertType` / `psychosocialAlertType` were already synced and read by nothing. Grouped by `lib/risk/reason-taxonomy.ts`. The two axes overlap for most at-risk scholars, so each table carries its own denominator — they do not sum to the at-risk total, and the UI says so |
 | 2.3 Participation by activity and risk tier | **Implemented** | one group-by over the mentor-report counts; every percentage ships with its denominator, because those columns default to zero and a blank report is indistinguishable from a real zero |
-| 2.3 M1→M6 trend | **Defer** | risk periods are keyed two ways — the sheet column carrying the first two program months is unmapped, so the fallback keys them to a calendar month. An M1→M6 line would compare unlike periods |
+| 2.3 M1→M6 trend | **Implemented** | scoped to one semester (`RiskAssessment.semester`, ADR-008); a line chart + trend table comparing % participation (≥1 activity) against % Medium+ risk, per program month, with month-over-month deltas. A missing month (no scholar classified that month) renders as an explicit no-data gap, never a misleading 0% |
 | 2.4 Status per university | **Implemented** | |
 | 2.5 Risk level by gender | **Implemented** | now a table, per the design |
 | 2.6 Risk by socioeconomic condition | **Implemented (beyond the design)** | the design drops it; kept because whether vulnerability predicts risk is the program's core thesis and nothing else answers it. Confirm with the client |
@@ -106,6 +106,6 @@ plausible-looking placeholder in a goal row is worse than a visible gap.
 Deferred deliberately (see the plan): GPA and progress fields absent from the sheet sync's
 `ACADEMIC_TERM_HEADER_`; the unmapped bare `MONTH` column; and `parseFilters` rejecting `"MES n"`
 periods. `RiskAssessment`'s two-column unique key overwriting across semesters is now **fixed**
-(ADR-008, `docs/adr/008-risk-period-identity.md`) — the identity is trustworthy, though the
-semester-scoped views built on top of it (M1→M6 trend, profile risk-history rollup) remain
-deferred.
+(ADR-008, `docs/adr/008-risk-period-identity.md`), and the M1→M6 participation-vs-risk trend built
+on top of it now **shipped** (Early Support, section 2.3). The Scholar Profile's semester-scoped
+risk-history rollup remains deferred — the identity is trustworthy for it too, it just isn't built.

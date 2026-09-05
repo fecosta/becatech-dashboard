@@ -40,12 +40,16 @@ describe("visiblePillsForPath", () => {
     ]);
   });
 
-  it("Early Support and Growth & Development show cohort/country/university only", () => {
+  it("Early Support additionally shows a semester pill (M1→M6 trend, ADR-008)", () => {
     expect(visiblePillsForPath("/dashboard/early-support")).toEqual([
       "cohort",
       "country",
       "university",
+      "semester",
     ]);
+  });
+
+  it("Growth & Development shows cohort/country/university only", () => {
     expect(visiblePillsForPath("/dashboard/career-readiness")).toEqual([
       "cohort",
       "country",

@@ -14,6 +14,7 @@ export interface FilterOptions {
   universities: string[];
   periods: string[];
   departments: string[];
+  semesters: string[];
 }
 
 export function TopFilters({ options }: { options: FilterOptions }) {
@@ -91,6 +92,14 @@ export function TopFilters({ options }: { options: FilterOptions }) {
           onChange={(v) => setParam("period", v)}
           placeholder="Period"
           options={options.periods.map((p) => ({ value: p, label: p }))}
+        />
+      ) : null}
+      {visible.includes("semester") ? (
+        <Select
+          value={val("semester")}
+          onChange={(v) => setParam("semester", v)}
+          placeholder="Semester"
+          options={options.semesters.map((s) => ({ value: s, label: s }))}
         />
       ) : null}
       {anyActive ? (
