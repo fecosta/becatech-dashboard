@@ -214,11 +214,18 @@ export interface MonthActivityStat {
 }
 export interface ParticipationByRisk {
   riskLevel: RiskLevel;
+  /** Scholars classified in this risk tier (active, ≠Cohorte-2024) — NOT the denominator behind
+   *  participatedPct; see totalActiveScholars for that. */
   scholarCount: number;
   /** Scholars in this tier with ≥1 activity — the numerator behind participatedPct. */
   participatedCount: number;
   averageActivitiesPerScholar: number;
-  /** % of scholars in this risk tier with ≥1 activity across the whole scope/period. */
+  /** Total active scholars in scope, shared across every tier — the denominator behind
+   *  participatedPct, so a small tier's full engagement isn't hidden by its own small size. */
+  totalActiveScholars: number;
+  /** % of ALL active scholars (not just this tier) that are both in this tier and have ≥1
+   *  activity — so tile percentages are comparable to each other and sum toward the whole active
+   *  population, rather than each being relative to its own tier's size. */
   participatedPct: number;
 }
 export interface LowParticipationRow {
