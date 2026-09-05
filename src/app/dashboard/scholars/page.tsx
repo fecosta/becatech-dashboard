@@ -10,6 +10,7 @@ import { parseFilters, preserveParams, type SearchParams } from "@/lib/dashboard
 import { getContactPriority } from "@/lib/dashboard/queries";
 import { SCHOLAR_SECTION, scholarProfileHref } from "@/lib/dashboard/scholar-routes";
 import type { DashboardFilters } from "@/lib/dashboard/types";
+import { COUNTRY_LABEL } from "@/lib/labels";
 
 export const dynamic = "force-dynamic";
 
@@ -80,7 +81,7 @@ async function ContactPriority({
   return (
     <Card>
       <ExecTable
-        headers={["Scholar", "Email", "Mobile", "University", "Cohort", "Risk"]}
+        headers={["Scholar", "National ID", "Email", "Mobile", "University", "Country", "Cohort", "Risk"]}
         rows={rows.map<ExecRow>((r) => ({
           key: r.scholarId,
           label: (
@@ -95,9 +96,11 @@ async function ContactPriority({
             </Link>
           ),
           cells: [
+            r.scholarId,
             r.email ?? <span className="text-muted">—</span>,
             r.mobilePhone ?? <span className="text-muted">—</span>,
             r.university,
+            COUNTRY_LABEL[r.country],
             r.cohort,
             <RiskBadge key="risk" level={r.riskLevel} />,
           ],
