@@ -1,0 +1,8 @@
+MENTOR REPORTS (fictional/synthetic export for testing only)
+Reports this month:,5,,,,,,,,,,,,,,,
+GLOBAL STATUS,SUBMISSION ID,ID OF THE SCHOLAR,SCHOLAR'S NAME,MENTOR'S NAME,SEMESTER,COUNTRY,COHORT,UNIVERSITY,¿QUÉ MES REPORTAS?,DATE OF THE SESSION,SESSION,MODALIDAD DEL ESPACIO,ACADEMIC STATUS,PSYCHOSOCIAL STATUS,MENTOR ID,FAVORITE COLOR
+Sin riesgo,sub-fx-001,BT-CO-101,Ana Fictional Uno,Mentor Fictional A,2026-1,Colombia,2025,Universidad Nacional de Colombia,MES 6,2026-06-15,Individual,Virtual,Bueno,Estable,M-01,
+Riesgo bajo,sub-fx-002,BT-CO-102,Luis Fictional Dos,Mentor Fictional B,2026-1,Colombia,2025,Universidad de Antioquia,,2026-07-10,Individual,Presencial,Regular,Estable,M-02,
+Riesgo medio,sub-fx-003,BT-PE-201,Maria Fictional Tres,Mentor Fictional C,2026-1,Peru,2026,Universidad Nacional Mayor de San Marcos,MES 5,2026-05-20,Grupal,Virtual,Regular,Alerta leve,M-01,
+Riesgo alto,sub-fx-004,BT-PE-202,Jose Fictional Cuatro,Mentor Fictional D,2026-1,Peru,2026,Universidad Nacional Mayor de San Marcos,MES 6,2026-06-18,Individual,Virtual,Bajo,Alerta,M-03,
+Riesgo crítico,sub-fx-005,BT-CO-103,Sofia Fictional Cinco,Mentor Fictional A,2026-1,Colombia,2025,Universidad Nacional de Colombia,MES 6,2026-06-22,Individual,Presencial,Bajo,Alerta critica,M-01,

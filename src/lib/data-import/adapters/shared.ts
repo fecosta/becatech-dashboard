@@ -57,3 +57,39 @@ export function mapStatus(v: unknown): string | undefined {
   if (s.includes("paus")) return "PAUSED";
   return String(v).trim();
 }
+
+/** [normalized-prefix regex, semester number] — ordinal Spanish semester words. Mirrors
+ *  apps-script/Normalize.gs's SEMESTER_WORD_RE_ exactly (same source data shape, ported here so
+ *  the manual-upload path parses the same real-world cell values the automated sync already
+ *  does — confirmed from production: "Sexto semestre", "Tercer semestre", etc.). */
+const SEMESTER_WORD_RE: [RegExp, number][] = [
+  [/^primer/, 1],
+  [/^segund/, 2],
+  [/^tercer/, 3],
+  [/^cuart/, 4],
+  [/^quint/, 5],
+  [/^sext/, 6],
+  [/^septim/, 7],
+  [/^setim/, 7],
+  [/^octav/, 8],
+  [/^noven/, 9],
+  [/^decim/, 10],
+  [/^undecim/, 11],
+  [/^duodecim/, 12],
+];
+
+/** "Sexto semestre" -> 6, "3er semestre" -> 3, 7 -> 7, "" / unparseable -> undefined (so it drops
+ *  to null downstream via gN(), not NaN — same resilience rule as any other optional numeric
+ *  field). Mirrors Normalize.gs's parseSemesterCell_. */
+export function parseSemesterCell(v: unknown): number | undefined {
+  if (v == null || v === "") return undefined;
+  if (typeof v === "number") return v;
+  const s = normKey(v);
+  if (!s) return undefined;
+  const digitMatch = /^(\d+)/.exec(s);
+  if (digitMatch) return Number(digitMatch[1]);
+  for (const [re, n] of SEMESTER_WORD_RE) {
+    if (re.test(s)) return n;
+  }
+  return undefined;
+}

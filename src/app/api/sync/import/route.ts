@@ -5,7 +5,7 @@
 import { timingSafeEqual } from "crypto";
 import { NextResponse } from "next/server";
 import { DataImportEntity } from "@/generated/prisma/enums";
-import { commitImportBatch, createImportBatch } from "@/lib/data-import/service";
+import { ingestAndCommit } from "@/lib/data-import/service";
 import { acquireSyncLock, releaseSyncLock, SYNC_LOCK_NAME } from "@/lib/data-import/sync-lock";
 import type { ImportEntity } from "@/lib/data-import/types";
 import { prisma } from "@/lib/db";
@@ -87,15 +87,13 @@ export async function POST(req: Request) {
     // looks identical at this level to an unrecognized format, so it's reported as a normal (if
     // uneventful) success rather than guessed at — same as the admin manual-upload path already
     // does for an empty upload.
-    const { batchId, result } = await createImportBatch({
+    const { batchId, result } = await ingestAndCommit({
       data: Buffer.from(text, "utf-8"),
       filename,
       sourceType: entity ? "TEMPLATE" : "LEGACY_WIDE_EXCEL",
       entity,
       uploadedById,
     });
-
-    await commitImportBatch(batchId);
 
     return NextResponse.json({
       batchId,

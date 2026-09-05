@@ -74,6 +74,13 @@ function checkFields(
     errors.push({ entity, rowNumber: row.rowNumber, field, message });
 
   for (const col of TEMPLATE_COLUMNS[entity]) {
+    // MENTOR_REPORT's scholarId is special-cased below (in validateBatch): a blank ID cell is
+    // expected whenever the sheet only gives a scholar name, and gets resolved there — by direct
+    // ID, by name, or a specific "not found"/"ambiguous"/"does not exist" error. Flagging it
+    // "Required" here first would reject the row before that resolution ever runs, on sheets where
+    // the ID cell is genuinely blank (not merely a wrong/mentor-shaped value) but the name is
+    // populated.
+    if (entity === "MENTOR_REPORT" && col.field === "scholarId") continue;
     const v = row.data[col.field];
     if (v == null) {
       if (col.required) push(col.field, "Required");

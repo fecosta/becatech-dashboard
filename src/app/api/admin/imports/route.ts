@@ -51,7 +51,7 @@ export async function POST(req: Request) {
 
   try {
     const data = await file.arrayBuffer();
-    const { batchId, result } = await createImportBatch({
+    const { batchId, result, schemaReports } = await createImportBatch({
       data,
       filename: file.name,
       sourceType: sourceType as DataImportSourceType,
@@ -65,6 +65,9 @@ export async function POST(req: Request) {
       successRows: result.successRows,
       errorRows: result.errorRows,
       errors: result.errors.slice(0, 1000),
+      // Column-level drift, informational only — additive field, safe for older UI builds to
+      // ignore. See src/lib/data-import/service.ts's inspectLegacySheets.
+      schemaReports,
     });
   } catch (error) {
     return NextResponse.json(
