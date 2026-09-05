@@ -1,6 +1,6 @@
 # SPEC-003 — Dashboard UX/UI Refresh
 
-Status: Active
+Status: Completed
 
 ## Goal
 
@@ -40,6 +40,23 @@ Already implements the required information hierarchy and graphs against real pr
 `docs/prototype-comparison.md`'s Early Support table. The one deliberately-deferred item is the
 M1→M6 participation-vs-risk monthly trend graph — see "Deferred" below.
 
+## Growth & Development
+
+Its five top-level sections (MAKERS Beca Tech Program, Growth & Development Metrics, Skills by
+City, Skills by University, Academic Progress) now use the same numbered-outline `SectionTitle
+size="lg"` pattern Home/Early Support/Program Ecosystem/Scholar Profile already use, closing the
+one visual inconsistency this spec's original audit flagged (see "Deferred" in the prior revision
+of this doc). Skills by City and Skills by University, previously paired in one `lg:grid-cols-2`
+row, are now two separate full-width sections — matching both the numbered-outline convention
+(no other view ever pairs two top-level sections in one row) and the design reference's own Career
+view, which stacks them the same way. All content is unchanged: the same `FactStrip`, the same
+`PENDING`/`ProxyBadge` cards for the professional-skills metrics (no data source exists for these
+yet — see `docs/PRODUCT.md`), the same real `getAcademicProgress`/`getSupportParticipation` data
+for Academic Progress. Note: the reference file's own Career-view markup actually styles these five
+headings with its small, unnumbered `.section-title` class (matching what the app already had) —
+applying the big numbered style here is a deliberate alignment with the *other four* views'
+convention, not a literal reference match for this one view.
+
 ## Scholar Profile
 
 Already split into Contact Prioritization (`/dashboard/scholars`), Find a Scholar
@@ -73,6 +90,16 @@ identity number (e.g. `"1023524767"`) — not a synthetic program-assigned code;
   Scholar/Email/Mobile/University/Cohort/Risk columns.
 - All previously-passing tests continue to pass, with `tests/nav-permissions.test.ts` updated to
   assert the new (hidden) sidebar behavior for Unit Economics/Selection Pipeline specifically.
+- Growth & Development shows the same 5-section numbered outline (`SectionTitle size="lg"`,
+  `career-sec-1..5`) as Home, Early Support, Program Ecosystem, and Scholar Profile — no
+  one-off heading system for this view.
+- A visual QA pass across `/dashboard`, `/dashboard/early-support`, `/dashboard/career-readiness`,
+  `/dashboard/scholars`, `/dashboard/scholars/find`, `/dashboard/actors`, and one
+  `/dashboard/scholars/[scholarId]` found no unresolved structural defects (sidebar/drawer
+  breakpoint gating, sticky filter header, table-overflow wrapping, `target="_blank"` scholar
+  links, and responsive grid classes all confirmed present and consistent). Performed via
+  server-rendered HTML/class inspection (no browser-automation tooling exists in this repo today),
+  not true pixel-level rendering at each viewport.
 
 ## Deferred
 
@@ -88,15 +115,15 @@ identity number (e.g. `"1023524767"`) — not a synthetic program-assigned code;
   fields should be gated behind it. Documented here at the user's request; not fixed as part of
   this spec — it's a real authorization decision that deserves its own explicit review, not a side
   effect of a UI pass.
-- **Growth & Development's section styling** doesn't use the numbered-executive-outline pattern
-  the other four primary views use (it uses `FactStrip`/`BulletTrackGoal` instead) — a minor,
-  pre-existing visual inconsistency noted during the audit, not treated as a required fix since the
-  page's actual metrics (goal-vs-actual, `PENDING` handling for unsupported MAKERS/skills data)
-  already match production data correctly.
 
 ## Documentation Impact
 
-`docs/prototype-comparison.md` (fix a dangling cross-reference), `docs/PRODUCT.md` /
-`docs/ARCHITECTURE.md` (reconcile "Career Readiness" → "Growth & Development" naming — the UI
-label and `VIEW_ORDER` already say "Growth & Development"; only these two docs and the route
-folder name still say "Career Readiness"), `docs/adr/008-risk-period-identity.md` (new).
+Earlier passes: `docs/prototype-comparison.md` (dangling cross-reference fixed), `docs/PRODUCT.md`
+/ `docs/ARCHITECTURE.md` ("Career Readiness" → "Growth & Development" naming reconciled — neither
+doc references the old name anymore; only the route folder, `src/app/dashboard/career-readiness/`,
+still does, which is an internal path, not user-facing), `docs/adr/008-risk-period-identity.md`
+(added).
+
+This closing pass: this spec file itself (moved to `specs/completed/`, status flipped, a new
+"Growth & Development" section added, the resolved Deferred bullet removed, two Acceptance Criteria
+bullets added) — no other docs needed changes for the hierarchy fix or the QA pass.
