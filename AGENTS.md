@@ -128,12 +128,13 @@ Authentication and authorization changes require an ADR. See `docs/SECURITY.md`,
 
 Before modifying code:
 
-1. Read the relevant feature spec in `specs/` (if one exists for the area you're touching).
-2. Inspect the existing implementation.
-3. Inspect tests covering the affected behavior.
-4. Identify affected domain modules (`src/lib/*`).
-5. Explain the intended approach.
-6. Identify any architectural consequences (does it touch an ADR-governed decision?).
+1. Read the relevant feature spec in `resources/specs/` (if one exists for the area you're touching).
+2. Read the relevant active task in `resources/tasks/active/` (if one exists for the work).
+3. Inspect the existing implementation.
+4. Inspect tests covering the affected behavior.
+5. Identify affected domain modules (`src/lib/*`).
+6. Explain the intended approach.
+7. Identify any architectural consequences (does it touch an ADR-governed decision?).
 
 Prefer small, focused changes. Do not bundle unrelated refactors into feature work.
 
@@ -141,12 +142,54 @@ Prefer small, focused changes. Do not bundle unrelated refactors into feature wo
 
 ## Feature Specs
 
-Meaningful product changes should have a spec. Specs live under `specs/active`, `specs/planned`,
-`specs/completed` — see `specs/README.md` for the lifecycle and required sections.
+Meaningful product changes should have a spec. Specs live under `resources/specs/active`,
+`resources/specs/planned`, `resources/specs/completed` — see `resources/specs/README.md` for the
+lifecycle and required sections.
 
 Do not treat implementation details as product requirements unless they are deliberate
 architectural constraints (e.g. "must reuse `scholarAccessWhere()`" is a real constraint; "must
 use a `Map` instead of an object" usually isn't).
+
+---
+
+## Implementation Tasks
+
+Concrete engineering execution tasks live under `resources/tasks/`.
+
+Use tasks to preserve implementation prompts, validation requirements, and execution context that
+are useful for AI-assisted development and future maintenance.
+
+The distinction is:
+
+- **Specs** define what the product/system should do and why.
+- **Tasks** define a concrete implementation, validation, review, or migration assignment.
+- **ADRs** record architecture and source-of-truth decisions.
+- **PRs/code** contain the implementation.
+
+Task lifecycle:
+
+```text
+resources/tasks/
+├── planned/
+├── active/
+└── completed/
+```
+
+Rules:
+
+- Task numbering is independent from spec numbering.
+- One spec may require multiple tasks.
+- A task may reference one or more specs/ADRs.
+- Do not use a task to silently introduce product behavior that requires a spec.
+- Do not use a task to silently introduce an architecture decision that requires an ADR.
+- Completing a task does not automatically complete its related spec; spec acceptance criteria
+  must still be verified.
+- Before starting implementation, check `resources/tasks/active/` for an owning task in addition
+  to the relevant spec.
+- After the implementation is merged or formally completed, move the task to
+  `resources/tasks/completed/` and record the completion date where practical.
+
+See `resources/tasks/README.md` for the full lifecycle and recommended task header.
 
 ---
 
@@ -232,6 +275,23 @@ limitation prevents a check from running, report that explicitly.
 
 ---
 
+## Git & Commit Rules
+
+### Commit convention and authorship
+
+- Use Conventional Commits with the following allowed prefixes:
+  - `feat:`
+  - `fix:`
+  - `chore:`
+  - `docs:`
+  - `refactor:`
+  - `test:`
+- Commits must use the configured Git user as the sole author.
+- Do not add `Co-Authored-By:` trailers for Claude, AI assistants, or any other co-author.
+- Do not modify the repository's Git user configuration unless explicitly requested.
+
+---
+
 ## Documentation
 
 Update documentation when behavior changes. Use:
@@ -243,7 +303,9 @@ Update documentation when behavior changes. Use:
 - `docs/DEVELOPMENT.md` for development workflow;
 - `docs/DESIGN_SYSTEM.md` for visual conventions;
 - `docs/adr/` for architecture decisions;
-- `specs/` for feature-level requirements.
+- `resources/specs/` for feature-level requirements;
+- `resources/tasks/` for concrete implementation assignments, validation prompts, and execution
+  history.
 
 Do not use the README as the only source of project knowledge — it is deliberately an entry
 point, not the architecture document.
