@@ -44,10 +44,9 @@ next-env.d.ts
 # prisma generated client
 /src/generated
 
-# internal program context docs (not committed)
-/context
-/design-reference
 
-# stray downloaded import templates / scratch spreadsheets at repo root
-/template-*.xlsx
-/*.csv
+# Ignore only sensitive/local-only resource content
+/resources/sample-data/private/
+/resources/sample-data/raw/
+/resources/sample-data/*.xlsx
+/resources/sample-data/*.xls

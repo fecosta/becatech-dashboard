@@ -1,0 +1,1299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Beca Tech+ — Prototype</title>
+<style>
+  :root{
+    --cream:#F3F1E7;
+    --purple:#A62BFF;
+    --yellow:#F3FF00;
+    --green:#27CF77;
+    --black:#0A0A0A;
+    --ink:#33312B;
+    --muted:#6F6C62;
+    --card:#FFFFFF;
+    --border:#E4E0D2;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--cream);
+    color:var(--ink);
+  }
+  .layout{display:flex; min-height:100vh;}
+
+  /* ---------- SIDEBAR (dark, yellow accents) ---------- */
+  .sidebar{width:246px; background:var(--black); flex-shrink:0; display:flex; flex-direction:column; justify-content:space-between;}
+  .brand{padding:22px 20px; display:flex; align-items:center; gap:12px; border-bottom:1px solid rgba(255,255,255,0.08);}
+  .brand-logo{height:22px; width:auto; filter:invert(1); display:block;}
+  .brand-sub{font-size:11px; color:rgba(255,255,255,0.45); line-height:1.25; margin-top:6px;}
+  .nav{padding:14px 12px; font-size:13.5px;}
+  .nav a{display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:10px; color:rgba(255,255,255,0.7); text-decoration:none; margin-bottom:3px; cursor:pointer; border-left:3px solid transparent;}
+  .nav a:hover{background:rgba(255,255,255,0.06); color:#fff;}
+  .nav a.active{background:rgba(166,43,255,0.18); color:var(--yellow); border-left:3px solid var(--yellow); font-weight:600;}
+  .nav .icon{width:16px; text-align:center;}
+  .profile{padding:16px 20px; border-top:1px solid rgba(255,255,255,0.08); display:flex; align-items:center; gap:10px;}
+  .avatar{width:30px; height:30px; border-radius:999px; background:var(--purple); color:#fff; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700;}
+  .profile-name{font-size:12px; font-weight:600; color:#fff; line-height:1.3;}
+  .profile-role{font-size:11px; color:rgba(255,255,255,0.45); line-height:1.3;}
+
+  /* ---------- MAIN ---------- */
+  .main{flex:1; overflow-y:auto;}
+  .container{padding:28px 36px 60px; max-width:1280px; margin:0 auto;}
+  .view{display:none;}
+  .view.active{display:block;}
+
+  /* ---------- GLOBAL TOPBAR (filters, applies to every view) ---------- */
+  .topbar{display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; padding:14px 36px; background:var(--cream); border-bottom:1px solid var(--border); position:sticky; top:0; z-index:5;}
+  .topbar .filters-group{display:flex; flex-wrap:wrap; gap:8px;}
+  .topbar .pill{font-size:11.5px; padding:6px 12px;}
+  .signout-btn{background:var(--card); border:1px solid var(--border); border-radius:10px; padding:8px 16px; font-size:12.5px; font-weight:600; color:var(--ink); cursor:pointer; flex-shrink:0;}
+
+  .pagehead{display:flex; align-items:baseline; justify-content:space-between; margin-bottom:6px;}
+  .pagehead h1{font-size:22px; font-weight:800; margin:0; color:var(--black);}
+  .pagehead .tag{font-size:12px; color:var(--muted); font-family:monospace;}
+  .dek{font-size:14px; color:var(--muted); margin:2px 0 20px; max-width:680px; line-height:1.55;}
+
+  .filters{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:20px;}
+  .pill{font-size:12px; background:var(--card); border:1px solid var(--border); border-radius:999px; padding:7px 14px; color:var(--ink);}
+
+  .card{background:var(--card); border:1px solid var(--border); border-radius:16px;}
+  .grid4{display:grid; grid-template-columns:repeat(4,1fr); gap:14px;}
+  .grid3{display:grid; grid-template-columns:repeat(3,1fr); gap:14px;}
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:16px;}
+
+  .kpi{padding:16px 18px;}
+  .kpi .l{font-size:12.5px; color:var(--muted); margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;}
+  .kpi .v{font-size:26px; font-weight:800; margin-bottom:4px; color:var(--black);}
+  .kpi .d{font-size:12px; color:var(--green); font-weight:600;}
+  .kpi .n{font-size:12px; color:var(--muted);}
+  .badge-proxy{font-size:9.5px; background:#F5EAFF; color:var(--purple); padding:2px 7px; border-radius:5px; font-weight:700;}
+
+  .section-title{font-size:13px; font-weight:700; color:var(--purple); text-transform:uppercase; letter-spacing:.04em; margin:26px 0 12px;}
+  .section-title:first-child{margin-top:0;}
+
+  /* Home narrative intro block — framed to stand out from the rest of the page */
+  .home-intro{margin:0 0 26px; background:#FBF7FF; border:1.5px solid var(--purple); border-radius:20px; padding:24px 28px;}
+  .home-intro .kicker{font-size:12px; color:var(--purple); text-transform:uppercase; letter-spacing:.06em; font-weight:700; margin-bottom:8px;}
+  .home-intro h2{font-size:28px; font-weight:800; color:var(--black); margin:0 0 4px; line-height:1.2;}
+  .home-intro .subtitle{font-size:15px; color:var(--purple); font-weight:700; margin-bottom:14px;}
+  .question-chip{display:inline-block; background:#fff; color:var(--purple); font-weight:700; font-size:13px; padding:8px 16px; border-radius:999px; margin-bottom:14px; border:1px solid #E3C9FA;}
+  .home-intro p.desc{font-size:14.5px; color:var(--ink); line-height:1.6; max-width:720px; margin:0;}
+  .home-intro p.lead-why{font-size:15.5px; font-weight:700; color:var(--black); margin:2px 0 6px; max-width:720px; line-height:1.5;}
+  .home-intro p.lead-what{font-size:14px; color:var(--ink); margin:0 0 14px; max-width:720px; line-height:1.6;}
+
+  .stat-strip{font-size:12.5px; color:var(--muted); margin:14px 2px 0;}
+  .stat-strip b{color:var(--black);}
+
+  /* Fact strip (context numbers: cohorts, selected, universities, partners) */
+  .fact-strip{display:flex; background:var(--card); border:1px solid var(--border); border-radius:16px; overflow:hidden;}
+  .fact-strip .item{flex:1; text-align:center; padding:18px 10px; border-right:1px solid var(--border);}
+  .fact-strip .item:last-child{border-right:none;}
+  .fact-strip .v{font-size:24px; font-weight:800; color:var(--black);}
+  .fact-strip .l{font-size:11.5px; color:var(--muted); margin-top:4px;}
+
+  /* Cuadro cards (How We're Doing) */
+  .cuadro-head{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:14px; flex-wrap:wrap; gap:6px;}
+  .cuadro-title{font-size:13.5px; font-weight:700; color:var(--black);}
+  .cuadro-avg{font-size:12px; color:var(--muted);}
+  .cuadro-avg b{color:var(--black); font-size:14px;}
+
+  .bullet-row{margin-bottom:14px;}
+  .bullet-row:last-child{margin-bottom:0;}
+  .bullet-label{display:flex; justify-content:space-between; font-size:12px; color:var(--ink); margin-bottom:5px;}
+  .bullet-track{position:relative; background:#F1EEE3; border-radius:999px; height:11px;}
+  .bullet-fill{height:100%; border-radius:999px;}
+  .bullet-goal{position:absolute; top:-3px; width:2px; height:17px; background:var(--black);}
+
+  /* Program Journey */
+  .journey-pills{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;}
+  .journey-pill{background:var(--cream); border:1px solid var(--border); border-radius:10px; padding:9px 20px; font-size:13px; font-weight:700; color:var(--ink);}
+  .journey-pill.era{background:#F5EAFF; color:var(--purple); border-color:#E3C9FA;}
+  .journey-note{font-size:12.5px; color:var(--muted);}
+
+  /* Donut chart (risk distribution) */
+  .donut-wrap{display:flex; align-items:center; gap:26px; flex-wrap:wrap;}
+  .donut{width:150px; height:150px; border-radius:50%; flex-shrink:0; position:relative;
+    background:conic-gradient(var(--green) 0% 38%, #8FE0B4 38% 65%, var(--purple) 65% 85%, #3A0A5C 85% 95%, var(--black) 95% 100%);}
+  .donut::after{content:""; position:absolute; inset:24px; background:var(--card); border-radius:50%;}
+  .legend-notes{display:flex; flex-direction:column; gap:8px; font-size:12.5px;}
+  .legend-notes .row{display:flex; align-items:baseline; gap:8px;}
+  .legend-notes .row b{min-width:96px; display:inline-flex; align-items:center; gap:6px;}
+  .legend-notes .row span.note{color:var(--muted);}
+
+  /* Simple bar chart (progress vs expected pace) */
+  .barchart{display:flex; align-items:flex-end; gap:20px; height:140px; padding-top:10px;}
+  .barchart .bar-col{display:flex; flex-direction:column; align-items:center; gap:8px; width:70px;}
+  .barchart .bar{width:44px; border-radius:8px 8px 0 0;}
+  .barchart .bar-val{font-size:13px; font-weight:800; color:var(--black);}
+  .barchart .bar-label{font-size:11.5px; color:var(--muted); text-align:center;}
+  .barchart .bar-note{font-size:10.5px; color:var(--muted); text-align:center; line-height:1.3; max-width:78px;}
+
+  /* dark callout w/ yellow (critical / attention items only) */
+  .callout-dark{background:var(--black); border-radius:16px; padding:18px 20px; color:#fff;}
+  .callout-dark .l{font-size:12px; color:rgba(255,255,255,0.55); margin-bottom:6px;}
+  .callout-dark .v{font-size:28px; font-weight:800; color:var(--yellow);}
+  .callout-dark .n{font-size:12px; color:rgba(255,255,255,0.55); margin-top:4px;}
+
+  /* risk bar */
+  .risk-row{display:flex; height:14px; border-radius:999px; overflow:hidden; margin:10px 0 12px;}
+  .risk-row div{height:100%;}
+  .risk-legend{display:flex; flex-wrap:wrap; gap:14px; font-size:12px; color:var(--ink);}
+  .risk-legend span{display:inline-flex; align-items:center; gap:6px;}
+  .dot{width:9px; height:9px; border-radius:999px; display:inline-block;}
+
+  .stat-row{display:flex; gap:16px; flex-wrap:wrap;}
+  .stat-chip{background:#F8F6EF; border:1px solid var(--border); border-radius:12px; padding:12px 16px; min-width:130px;}
+  .stat-chip .v{font-size:20px; font-weight:800; color:var(--black);}
+  .stat-chip .l{font-size:11.5px; color:var(--muted); margin-top:2px;}
+  .stat-chip.chip-green{background:#EAFBF2; border-color:#CFEFDD;}
+  .stat-chip.chip-green .v{color:var(--green);}
+  .stat-chip.chip-red{background:#FDECEC; border-color:#F5C9C9;}
+  .stat-chip.chip-red .v{color:#D33636;}
+
+  .split-bar{display:flex; height:10px; border-radius:999px; overflow:hidden; margin:8px 0;}
+
+  /* Scholar profile search */
+  .search{display:flex; gap:10px; margin-bottom:20px;}
+  .search input{flex:1; padding:11px 16px; border-radius:12px; border:1px solid var(--border); font-size:13.5px; background:var(--card);}
+  .search button{padding:11px 18px; border-radius:12px; border:none; background:var(--purple); color:#fff; font-size:13px; font-weight:700; cursor:pointer;}
+
+  .profile-card{display:flex; gap:18px; padding:22px;}
+  .profile-photo{width:78px; height:78px; border-radius:16px; background:linear-gradient(135deg,var(--purple),var(--green)); flex-shrink:0;}
+  @keyframes avatarGradient{0%{background-position:0% 50%;} 50%{background-position:100% 50%;} 100%{background-position:0% 50%;}}
+  @keyframes avatarPulse{0%,100%{box-shadow:0 0 0 0 rgba(166,43,255,0.35);} 50%{box-shadow:0 0 0 9px rgba(166,43,255,0);}}
+  .profile-photo-animated{width:78px; height:78px; border-radius:16px; flex-shrink:0; background:linear-gradient(120deg,var(--purple),var(--green),#C77DFF,var(--purple)); background-size:300% 300%; animation:avatarGradient 7s ease infinite, avatarPulse 2.6s ease-in-out infinite; display:flex; align-items:center; justify-content:center; overflow:hidden;}
+  .profile-photo-animated svg{width:40px; height:40px;}
+  .profile-fields{display:grid; grid-template-columns:repeat(3,1fr); gap:10px 22px; flex:1;}
+  .field .l{font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.03em;}
+  .field .v{font-size:13.5px; font-weight:600; color:var(--black); margin-top:2px;}
+  .status-badge{display:inline-block; font-size:11.5px; font-weight:700; padding:4px 10px; border-radius:999px; background:#EAFBF2; color:var(--green);}
+  .activity-chip{display:inline-block; font-size:11.5px; background:#F5EAFF; color:var(--purple); padding:4px 10px; border-radius:999px; margin:3px 4px 0 0;}
+
+  /* university cards */
+  .uni-card{padding:16px 18px;}
+  .uni-card .name{font-size:14.5px; font-weight:700; color:var(--black); margin-bottom:8px;}
+  .uni-meta{font-size:12px; color:var(--muted); display:flex; flex-direction:column; gap:4px; margin-bottom:10px;}
+  .risk-chip{display:inline-block; font-size:11px; font-weight:700; padding:3px 9px; border-radius:999px;}
+
+
+  /* University risk rows (Option A — 2-color stacked bar per university) */
+  .uni-risk-row{display:flex; align-items:center; gap:14px; padding:9px 0; border-bottom:1px solid var(--border);}
+  .uni-risk-row:last-child{border-bottom:none;}
+  .uni-risk-name{width:250px; font-size:12.5px; font-weight:600; color:var(--black); flex-shrink:0;}
+  .uni-risk-name .country{font-weight:400; color:var(--muted); font-size:11px;}
+  .uni-risk-track{flex:1; display:flex; height:12px; border-radius:999px; overflow:hidden;}
+  .uni-risk-pct{width:112px; text-align:right; font-size:11.5px; color:var(--muted); flex-shrink:0;}
+
+  /* University horizontal bar chart (single-metric ranking, e.g. Scholars Status per University) */
+  .uni-hbar-row{display:flex; align-items:center; gap:14px; padding:10px 0; border-bottom:1px solid var(--border);}
+  .uni-hbar-row:last-child{border-bottom:none;}
+  .uni-hbar-name{width:250px; font-size:12.5px; font-weight:600; color:var(--black); flex-shrink:0;}
+  .uni-hbar-name .country{font-weight:400; color:var(--muted); font-size:11px;}
+  .uni-hbar-track{flex:1; background:#F1EEE3; border-radius:999px; height:18px;}
+  .uni-hbar-fill{height:100%; border-radius:999px; display:flex; align-items:center; justify-content:flex-end; padding-right:10px; min-width:34px;}
+  .uni-hbar-fill span{font-size:11px; font-weight:700; color:#fff; white-space:nowrap;}
+
+  /* Delivery partner rows (scholar counts, grouped by program stage) */
+  .partner-group-title{font-size:12px; font-weight:700; color:var(--purple); text-transform:uppercase; letter-spacing:.03em; margin:16px 0 8px;}
+  .partner-group-title:first-child{margin-top:0;}
+  .partner-row{display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--border);}
+  .partner-row:last-child{border-bottom:none;}
+  .partner-name{font-size:13.5px; font-weight:600; color:var(--black);}
+  .partner-country{font-size:11.5px; color:var(--muted); margin-left:6px; font-weight:400;}
+  .partner-count{font-size:14px; font-weight:800; color:var(--black);}
+  .partner-count .n{font-size:11.5px; color:var(--muted); font-weight:400; margin-left:4px;}
+
+  /* Monthly trend chart caption / delta arrows */
+  .trend-delta{font-size:9.5px; font-weight:700;}
+  .trend-delta.up-bad{fill:#D33636;}
+  .trend-delta.down-good{fill:var(--green);}
+  .trend-delta.flat{fill:var(--muted);}
+
+  /* Monthly follow-up heatmap (Scholar Profile) */
+  .heatmap-table{width:100%; border-collapse:separate; border-spacing:0 6px; font-size:12.5px;}
+  .heatmap-table th{text-align:center; font-size:11px; color:var(--muted); font-weight:700; text-transform:uppercase; letter-spacing:.03em; padding:0 6px 4px;}
+  .heatmap-table th:first-child{text-align:left;}
+  .heatmap-table td{padding:9px 6px; text-align:center;}
+  .heatmap-table td:first-child{text-align:left; font-weight:600; color:var(--black); width:90px;}
+  .risk-cell{border-radius:8px; font-weight:700; font-size:11.5px;}
+  .risk-cell.nr{background:#EAFBF2; color:var(--green);}
+  .risk-cell.low{background:#EEFAF3; color:#3FA968;}
+  .risk-cell.med{background:#F5EAFF; color:var(--purple);}
+  .risk-cell.high{background:#EEE3F7; color:#3A0A5C;}
+  .risk-cell.crit{background:var(--black); color:var(--yellow);}
+
+  /* Panel headers inside Scholar Profile */
+  .panel-title{font-size:13px; font-weight:700; color:var(--black); margin-bottom:14px;}
+  .gpa-band-row{display:flex; gap:16px; margin-top:12px;}
+
+  /* Big, standout section title (e.g. "Program Overview") */
+  .section-title-big{font-size:21px; font-weight:800; color:var(--black); text-transform:none; letter-spacing:0; margin:34px 0 14px;}
+  .section-title-big:first-child{margin-top:0;}
+
+  /* Nav buttons (link directly to a dashboard view) */
+  .nav-btn{border:none; border-radius:12px; padding:12px 22px; font-size:13.5px; font-weight:700; color:#fff; cursor:pointer; display:inline-flex; align-items:center; gap:6px; white-space:nowrap;}
+  .nav-btn-purple{background:var(--purple);}
+  .nav-btn-green{background:var(--green);}
+  .nav-btn:hover{opacity:.9;}
+
+  /* "Handmade" bullet list (Early Support intro) */
+  .handmade-list{display:flex; flex-direction:column; gap:10px; margin:6px 0 20px;}
+  .handmade-item{display:flex; align-items:flex-start; gap:10px; font-size:14px; color:var(--ink); line-height:1.55; max-width:720px;}
+  .handmade-mark{font-size:15px; font-weight:800; flex-shrink:0; margin-top:2px;}
+
+  /* University risk rows v2 — % labels sit above the stacked bar */
+  .uni-risk-bars{flex:1; display:flex; flex-direction:column; gap:5px;}
+  .uni-risk-pcts{display:flex; justify-content:space-between; font-size:11.5px; font-weight:700;}
+</style>
+</head>
+<body>
+<div class="layout">
+
+  <!-- ===================== SIDEBAR ===================== -->
+  <aside class="sidebar">
+    <div>
+      <div class="brand">
+        <div>
+          <img class="brand-logo" src="data:image/png;base64,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" alt="VelezReyes+ logo" />
+          <div class="brand-sub">Beca Tech+ &middot; Scholar Platform</div>
+        </div>
+      </div>
+      <nav class="nav" id="nav">
+        <a data-target="home" class="active"><span class="icon">&#9635;</span> Home</a>
+        <a data-target="early"><span class="icon">&#9679;</span> Early Support</a>
+        <a data-target="career"><span class="icon">&#9650;</span> Growth &amp; Development</a>
+        <a data-target="profile"><span class="icon">&#9737;</span> Scholar Profile</a>
+        <a data-target="ecosystem"><span class="icon">&#8938;</span> Program Ecosystem</a>
+      </nav>
+    </div>
+    <div class="profile">
+      <div class="avatar">MR</div>
+      <div>
+        <div class="profile-name">María Restrepo</div>
+        <div class="profile-role">Program Manager</div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ===================== MAIN ===================== -->
+  <main class="main">
+
+    <!-- Global filter bar — applies across every view -->
+    <div class="topbar">
+      <div class="filters-group">
+        <span class="pill">Cohort: all ⌄</span>
+        <span class="pill">University: all ⌄</span>
+        <span class="pill">Country: all ⌄</span>
+        <span class="pill">Semester: all ⌄</span>
+        <span class="pill">Month: all ⌄</span>
+        <span class="pill">Status: all ⌄</span>
+        <span class="pill">Risk: all ⌄</span>
+        <span class="pill">Department: all ⌄</span>
+      </div>
+      <button class="signout-btn">Sign out</button>
+    </div>
+
+    <div class="container">
+
+      <!-- ============ VIEW 1: HOME ============ -->
+      <section class="view active" data-view="home">
+        <div class="pagehead">
+          <h1>Beca Tech+</h1>
+          <span class="tag">Data as of 2026-06</span>
+        </div>
+
+        <div class="fact-strip">
+          <div class="item"><div class="v" style="color:var(--purple);">3</div><div class="l">Cohorts</div></div>
+          <div class="item"><div class="v" style="color:var(--green);">237</div><div class="l">Scholars selected</div></div>
+          <div class="item"><div class="v" style="color:var(--purple);">11</div><div class="l">Partner universities</div></div>
+          <div class="item"><div class="v" style="color:var(--green);">4</div><div class="l">Delivery partners</div></div>
+        </div>
+
+        <div class="section-title-big">How Do We Support Scholars?</div>
+        <div class="card" style="padding:22px 26px; display:flex; align-items:center; justify-content:space-between; gap:20px; flex-wrap:wrap;">
+          <p style="font-size:14px; color:var(--muted); margin:0; max-width:440px; line-height:1.6;">Every scholar moves through two stages of support, each with its own goals and metrics — explore them in detail.</p>
+          <div style="display:flex; gap:14px; flex-wrap:wrap;">
+            <button class="nav-btn nav-btn-purple" data-goto="early">Early Support →</button>
+            <button class="nav-btn nav-btn-green" data-goto="career">Growth &amp; Development →</button>
+          </div>
+        </div>
+
+        <div class="section-title-big">Program Overview</div>
+        <div class="grid2">
+
+          <!-- Cuadro 1: Total Active Scholars -->
+          <div class="card cuadro" style="padding:20px;">
+            <div class="cuadro-head">
+              <div class="cuadro-title">Total Active Scholars</div>
+            </div>
+            <div style="font-size:32px; font-weight:800; color:var(--black); margin-bottom:14px;">225</div>
+            <div class="stat-row">
+              <div class="stat-chip chip-green"><div class="v">142</div><div class="l">Active in Colombia</div></div>
+              <div class="stat-chip chip-green"><div class="v">83</div><div class="l">Active in Peru</div></div>
+              <div class="stat-chip chip-green"><div class="v">106</div><div class="l">Active women</div></div>
+            </div>
+          </div>
+
+          <!-- Cuadro 2: Retention Rate -->
+          <div class="card cuadro" style="padding:20px;">
+            <div class="cuadro-head">
+              <div class="cuadro-title">Retention Rate</div>
+              <div class="cuadro-avg">Program average <b>91.4%</b></div>
+            </div>
+            <div class="bullet-row">
+              <div class="bullet-label"><span>Year 1 · goal ≥85%</span><span><b>89%</b></span></div>
+              <div class="bullet-track"><div class="bullet-fill" style="width:89%; background:var(--green);"></div><div class="bullet-goal" style="left:85%;"></div></div>
+            </div>
+            <div class="bullet-row">
+              <div class="bullet-label"><span>Year 2 · goal ≥90%</span><span><b>92%</b></span></div>
+              <div class="bullet-track"><div class="bullet-fill" style="width:92%; background:var(--green);"></div><div class="bullet-goal" style="left:90%;"></div></div>
+            </div>
+            <div class="bullet-row">
+              <div class="bullet-label"><span>Year 3 · goal ≥90%</span><span><b>88%</b></span></div>
+              <div class="bullet-track"><div class="bullet-fill" style="width:88%; background:var(--purple);"></div><div class="bullet-goal" style="left:90%;"></div></div>
+            </div>
+          </div>
+
+          <!-- Cuadro 3: Program Satisfaction -->
+          <div class="card cuadro" style="padding:20px;">
+            <div class="cuadro-head">
+              <div class="cuadro-title">Program Satisfaction <span class="badge-proxy">PROXY</span></div>
+            </div>
+            <div class="stat-row">
+              <div class="stat-chip"><div class="v">88%</div><div class="l">Goal</div></div>
+              <div class="stat-chip chip-green"><div class="v">90%</div><div class="l">Result · 2026-1</div></div>
+            </div>
+            <p class="stat-strip" style="margin-top:14px; font-size:12px;">+2 pts above goal — trending up since 2025-1 (82% → 85% → 90%).</p>
+          </div>
+
+          <!-- Cuadro 4: Academic Progress -->
+          <div class="card cuadro" style="padding:20px;">
+            <div class="cuadro-head">
+              <div class="cuadro-title">Academic Progress</div>
+              <div class="cuadro-avg">Average GPA <b>3.9/5</b></div>
+            </div>
+            <div class="barchart" style="height:175px;">
+              <div class="bar-col" style="width:78px;">
+                <div class="bar-val">70%</div>
+                <div class="bar" style="height:78px; background:var(--green);"></div>
+                <div class="bar-label">On track</div>
+                <div class="bar-note">Following their study plan</div>
+              </div>
+              <div class="bar-col" style="width:78px;">
+                <div class="bar-val">22%</div>
+                <div class="bar" style="height:28px; background:#8FE0B4;"></div>
+                <div class="bar-label">Behind</div>
+                <div class="bar-note">One course behind</div>
+              </div>
+              <div class="bar-col" style="width:78px;">
+                <div class="bar-val">8%</div>
+                <div class="bar" style="height:12px; background:var(--purple);"></div>
+                <div class="bar-label">Critical</div>
+                <div class="bar-note">More than one course behind</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Cuadro 5: Dropouts -->
+          <div class="card cuadro" style="padding:20px;">
+            <div class="cuadro-head">
+              <div class="cuadro-title">Dropouts</div>
+              <div class="cuadro-avg">2.2% of active scholars</div>
+            </div>
+            <div style="font-size:32px; font-weight:800; color:#D33636; margin-bottom:14px;">5</div>
+            <div class="stat-row" style="flex-direction:column; gap:8px;">
+              <div class="stat-row" style="width:100%;">
+                <div class="stat-chip chip-red" style="flex:1;"><div class="v">2</div><div class="l">Financial hardship</div></div>
+                <div class="stat-chip chip-red" style="flex:1;"><div class="v">1</div><div class="l">Academic difficulty</div></div>
+              </div>
+              <div class="stat-row" style="width:100%;">
+                <div class="stat-chip chip-red" style="flex:1;"><div class="v">1</div><div class="l">Psychosocial / health</div></div>
+                <div class="stat-chip chip-red" style="flex:1;"><div class="v">1</div><div class="l">Relocation / other</div></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Cuadro 6: Socioeconomic Condition -->
+          <div class="card cuadro" style="padding:20px;">
+            <div class="cuadro-head">
+              <div class="cuadro-title">Socioeconomic Condition</div>
+            </div>
+            <div class="stat-row">
+              <div class="stat-chip chip-green"><div class="v">68%</div><div class="l">Baja</div></div>
+              <div class="stat-chip"><div class="v">27%</div><div class="l">Media</div></div>
+              <div class="stat-chip chip-red"><div class="v">5%</div><div class="l">Alta</div></div>
+            </div>
+            <p class="stat-strip" style="margin-top:14px; font-size:12px;">Consistent with the program's low-income eligibility criteria.</p>
+          </div>
+
+        </div>
+
+        <div class="section-title-big">Active Scholars by City (Colombia)</div>
+        <div class="card" style="padding:24px;">
+          <div class="barchart" style="height:270px; gap:28px; padding-top:20px; background-image:repeating-linear-gradient(to top, var(--border) 0, var(--border) 1px, transparent 1px, transparent 25%);">
+            <div class="bar-col" style="width:90px;">
+              <div class="bar-val" style="font-size:18px;">65</div>
+              <div class="bar" style="height:150px; width:56px; background:var(--purple); border-radius:10px 10px 0 0;"></div>
+              <div class="bar-label">Medellín</div>
+            </div>
+            <div class="bar-col" style="width:90px;">
+              <div class="bar-val" style="font-size:18px;">42</div>
+              <div class="bar" style="height:97px; width:56px; background:var(--purple); border-radius:10px 10px 0 0;"></div>
+              <div class="bar-label">Bogotá</div>
+            </div>
+            <div class="bar-col" style="width:90px;">
+              <div class="bar-val" style="font-size:18px;">16</div>
+              <div class="bar" style="height:37px; width:56px; background:var(--purple); border-radius:10px 10px 0 0;"></div>
+              <div class="bar-label">Cali</div>
+            </div>
+            <div class="bar-col" style="width:90px;">
+              <div class="bar-val" style="font-size:18px;">13</div>
+              <div class="bar" style="height:30px; width:56px; background:var(--purple); border-radius:10px 10px 0 0;"></div>
+              <div class="bar-label">Barranquilla</div>
+            </div>
+            <div class="bar-col" style="width:90px;">
+              <div class="bar-val" style="font-size:18px;">6</div>
+              <div class="bar" style="height:14px; width:56px; background:#D9C7F5; border-radius:10px 10px 0 0;"></div>
+              <div class="bar-label">Other cities</div>
+            </div>
+          </div>
+          <div class="journey-note" style="margin-top:16px;">142 active scholars in Colombia across 4 main cities plus smaller markets.</div>
+        </div>
+
+        <div class="section-title-big">All Universities — Retention &amp; Drop Out Rate</div>
+        <div class="card" style="padding:24px;">
+          <div class="uni-risk-row">
+            <div class="uni-risk-name">Universidad de Los Andes</div>
+            <div class="uni-risk-track"><div class="uni-risk-fill" style="width:96%; background:var(--green);"></div><div class="uni-risk-fill" style="width:4%; background:#D33636;"></div></div>
+            <div class="uni-risk-pct">96% · 4%</div>
+          </div>
+          <div class="uni-risk-row">
+            <div class="uni-risk-name">Pontificia Universidad Javeriana</div>
+            <div class="uni-risk-track"><div class="uni-risk-fill" style="width:95%; background:var(--green);"></div><div class="uni-risk-fill" style="width:5%; background:#D33636;"></div></div>
+            <div class="uni-risk-pct">95% · 5%</div>
+          </div>
+          <div class="uni-risk-row">
+            <div class="uni-risk-name">Universidad EAFIT</div>
+            <div class="uni-risk-track"><div class="uni-risk-fill" style="width:100%; background:var(--green);"></div></div>
+            <div class="uni-risk-pct">100% · 0%</div>
+          </div>
+          <div class="uni-risk-row">
+            <div class="uni-risk-name">Universidad Icesi</div>
+            <div class="uni-risk-track"><div class="uni-risk-fill" style="width:94%; background:var(--green);"></div><div class="uni-risk-fill" style="width:6%; background:#D33636;"></div></div>
+            <div class="uni-risk-pct">94% · 6%</div>
+          </div>
+          <div class="uni-risk-row">
+            <div class="uni-risk-name">Universidad Pontificia Bolivariana</div>
+            <div class="uni-risk-track"><div class="uni-risk-fill" style="width:94%; background:var(--green);"></div><div class="uni-risk-fill" style="width:6%; background:#D33636;"></div></div>
+            <div class="uni-risk-pct">94% · 6%</div>
+          </div>
+          <div class="uni-risk-row">
+            <div class="uni-risk-name">Universidad EIA</div>
+            <div class="uni-risk-track"><div class="uni-risk-fill" style="width:100%; background:var(--green);"></div></div>
+            <div class="uni-risk-pct">100% · 0%</div>
+          </div>
+          <div class="uni-risk-row">
+            <div class="uni-risk-name">Universidad del Norte</div>
+            <div class="uni-risk-track"><div class="uni-risk-fill" style="width:93%; background:var(--green);"></div><div class="uni-risk-fill" style="width:7%; background:#D33636;"></div></div>
+            <div class="uni-risk-pct">93% · 7%</div>
+          </div>
+          <div class="uni-risk-row">
+            <div class="uni-risk-name">Universidad de Antioquia</div>
+            <div class="uni-risk-track"><div class="uni-risk-fill" style="width:90%; background:#8FE0B4;"></div><div class="uni-risk-fill" style="width:10%; background:#D33636;"></div></div>
+            <div class="uni-risk-pct">90% · 10%</div>
+          </div>
+          <div class="uni-risk-row">
+            <div class="uni-risk-name">Universidad Nacional</div>
+            <div class="uni-risk-track"><div class="uni-risk-fill" style="width:100%; background:var(--green);"></div></div>
+            <div class="uni-risk-pct">100% · 0%</div>
+          </div>
+          <div class="uni-risk-row">
+            <div class="uni-risk-name">UTEC</div>
+            <div class="uni-risk-track"><div class="uni-risk-fill" style="width:98%; background:var(--green);"></div><div class="uni-risk-fill" style="width:2%; background:#D33636;"></div></div>
+            <div class="uni-risk-pct">98% · 2%</div>
+          </div>
+          <div class="uni-risk-row">
+            <div class="uni-risk-name">UPC</div>
+            <div class="uni-risk-track"><div class="uni-risk-fill" style="width:97%; background:var(--green);"></div><div class="uni-risk-fill" style="width:3%; background:#D33636;"></div></div>
+            <div class="uni-risk-pct">97% · 3%</div>
+          </div>
+          <div class="journey-note" style="margin-top:16px;">Retention % · Drop out % — shown per university, all cohorts combined.</div>
+        </div>
+
+        <div class="section-title-big">Scholars by Year</div>
+        <div class="card" style="padding:24px;">
+          <div class="barchart" style="height:270px; gap:44px; padding-top:20px; background-image:repeating-linear-gradient(to top, var(--border) 0, var(--border) 1px, transparent 1px, transparent 25%);">
+            <div class="bar-col" style="width:100px;">
+              <div class="bar-val" style="font-size:20px;">139</div>
+              <div class="bar" style="height:150px; width:64px; background:var(--green); border-radius:10px 10px 0 0;"></div>
+              <div class="bar-label">Year 1</div>
+              <div class="bar-note">62% of active scholars</div>
+            </div>
+            <div class="bar-col" style="width:100px;">
+              <div class="bar-val" style="font-size:20px;">59</div>
+              <div class="bar" style="height:64px; width:64px; background:#8FE0B4; border-radius:10px 10px 0 0;"></div>
+              <div class="bar-label">Year 2</div>
+              <div class="bar-note">26% of active scholars</div>
+            </div>
+            <div class="bar-col" style="width:100px;">
+              <div class="bar-val" style="font-size:20px;">27</div>
+              <div class="bar" style="height:29px; width:64px; background:var(--purple); border-radius:10px 10px 0 0;"></div>
+              <div class="bar-label">Year 3</div>
+              <div class="bar-note">12% of active scholars</div>
+            </div>
+          </div>
+          <div class="journey-note" style="margin-top:16px; display:flex; flex-direction:column; gap:4px;">
+            <div>Years 1–2 — <b>Early Support:</b> academic &amp; psychosocial support</div>
+            <div>Year 3 onward — <b>Growth &amp; Development:</b> professional development</div>
+          </div>
+        </div>
+
+        <div class="section-title-big">English Level Distribution</div>
+        <div class="card" style="padding:24px;">
+          <div class="barchart" style="height:220px; gap:20px; padding-top:14px; justify-content:center;">
+            <div class="bar-col" style="width:70px;">
+              <div class="bar-val" style="font-size:15px;">8%</div>
+              <div class="bar" style="height:35px; width:44px; background:var(--purple); border-radius:8px 8px 0 0;"></div>
+              <div class="bar-label">A1</div>
+            </div>
+            <div class="bar-col" style="width:70px;">
+              <div class="bar-val" style="font-size:15px;">14%</div>
+              <div class="bar" style="height:61px; width:44px; background:var(--purple); border-radius:8px 8px 0 0;"></div>
+              <div class="bar-label">A2</div>
+            </div>
+            <div class="bar-col" style="width:70px;">
+              <div class="bar-val" style="font-size:15px;">22%</div>
+              <div class="bar" style="height:95px; width:44px; background:var(--purple); border-radius:8px 8px 0 0;"></div>
+              <div class="bar-label">B1</div>
+            </div>
+            <div class="bar-col" style="width:70px;">
+              <div class="bar-val" style="font-size:15px;">30%</div>
+              <div class="bar" style="height:130px; width:44px; background:var(--green); border-radius:8px 8px 0 0;"></div>
+              <div class="bar-label">B2</div>
+            </div>
+            <div class="bar-col" style="width:70px;">
+              <div class="bar-val" style="font-size:15px;">18%</div>
+              <div class="bar" style="height:78px; width:44px; background:var(--green); border-radius:8px 8px 0 0;"></div>
+              <div class="bar-label">C1</div>
+            </div>
+            <div class="bar-col" style="width:70px;">
+              <div class="bar-val" style="font-size:15px;">8%</div>
+              <div class="bar" style="height:35px; width:44px; background:var(--green); border-radius:8px 8px 0 0;"></div>
+              <div class="bar-label">C2</div>
+            </div>
+          </div>
+          <div class="journey-note" style="margin-top:14px;">A1–B1: developing proficiency · B2–C2: professional working proficiency</div>
+        </div>
+
+        <p class="stat-strip" style="margin-top:22px; font-size:13px;">Explore each section on the left to see how we support scholars at every stage.</p>
+      </section>
+
+      <!-- ============ VIEW 2: EARLY SUPPORT (Years 1-2) ============ -->
+      <section class="view" data-view="early">
+        <div class="pagehead">
+          <h1>Early Support — Academic &amp; Psychosocial</h1>
+          <span class="tag">Years 1–2</span>
+        </div>
+        <p class="dek">During the first two years, we accompany scholars along two parallel tracks:</p>
+        <div class="handmade-list">
+          <div class="handmade-item"><span class="handmade-mark" style="color:var(--green);">✓</span><div><b>Academic support:</b> tutoring, advising, study groups, and workshops that strengthen the skills scholars need to meet university demands.</div></div>
+          <div class="handmade-item"><span class="handmade-mark" style="color:var(--purple);">✓</span><div><b>Psychosocial support:</b> individual and group activities that build socioemotional skills, overall wellbeing, and support networks.</div></div>
+        </div>
+
+        <div class="fact-strip">
+          <div class="item"><div class="v" style="color:var(--purple);">198</div><div class="l">Total scholars <span style="opacity:.7;">(88% of all active)</span></div></div>
+          <div class="item"><div class="v" style="color:var(--green);">99%</div><div class="l">Year 1 retention <span style="opacity:.7;">· goal ≥85%</span></div></div>
+          <div class="item"><div class="v" style="color:var(--green);">96%</div><div class="l">Year 2 retention <span style="opacity:.7;">· goal ≥90%</span></div></div>
+        </div>
+
+        <div class="section-title" style="margin-top:26px;">Scholars Status</div>
+        <div class="card" style="padding:20px;">
+          <div class="donut-wrap">
+            <div class="donut" style="background:conic-gradient(var(--green) 0% 42%, #8FE0B4 42% 68%, var(--purple) 68% 86%, #3A0A5C 86% 96%, var(--black) 96% 100%);"></div>
+            <div class="legend-notes">
+              <div class="row"><b><i class="dot" style="background:var(--green);"></i> No Risk · 42%</b><span class="note">Stable, no dropout risk</span></div>
+              <div class="row"><b><i class="dot" style="background:#8FE0B4;"></i> Low · 26%</b><span class="note">Minor issues, low dropout risk</span></div>
+              <div class="row"><b><i class="dot" style="background:var(--purple);"></i> Medium · 18%</b><span class="note">Needs monitoring, moderate risk</span></div>
+              <div class="row"><b><i class="dot" style="background:#3A0A5C;"></i> High · 10%</b><span class="note">Serious issues, high dropout risk</span></div>
+              <div class="row"><b><i class="dot" style="background:var(--black);"></i> Critical · 4%</b><span class="note">Urgent, very high dropout risk</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid2" style="margin-top:16px;">
+          <!-- Monthly Change in Risk Level -->
+          <div class="card cuadro" style="padding:20px;">
+            <div class="cuadro-head">
+              <div class="cuadro-title">Monthly Change in Risk Level</div>
+              <div class="cuadro-avg">% in Medium+ risk</div>
+            </div>
+            <svg viewBox="0 0 300 100" width="100%" height="100" style="overflow:visible; display:block;">
+              <polyline points="20,40 90,46 160,58 230,50 280,62" fill="none" stroke="#A62BFF" stroke-width="2.5"/>
+              <circle cx="20" cy="40" r="4" fill="#A62BFF"/>
+              <circle cx="90" cy="46" r="4" fill="#A62BFF"/>
+              <circle cx="160" cy="58" r="4" fill="#A62BFF"/>
+              <circle cx="230" cy="50" r="4" fill="#A62BFF"/>
+              <circle cx="280" cy="62" r="4" fill="#A62BFF"/>
+              <text x="20" y="30" font-size="10" fill="#33312B" text-anchor="middle" font-weight="700">30%</text>
+              <text x="90" y="36" font-size="10" fill="#33312B" text-anchor="middle" font-weight="700">28%</text>
+              <text x="160" y="48" font-size="10" fill="#33312B" text-anchor="middle" font-weight="700">25%</text>
+              <text x="230" y="40" font-size="10" fill="#33312B" text-anchor="middle" font-weight="700">27%</text>
+              <text x="280" y="52" font-size="10" fill="#33312B" text-anchor="middle" font-weight="700">24%</text>
+              <text x="55" y="82" class="trend-delta down-good" text-anchor="middle">▼2</text>
+              <text x="125" y="82" class="trend-delta down-good" text-anchor="middle">▼3</text>
+              <text x="195" y="82" class="trend-delta up-bad" text-anchor="middle">▲2</text>
+              <text x="255" y="82" class="trend-delta down-good" text-anchor="middle">▼3</text>
+              <text x="20" y="96" font-size="9.5" fill="#6F6C62" text-anchor="middle">M1</text>
+              <text x="90" y="96" font-size="9.5" fill="#6F6C62" text-anchor="middle">M2</text>
+              <text x="160" y="96" font-size="9.5" fill="#6F6C62" text-anchor="middle">M3</text>
+              <text x="230" y="96" font-size="9.5" fill="#6F6C62" text-anchor="middle">M4</text>
+              <text x="280" y="96" font-size="9.5" fill="#6F6C62" text-anchor="middle">M5</text>
+            </svg>
+          </div>
+
+          <!-- Alert Type -->
+          <div class="card cuadro" style="padding:20px;">
+            <div class="cuadro-head">
+              <div class="cuadro-title">Alert Type: Psychosocial vs. Academic</div>
+              <div class="cuadro-avg">Medium / High / Critical scholars</div>
+            </div>
+            <div class="stat-row">
+              <div class="stat-chip">
+                <div class="v">63%</div>
+                <div class="l">Academic alerts</div>
+              </div>
+              <div class="stat-chip">
+                <div class="v">37%</div>
+                <div class="l">Psychosocial alerts</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card cuadro" style="padding:20px; margin-top:14px;">
+          <div class="cuadro-head">
+            <div class="cuadro-title">Main Risk Level Reasons</div>
+            <div class="cuadro-avg">5 dropouts to date</div>
+          </div>
+          <div class="stat-row">
+            <div class="stat-chip chip-red"><div class="v">2</div><div class="l">Financial hardship</div></div>
+            <div class="stat-chip chip-red"><div class="v">1</div><div class="l">Academic difficulty</div></div>
+            <div class="stat-chip chip-red"><div class="v">1</div><div class="l">Psychosocial / health</div></div>
+            <div class="stat-chip chip-red"><div class="v">1</div><div class="l">Relocation / other</div></div>
+          </div>
+        </div>
+
+        <div class="section-title" style="margin-top:26px;">Scholars Status per University</div>
+        <div class="card" style="padding:20px 24px;">
+          <div class="uni-hbar-row">
+            <div class="uni-hbar-name">Universidad de Los Andes <span class="country">COL</span></div>
+            <div class="uni-hbar-track"><div class="uni-hbar-fill" style="width:70%; background:var(--green);"><span>70%</span></div></div>
+          </div>
+          <div class="uni-hbar-row">
+            <div class="uni-hbar-name">Pontificia Universidad Javeriana <span class="country">COL</span></div>
+            <div class="uni-hbar-track"><div class="uni-hbar-fill" style="width:68%; background:var(--green);"><span>68%</span></div></div>
+          </div>
+          <div class="uni-hbar-row">
+            <div class="uni-hbar-name">Universidad EAFIT <span class="country">COL</span></div>
+            <div class="uni-hbar-track"><div class="uni-hbar-fill" style="width:75%; background:var(--green);"><span>75%</span></div></div>
+          </div>
+          <div class="uni-hbar-row">
+            <div class="uni-hbar-name">Universidad Icesi <span class="country">COL</span></div>
+            <div class="uni-hbar-track"><div class="uni-hbar-fill" style="width:68%; background:var(--green);"><span>68%</span></div></div>
+          </div>
+          <div class="uni-hbar-row">
+            <div class="uni-hbar-name">Universidad Pontificia Bolivariana <span class="country">COL</span></div>
+            <div class="uni-hbar-track"><div class="uni-hbar-fill" style="width:68%; background:var(--green);"><span>68%</span></div></div>
+          </div>
+          <div class="uni-hbar-row">
+            <div class="uni-hbar-name">Universidad EIA <span class="country">COL</span></div>
+            <div class="uni-hbar-track"><div class="uni-hbar-fill" style="width:71%; background:var(--green);"><span>71%</span></div></div>
+          </div>
+          <div class="uni-hbar-row">
+            <div class="uni-hbar-name">Universidad del Norte <span class="country">COL</span></div>
+            <div class="uni-hbar-track"><div class="uni-hbar-fill" style="width:65%; background:var(--green);"><span>65%</span></div></div>
+          </div>
+          <div class="uni-hbar-row">
+            <div class="uni-hbar-name">UTEC <span class="country">PE</span></div>
+            <div class="uni-hbar-track"><div class="uni-hbar-fill" style="width:68%; background:var(--green);"><span>68%</span></div></div>
+          </div>
+          <div class="uni-hbar-row">
+            <div class="uni-hbar-name">UPC <span class="country">PE</span></div>
+            <div class="uni-hbar-track"><div class="uni-hbar-fill" style="width:67%; background:var(--green);"><span>67%</span></div></div>
+          </div>
+          <div class="risk-legend" style="margin-top:16px;">
+            <span><i class="dot" style="background:var(--green);"></i> Bar = % Low risk (No Risk + Low)</span>
+            <span>Remaining % = Needs attention (Medium + High + Critical)</span>
+          </div>
+        </div>
+
+        <div class="grid2" style="margin-top:26px;">
+          <div>
+            <div class="section-title">Risk Level by City</div>
+            <div class="card" style="padding:20px 24px;">
+              <div class="uni-hbar-row">
+                <div class="uni-hbar-name">Bogotá</div>
+                <div class="uni-hbar-track"><div class="uni-hbar-fill" style="width:72%; background:var(--green);"><span>72%</span></div></div>
+              </div>
+              <div class="uni-hbar-row">
+                <div class="uni-hbar-name">Medellín</div>
+                <div class="uni-hbar-track"><div class="uni-hbar-fill" style="width:69%; background:var(--green);"><span>69%</span></div></div>
+              </div>
+              <div class="uni-hbar-row">
+                <div class="uni-hbar-name">Cali</div>
+                <div class="uni-hbar-track"><div class="uni-hbar-fill" style="width:64%; background:var(--green);"><span>64%</span></div></div>
+              </div>
+              <div class="uni-hbar-row">
+                <div class="uni-hbar-name">Barranquilla</div>
+                <div class="uni-hbar-track"><div class="uni-hbar-fill" style="width:61%; background:var(--green);"><span>61%</span></div></div>
+              </div>
+              <div class="risk-legend" style="margin-top:14px;">
+                <span><i class="dot" style="background:var(--green);"></i> Bar = % Low risk</span>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div class="section-title">Risk Level by Gender</div>
+            <div class="card" style="padding:20px 24px;">
+              <div class="uni-hbar-row">
+                <div class="uni-hbar-name">Women</div>
+                <div class="uni-hbar-track"><div class="uni-hbar-fill" style="width:70%; background:var(--green);"><span>70%</span></div></div>
+              </div>
+              <div class="uni-hbar-row">
+                <div class="uni-hbar-name">Men</div>
+                <div class="uni-hbar-track"><div class="uni-hbar-fill" style="width:66%; background:var(--green);"><span>66%</span></div></div>
+              </div>
+              <div class="risk-legend" style="margin-top:14px;">
+                <span><i class="dot" style="background:var(--green);"></i> Bar = % Low risk</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="section-title" style="margin-top:26px;">Risk Level by Socioeconomic Condition</div>
+        <div class="card" style="padding:20px 24px;">
+          <div class="uni-hbar-row">
+            <div class="uni-hbar-name">Baja</div>
+            <div class="uni-hbar-track"><div class="uni-hbar-fill" style="width:64%; background:var(--purple);"><span>64%</span></div></div>
+          </div>
+          <div class="uni-hbar-row">
+            <div class="uni-hbar-name">Media</div>
+            <div class="uni-hbar-track"><div class="uni-hbar-fill" style="width:74%; background:var(--green);"><span>74%</span></div></div>
+          </div>
+          <div class="uni-hbar-row">
+            <div class="uni-hbar-name">Alta</div>
+            <div class="uni-hbar-track"><div class="uni-hbar-fill" style="width:86%; background:var(--green);"><span>86%</span></div></div>
+          </div>
+          <div class="risk-legend" style="margin-top:14px;">
+            <span><i class="dot" style="background:var(--green);"></i> Bar = % Low risk</span>
+            <span>Lower socioeconomic condition correlates with higher risk levels.</span>
+          </div>
+        </div>
+
+        <div class="section-title" style="margin-top:26px;">Participation in Support Activities</div>
+        <div class="card cuadro" style="padding:20px;">
+          <div class="cuadro-title" style="margin-bottom:10px;">Overall participation trend</div>
+          <svg viewBox="0 0 300 135" width="100%" height="135" style="overflow:visible; display:block;">
+            <rect x="3" y="58" width="34" height="47" rx="4" fill="#C77DFF" opacity="0.55"/>
+            <rect x="73" y="50" width="34" height="55" rx="4" fill="#C77DFF" opacity="0.55"/>
+            <rect x="143" y="44" width="34" height="61" rx="4" fill="#C77DFF" opacity="0.55"/>
+            <rect x="213" y="38" width="34" height="67" rx="4" fill="#C77DFF" opacity="0.55"/>
+            <rect x="263" y="38" width="34" height="67" rx="4" fill="#C77DFF" opacity="0.55"/>
+            <polyline points="20,58 90,50 160,44 230,38 280,38" fill="none" stroke="#A62BFF" stroke-width="2.5"/>
+            <circle cx="20" cy="58" r="4" fill="#A62BFF"/>
+            <circle cx="90" cy="50" r="4" fill="#A62BFF"/>
+            <circle cx="160" cy="44" r="4" fill="#A62BFF"/>
+            <circle cx="230" cy="38" r="4" fill="#A62BFF"/>
+            <circle cx="280" cy="38" r="4" fill="#A62BFF"/>
+            <text x="20" y="48" font-size="10" fill="#33312B" text-anchor="middle" font-weight="700">74%</text>
+            <text x="90" y="40" font-size="10" fill="#33312B" text-anchor="middle" font-weight="700">77%</text>
+            <text x="160" y="34" font-size="10" fill="#33312B" text-anchor="middle" font-weight="700">79%</text>
+            <text x="230" y="28" font-size="10" fill="#33312B" text-anchor="middle" font-weight="700">81%</text>
+            <text x="280" y="28" font-size="10" fill="#33312B" text-anchor="middle" font-weight="700">81%</text>
+            <line x1="0" y1="105" x2="300" y2="105" stroke="#E4E0D2" stroke-width="1"/>
+            <text x="20" y="122" font-size="9.5" fill="#6F6C62" text-anchor="middle">M1</text>
+            <text x="90" y="122" font-size="9.5" fill="#6F6C62" text-anchor="middle">M2</text>
+            <text x="160" y="122" font-size="9.5" fill="#6F6C62" text-anchor="middle">M3</text>
+            <text x="230" y="122" font-size="9.5" fill="#6F6C62" text-anchor="middle">M4</text>
+            <text x="280" y="122" font-size="9.5" fill="#6F6C62" text-anchor="middle">M5</text>
+          </svg>
+        </div>
+
+        <div class="card cuadro" style="padding:20px; margin-top:16px;">
+          <div class="cuadro-head">
+            <div class="cuadro-title">Participation by Risk Level</div>
+            <div class="cuadro-avg">% of scholars in each tier with ≥1 activity this month</div>
+          </div>
+          <div class="stat-row">
+            <div class="stat-chip chip-green"><div class="v">91%</div><div class="l">No Risk</div></div>
+            <div class="stat-chip chip-green"><div class="v">86%</div><div class="l">Low</div></div>
+            <div class="stat-chip"><div class="v">72%</div><div class="l">Medium</div></div>
+            <div class="stat-chip chip-red"><div class="v">58%</div><div class="l">High</div></div>
+            <div class="stat-chip chip-red"><div class="v">44%</div><div class="l">Critical</div></div>
+          </div>
+        </div>
+
+        <div class="section-title" style="margin-top:26px;">Academic Progress</div>
+        <div class="grid2">
+          <div class="card cuadro" style="padding:20px;">
+            <div class="cuadro-title" style="margin-bottom:6px;">On track vs. behind</div>
+            <div class="barchart" style="height:175px;">
+              <div class="bar-col" style="width:78px;">
+                <div class="bar-val">68%</div>
+                <div class="bar" style="height:68px; background:var(--green);"></div>
+                <div class="bar-label">On track</div>
+                <div class="bar-note">Following their study plan</div>
+              </div>
+              <div class="bar-col" style="width:78px;">
+                <div class="bar-val">24%</div>
+                <div class="bar" style="height:24px; background:#8FE0B4;"></div>
+                <div class="bar-label">Behind</div>
+                <div class="bar-note">One course behind</div>
+              </div>
+              <div class="bar-col" style="width:78px;">
+                <div class="bar-val">8%</div>
+                <div class="bar" style="height:8px; background:var(--purple);"></div>
+                <div class="bar-label">Critical</div>
+                <div class="bar-note">More than one course behind</div>
+              </div>
+            </div>
+          </div>
+          <div class="card cuadro" style="padding:20px;">
+            <div class="cuadro-head">
+              <div class="cuadro-title">GPA distribution</div>
+              <div class="cuadro-avg">Average <b>3.8/5</b></div>
+            </div>
+            <div class="stat-row">
+              <div class="stat-chip"><div class="v">25%</div><div class="l">Below 3.5</div></div>
+              <div class="stat-chip"><div class="v">45%</div><div class="l">GPA 3.5 – 3.9</div></div>
+              <div class="stat-chip"><div class="v">30%</div><div class="l">GPA 4.0 – 5.0</div></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ VIEW 3: GROWTH & DEVELOPMENT (Years 3-5) ============ -->
+      <section class="view" data-view="career">
+        <div class="pagehead">
+          <h1>Growth &amp; Development — Professional Skills</h1>
+          <span class="tag">Years 3–5</span>
+        </div>
+        <p class="dek">At this stage, scholars gain greater agency, and support shifts toward building professional skills — an entrepreneurial mindset, growing meaningful professional networks, and strengthening confidence in using English in the workplace.</p>
+
+        <div class="fact-strip">
+          <div class="item"><div class="v" style="color:var(--purple);">27</div><div class="l">Total scholars <span style="opacity:.7;">(12% of all active)</span></div></div>
+          <div class="item"><div class="v" style="color:var(--green);">93%</div><div class="l">Retention rate <span style="opacity:.7;">· goal ≥90%</span></div></div>
+        </div>
+
+        <div class="section-title" style="margin-top:26px;">MAKERS Beca Tech Program</div>
+        <div class="card" style="padding:18px 20px;">
+          <p style="font-size:13.5px; color:var(--muted); line-height:1.55; margin:0;">A two-year program of virtual sessions, mentorships, and workshops that builds the professional and entrepreneurial skills scholars need for the transition into the workforce.</p>
+        </div>
+
+        <div class="section-title" style="margin-top:26px;">Growth &amp; Development Metrics <span style="color:var(--muted); font-weight:400; text-transform:none; letter-spacing:0;">— goal vs. actual (illustrative)</span></div>
+        <div class="card cuadro" style="padding:20px;">
+          <div class="bullet-row">
+            <div class="bullet-label"><span>Mindset · goal ≥70%</span><span><b>76%</b></span></div>
+            <div class="bullet-track"><div class="bullet-fill" style="width:76%; background:var(--green);"></div><div class="bullet-goal" style="left:70%;"></div></div>
+          </div>
+          <div class="bullet-row">
+            <div class="bullet-label"><span>Social Capital · goal ≥65%</span><span><b>71%</b></span></div>
+            <div class="bullet-track"><div class="bullet-fill" style="width:71%; background:var(--green);"></div><div class="bullet-goal" style="left:65%;"></div></div>
+          </div>
+          <div class="bullet-row">
+            <div class="bullet-label"><span>Attendance Rate · goal ≥80%</span><span><b>85%</b></span></div>
+            <div class="bullet-track"><div class="bullet-fill" style="width:85%; background:var(--green);"></div><div class="bullet-goal" style="left:80%;"></div></div>
+          </div>
+          <div class="bullet-row">
+            <div class="bullet-label"><span>Module D2 – Advanced AI · goal ≥60%</span><span><b>58%</b></span></div>
+            <div class="bullet-track"><div class="bullet-fill" style="width:58%; background:var(--purple);"></div><div class="bullet-goal" style="left:60%;"></div></div>
+          </div>
+          <div class="bullet-row">
+            <div class="bullet-label"><span>Average Connections · goal ≥6</span><span><b>8</b></span></div>
+            <div class="bullet-track"><div class="bullet-fill" style="width:80%; background:var(--green);"></div><div class="bullet-goal" style="left:60%;"></div></div>
+          </div>
+          <div class="bullet-row">
+            <div class="bullet-label"><span>Average Leadership Score · goal ≥7.0/10</span><span><b>7.6/10</b></span></div>
+            <div class="bullet-track"><div class="bullet-fill" style="width:76%; background:var(--green);"></div><div class="bullet-goal" style="left:70%;"></div></div>
+          </div>
+        </div>
+
+        <div class="section-title" style="margin-top:26px;">Skills by City</div>
+        <div class="card cuadro" style="padding:20px;">
+          <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:16px;">
+            <span class="pill" style="background:var(--purple); color:#fff; border-color:var(--purple);">All cities</span>
+            <span class="pill">Medellín</span>
+            <span class="pill">Bogotá</span>
+            <span class="pill">Cali</span>
+            <span class="pill">Barranquilla</span>
+          </div>
+          <table class="heatmap-table">
+            <tr>
+              <th>City</th>
+              <th>Mindset</th>
+              <th>Social Capital</th>
+              <th>Attendance</th>
+              <th>Module D2</th>
+              <th>Leadership</th>
+            </tr>
+            <tr>
+              <td>Medellín</td>
+              <td>78%</td>
+              <td>73%</td>
+              <td>87%</td>
+              <td>60%</td>
+              <td>7.8/10</td>
+            </tr>
+            <tr>
+              <td>Bogotá</td>
+              <td>74%</td>
+              <td>69%</td>
+              <td>83%</td>
+              <td>55%</td>
+              <td>7.4/10</td>
+            </tr>
+            <tr>
+              <td>Cali</td>
+              <td>77%</td>
+              <td>70%</td>
+              <td>86%</td>
+              <td>59%</td>
+              <td>7.5/10</td>
+            </tr>
+            <tr>
+              <td>Barranquilla</td>
+              <td>72%</td>
+              <td>68%</td>
+              <td>82%</td>
+              <td>52%</td>
+              <td>7.2/10</td>
+            </tr>
+          </table>
+          <p class="stat-strip" style="margin-top:10px; font-size:12px;">Medellín leads on every skill dimension; Barranquilla lags most on Module D2 – Advanced AI.</p>
+        </div>
+
+        <div class="section-title" style="margin-top:26px;">Academic Progress</div>
+        <div class="grid2">
+          <div class="card cuadro" style="padding:20px;">
+            <div class="cuadro-title" style="margin-bottom:6px;">On track vs. behind</div>
+            <div class="barchart" style="height:175px;">
+              <div class="bar-col" style="width:78px;">
+                <div class="bar-val">82%</div>
+                <div class="bar" style="height:82px; background:var(--green);"></div>
+                <div class="bar-label">On track</div>
+                <div class="bar-note">Following their study plan</div>
+              </div>
+              <div class="bar-col" style="width:78px;">
+                <div class="bar-val">12%</div>
+                <div class="bar" style="height:12px; background:#8FE0B4;"></div>
+                <div class="bar-label">Behind</div>
+                <div class="bar-note">One course behind</div>
+              </div>
+              <div class="bar-col" style="width:78px;">
+                <div class="bar-val">6%</div>
+                <div class="bar" style="height:6px; background:var(--purple);"></div>
+                <div class="bar-label">Critical</div>
+                <div class="bar-note">More than one course behind</div>
+              </div>
+            </div>
+          </div>
+          <div class="card cuadro" style="padding:20px;">
+            <div class="cuadro-head">
+              <div class="cuadro-title">GPA distribution</div>
+              <div class="cuadro-avg">Average <b>4.0/5</b></div>
+            </div>
+            <div class="stat-row">
+              <div class="stat-chip"><div class="v">15%</div><div class="l">Below 3.5</div></div>
+              <div class="stat-chip"><div class="v">40%</div><div class="l">GPA 3.5 – 3.9</div></div>
+              <div class="stat-chip chip-green"><div class="v">45%</div><div class="l">GPA 4.0 – 5.0</div></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ VIEW 4: SCHOLAR PROFILE ============ -->
+      <section class="view" data-view="profile">
+        <div class="pagehead">
+          <h1>Scholar Profile</h1>
+          <span class="tag">Individual record</span>
+        </div>
+        <p class="dek">Who is this scholar, and how are they doing? Search any scholar to see their full record.</p>
+
+        <div class="search">
+          <input type="text" placeholder="Search by name, ID, or university..." value="Camila Torres" />
+          <button>Search</button>
+        </div>
+
+        <div class="section-title" style="margin-top:6px;">Identity &amp; Program</div>
+        <div class="card profile-card">
+          <div class="profile-photo-animated" title="Illustrative avatar — no real photo available in this prototype">
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="12" cy="8" r="4.2" fill="#FFFFFF"/>
+              <path d="M4 20.2C4 16.2 7.6 13.6 12 13.6C16.4 13.6 20 16.2 20 20.2V21H4V20.2Z" fill="#FFFFFF"/>
+            </svg>
+          </div>
+          <div class="profile-fields">
+            <div class="field"><div class="l">ID</div><div class="v">BT-2023-0142</div></div>
+            <div class="field"><div class="l">Name</div><div class="v">Camila Torres</div></div>
+            <div class="field"><div class="l">Country</div><div class="v">Colombia</div></div>
+            <div class="field"><div class="l">Cohort</div><div class="v">2023</div></div>
+            <div class="field"><div class="l">University</div><div class="v">Universidad Nacional</div></div>
+            <div class="field"><div class="l">Program</div><div class="v">Industrial Engineering</div></div>
+            <div class="field"><div class="l">Year</div><div class="v">3</div></div>
+            <div class="field"><div class="l">Semester</div><div class="v">2026-1</div></div>
+            <div class="field"><div class="l">Department of Origin</div><div class="v">Nariño</div></div>
+            <div class="field"><div class="l">Department of Residence</div><div class="v">Bogotá</div></div>
+            <div class="field"><div class="l">Gender</div><div class="v">Female</div></div>
+            <div class="field"><div class="l">Status</div><div class="v"><span class="status-badge">Active</span></div></div>
+            <div class="field"><div class="l">Est. Year of Finalization</div><div class="v">2027</div></div>
+            <div class="field"><div class="l">Delivery Partner</div><div class="v">MAKERS</div></div>
+          </div>
+        </div>
+
+        <div class="section-title" style="margin-top:26px;">Academic Performance</div>
+        <div class="grid2">
+          <div class="card cuadro" style="padding:20px;">
+            <div class="panel-title">GPA Trend</div>
+            <svg viewBox="0 0 300 90" width="100%" height="90" style="overflow:visible; display:block;">
+              <line x1="10" y1="40" x2="290" y2="40" stroke="#CCCCCC" stroke-dasharray="4,4" stroke-width="1"/>
+              <polyline points="20,62 90,50 160,56 230,44 280,38" fill="none" stroke="#A62BFF" stroke-width="2.5"/>
+              <circle cx="20" cy="62" r="4" fill="#A62BFF"/>
+              <circle cx="90" cy="50" r="4" fill="#A62BFF"/>
+              <circle cx="160" cy="56" r="4" fill="#A62BFF"/>
+              <circle cx="230" cy="44" r="4" fill="#A62BFF"/>
+              <circle cx="280" cy="38" r="4" fill="#A62BFF"/>
+              <text x="20" y="76" font-size="9.5" fill="#6F6C62" text-anchor="middle">2024-1</text>
+              <text x="90" y="76" font-size="9.5" fill="#6F6C62" text-anchor="middle">2024-2</text>
+              <text x="160" y="76" font-size="9.5" fill="#6F6C62" text-anchor="middle">2025-1</text>
+              <text x="230" y="76" font-size="9.5" fill="#6F6C62" text-anchor="middle">2025-2</text>
+              <text x="280" y="76" font-size="9.5" fill="#6F6C62" text-anchor="middle">2026-1</text>
+              <text x="20" y="54" font-size="10" fill="#33312B" text-anchor="middle" font-weight="700">3.6</text>
+              <text x="90" y="42" font-size="10" fill="#33312B" text-anchor="middle" font-weight="700">3.8</text>
+              <text x="160" y="48" font-size="10" fill="#33312B" text-anchor="middle" font-weight="700">3.7</text>
+              <text x="230" y="36" font-size="10" fill="#33312B" text-anchor="middle" font-weight="700">3.9</text>
+              <text x="280" y="30" font-size="10" fill="#33312B" text-anchor="middle" font-weight="700">4.0</text>
+            </svg>
+          </div>
+          <div class="card cuadro" style="padding:20px;">
+            <div class="panel-title">2026-1 Snapshot</div>
+            <div class="stat-row">
+              <div class="stat-chip"><div class="v">B2</div><div class="l">English Level</div></div>
+              <div class="stat-chip chip-green"><div class="v">On track</div><div class="l">Academic Progress</div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="section-title" style="margin-top:26px;">Monthly Follow-Up History</div>
+        <div class="card" style="padding:18px 20px;">
+          <table class="heatmap-table">
+            <tr><th>Month</th><th>Academic</th><th>Psychosocial</th><th>Global</th></tr>
+            <tr><td>Month 1</td><td><span class="risk-cell nr">No Risk</span></td><td><span class="risk-cell low">Low</span></td><td><span class="risk-cell low">Low</span></td></tr>
+            <tr><td>Month 2</td><td><span class="risk-cell nr">No Risk</span></td><td><span class="risk-cell nr">No Risk</span></td><td><span class="risk-cell nr">No Risk</span></td></tr>
+            <tr><td>Month 3</td><td><span class="risk-cell low">Low</span></td><td><span class="risk-cell nr">No Risk</span></td><td><span class="risk-cell low">Low</span></td></tr>
+            <tr><td>Month 4</td><td><span class="risk-cell nr">No Risk</span></td><td><span class="risk-cell nr">No Risk</span></td><td><span class="risk-cell nr">No Risk</span></td></tr>
+            <tr><td>Month 5</td><td><span class="risk-cell nr">No Risk</span></td><td><span class="risk-cell nr">No Risk</span></td><td><span class="risk-cell nr">No Risk</span></td></tr>
+          </table>
+        </div>
+      </section>
+
+      <!-- ============ VIEW 5: PROGRAM ECOSYSTEM ============ -->
+      <section class="view" data-view="ecosystem">
+        <div class="pagehead">
+          <h1>Program Ecosystem — Universities &amp; Delivery Partners</h1>
+          <span class="tag">Partners</span>
+        </div>
+        <p class="dek">Who helps us deliver this, and how well? Partner universities and delivery partners across Colombia and Peru.</p>
+
+        <div class="section-title">Partner Universities</div>
+        <div class="grid3">
+          <div class="card uni-card" style="border-left:4px solid var(--purple);">
+            <div class="name">Universidad de Los Andes <span style="font-weight:400; color:var(--muted); font-size:11px;">Bogotá, COL · Private</span></div>
+            <div class="uni-meta">
+              <span style="color:var(--purple); font-weight:700;">24 active scholars</span>
+              <span>23 active · 1 drop out</span>
+              <span>Retention 96% · Drop out 4%</span>
+              <span>Contact: María Camila Rodríguez · mc.rodriguez@uniandes.edu.co</span>
+              <span>Cohorts: 2025, 2026</span>
+              <span>Semester: Jan 13 – May 24</span>
+              <span>Exams: May 5 – May 16</span>
+            </div>
+          </div>
+          <div class="card uni-card" style="border-left:4px solid var(--purple);">
+            <div class="name">Pontificia Universidad Javeriana <span style="font-weight:400; color:var(--muted); font-size:11px;">Bogotá, COL · Private</span></div>
+            <div class="uni-meta">
+              <span style="color:var(--purple); font-weight:700;">20 active scholars</span>
+              <span>19 active · 1 drop out</span>
+              <span>Retention 95% · Drop out 5%</span>
+              <span>Contact: Andrés Felipe Gómez · af.gomez@javeriana.edu.co</span>
+              <span>Cohorts: 2025, 2026</span>
+              <span>Semester: Jan 20 – Jun 7</span>
+              <span>Exams: May 18 – May 29</span>
+            </div>
+          </div>
+          <div class="card uni-card" style="border-left:4px solid var(--purple);">
+            <div class="name">Universidad EAFIT <span style="font-weight:400; color:var(--muted); font-size:11px;">Medellín, COL · Private</span></div>
+            <div class="uni-meta">
+              <span style="color:var(--purple); font-weight:700;">19 active scholars</span>
+              <span>19 active · 0 drop out</span>
+              <span>Retention 100% · Drop out 0%</span>
+              <span>Contact: Laura Restrepo · lrestrepo@eafit.edu.co</span>
+              <span>Cohorts: 2024, 2025, 2026</span>
+              <span>Semester: Jan 27 – Jun 14</span>
+              <span>Exams: May 25 – Jun 5</span>
+            </div>
+          </div>
+          <div class="card uni-card" style="border-left:4px solid var(--purple);">
+            <div class="name">Universidad Icesi <span style="font-weight:400; color:var(--muted); font-size:11px;">Cali, COL · Private</span></div>
+            <div class="uni-meta">
+              <span style="color:var(--purple); font-weight:700;">17 active scholars</span>
+              <span>16 active · 1 drop out</span>
+              <span>Retention 94% · Drop out 6%</span>
+              <span>Contact: Juan Pablo Salazar · jp.salazar@icesi.edu.co</span>
+              <span>Cohorts: 2025, 2026</span>
+              <span>Semester: Jan 20 – Jun 7</span>
+              <span>Exams: May 18 – May 29</span>
+            </div>
+          </div>
+          <div class="card uni-card" style="border-left:4px solid var(--purple);">
+            <div class="name">Universidad Pontificia Bolivariana <span style="font-weight:400; color:var(--muted); font-size:11px;">Medellín, COL · Private</span></div>
+            <div class="uni-meta">
+              <span style="color:var(--purple); font-weight:700;">16 active scholars</span>
+              <span>15 active · 1 drop out</span>
+              <span>Retention 94% · Drop out 6%</span>
+              <span>Contact: Valentina Muñoz · vmunoz@upb.edu.co</span>
+              <span>Cohorts: 2024, 2025</span>
+              <span>Semester: Feb 3 – Jun 21</span>
+              <span>Exams: Jun 1 – Jun 12</span>
+            </div>
+          </div>
+          <div class="card uni-card" style="border-left:4px solid var(--purple);">
+            <div class="name">Universidad EIA <span style="font-weight:400; color:var(--muted); font-size:11px;">Medellín, COL · Private</span></div>
+            <div class="uni-meta">
+              <span style="color:var(--purple); font-weight:700;">15 active scholars</span>
+              <span>15 active · 0 drop out</span>
+              <span>Retention 100% · Drop out 0%</span>
+              <span>Contact: Santiago Vélez · svelez@eia.edu.co</span>
+              <span>Cohorts: 2024, 2025, 2026</span>
+              <span>Semester: Jan 27 – Jun 14</span>
+              <span>Exams: May 25 – Jun 5</span>
+            </div>
+          </div>
+          <div class="card uni-card" style="border-left:4px solid var(--purple);">
+            <div class="name">Universidad del Norte <span style="font-weight:400; color:var(--muted); font-size:11px;">Barranquilla, COL · Private</span></div>
+            <div class="uni-meta">
+              <span style="color:var(--purple); font-weight:700;">14 active scholars</span>
+              <span>13 active · 1 drop out</span>
+              <span>Retention 93% · Drop out 7%</span>
+              <span>Contact: Camila Cabrera · ccabrera@uninorte.edu.co</span>
+              <span>Cohorts: 2025, 2026</span>
+              <span>Semester: Jan 20 – Jun 7</span>
+              <span>Exams: May 18 – May 29</span>
+            </div>
+          </div>
+          <div class="card uni-card" style="border-left:4px solid var(--purple);">
+            <div class="name">Universidad de Antioquia <span style="font-weight:400; color:var(--muted); font-size:11px;">Medellín, COL · Public</span></div>
+            <div class="uni-meta">
+              <span style="color:var(--purple); font-weight:700;">10 active scholars</span>
+              <span>9 active · 1 drop out</span>
+              <span>Retention 90% · Drop out 10%</span>
+              <span>Contact: Diego Alejandro Zapata · da.zapata@udea.edu.co</span>
+              <span>Cohorts: 2024</span>
+              <span>Semester: Feb 10 – Jun 20</span>
+              <span>Exams: Jun 8 – Jun 19</span>
+            </div>
+          </div>
+          <div class="card uni-card" style="border-left:4px solid var(--purple);">
+            <div class="name">Universidad Nacional <span style="font-weight:400; color:var(--muted); font-size:11px;">Medellín, COL · Public</span></div>
+            <div class="uni-meta">
+              <span style="color:var(--purple); font-weight:700;">7 active scholars</span>
+              <span>7 active · 0 drop out</span>
+              <span>Retention 100% · Drop out 0%</span>
+              <span>Contact: Natalia Ospina · nospina@unal.edu.co</span>
+              <span>Cohorts: 2024</span>
+              <span>Semester: Feb 10 – Jun 20</span>
+              <span>Exams: Jun 8 – Jun 19</span>
+            </div>
+          </div>
+          <div class="card uni-card" style="border-left:4px solid var(--green);">
+            <div class="name">UTEC <span style="font-weight:400; color:var(--muted); font-size:11px;">Lima, PE · Private</span></div>
+            <div class="uni-meta">
+              <span style="color:var(--green); font-weight:700;">40 active scholars</span>
+              <span>39 active · 1 drop out</span>
+              <span>Retention 98% · Drop out 2%</span>
+              <span>Contact: Fernanda Quispe · fquispe@utec.edu.pe</span>
+              <span>Cohorts: 2025, 2026</span>
+              <span>Semester: Mar 4 – Jul 12</span>
+              <span>Exams: Jun 30 – Jul 10</span>
+            </div>
+          </div>
+          <div class="card uni-card" style="border-left:4px solid var(--green);">
+            <div class="name">UPC <span style="font-weight:400; color:var(--muted); font-size:11px;">Lima, PE · Private</span></div>
+            <div class="uni-meta">
+              <span style="color:var(--green); font-weight:700;">33 active scholars</span>
+              <span>32 active · 1 drop out</span>
+              <span>Retention 97% · Drop out 3%</span>
+              <span>Contact: Rodrigo Salinas · rsalinas@upc.edu.pe</span>
+              <span>Cohorts: 2026</span>
+              <span>Semester: Mar 11 – Jul 19</span>
+              <span>Exams: Jul 7 – Jul 17</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="section-title" style="margin-top:26px;">Delivery Partners</div>
+        <div class="card" style="padding:6px 20px;">
+          <div class="partner-group-title">Academic &amp; Psychosocial — Early Support</div>
+          <div class="partner-row">
+            <div class="partner-name">Fundación Antivirus para la Deserción <span class="partner-country">Colombia</span></div>
+            <div class="partner-count" style="color:var(--purple);">141 <span class="n">scholars</span></div>
+          </div>
+          <div class="partner-row">
+            <div class="partner-name">ESCALO <span class="partner-country">Perú</span></div>
+            <div class="partner-count" style="color:var(--purple);">57 <span class="n">scholars</span></div>
+          </div>
+
+          <div class="partner-group-title">Growth &amp; Development</div>
+          <div class="partner-row">
+            <div class="partner-name">MAKERS <span class="partner-country">Colombia</span></div>
+            <div class="partner-count" style="color:var(--green);">27 <span class="n">scholars</span></div>
+          </div>
+          <div class="partner-row">
+            <div class="partner-name">Confident English <span class="partner-country">Colombia</span></div>
+            <div class="partner-count" style="color:var(--green);">20 <span class="n">scholars</span></div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+</div>
+
+<script>
+  var links = document.querySelectorAll('#nav a');
+  var views = document.querySelectorAll('.view');
+  function goToView(target){
+    links.forEach(function(l){ l.classList.remove('active'); });
+    views.forEach(function(v){ v.classList.remove('active'); });
+    var navLink = document.querySelector('#nav a[data-target="' + target + '"]');
+    if(navLink){ navLink.classList.add('active'); }
+    document.querySelector('.view[data-view="' + target + '"]').classList.add('active');
+    window.scrollTo(0,0);
+  }
+  links.forEach(function(link){
+    link.addEventListener('click', function(){
+      goToView(link.getAttribute('data-target'));
+    });
+  });
+  document.querySelectorAll('[data-goto]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      goToView(btn.getAttribute('data-goto'));
+    });
+  });
+</script>
+</body>
+</html>
