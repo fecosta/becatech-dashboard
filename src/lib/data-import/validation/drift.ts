@@ -50,7 +50,6 @@ export function classifyColumns(normalizedHeaderKeys: string[], contract: Source
   }
 
   const recognizedSet = new Set(recognized);
-  const ignoredSet = new Set(contract.ignored);
   const repeating = contract.repeating ?? [];
   const ignored: string[] = [];
   const unknown: string[] = [];
@@ -58,7 +57,7 @@ export function classifyColumns(normalizedHeaderKeys: string[], contract: Source
   for (const key of new Set(headerKeys)) {
     if (recognizedSet.has(key)) continue;
     if (repeating.some((pattern) => pattern.test(key))) continue;
-    if (ignoredSet.has(key)) ignored.push(key);
+    if (contract.ignored.some((alias) => aliasMatches(key, alias))) ignored.push(key);
     else unknown.push(key);
   }
 

@@ -9,6 +9,7 @@ import { coerceValue } from "../coerce";
 import type { ParsedSheet } from "../parse";
 import {
   ENGLISH_LEVEL_PATTERN,
+  ESTADO_FINAL_PATTERN,
   TERM_PATTERNS as RE,
   scholarGeneralInfoContract,
 } from "../source-contracts/scholar-general-info";
@@ -16,13 +17,35 @@ import type { CanonicalBatch, CanonicalRow, FieldType, RawRecord, SourceAdapter 
 import { classifyColumns } from "../validation/drift";
 import { getAny, indexRecord, mapCountry, mapStatus, normKey, parseSemesterCell } from "./shared";
 
-// NOTE: unlike apps-script/Normalize.gs (which reads cells positionally via getValues() arrays),
-// this adapter goes through XLSX.utils.sheet_to_json, which keys each row by its (normalized)
-// header text — duplicate literal header text collapses to one property, silently dropping the
-// others. The new sheet's bare "ESTADO FINAL" column repeats identically up to 4 times, so it
-// CANNOT be resolved here the way Normalize.gs's findAcademicStatusColumns_ resolves it
-// positionally; academicStatus stays unmapped for this (manual-upload) path until this adapter's
-// row model is reworked to read positionally too. Flagged, not fixed, in this pass.
+/**
+ * Positionally resolve bare "ESTADO FINAL" columns (no term in the header text — it repeats once
+ * per term block; `xlsx` auto-suffixes the duplicates as `estado final`, `estado final_1`, ...) to
+ * a specific term, by pairing each with the MATERIAS REPROBADAS/MENCIONAR block immediately
+ * preceding it — a faithful port of apps-script/Normalize.gs's `findAcademicStatusColumns_`. Real
+ * layout for most terms is a clean 3-column block (MATERIAS -> MENCIONAR -> ESTADO FINAL); two
+ * terms (2025-1/2025-2 in the current sheet) instead stack two MATERIAS/MENCIONAR pairs back-to-
+ * back before a single ESTADO FINAL, which makes that column genuinely ambiguous. Per policy
+ * (matching Normalize.gs), an ambiguous or orphaned ESTADO FINAL is left unresolved rather than
+ * guessed. `headerKeys` must be in source column order (object key insertion order, from
+ * `Object.keys()` on the parsed row).
+ */
+function findAcademicStatusColumns(headerKeys: string[]): Map<string, string> {
+  const resolved = new Map<string, string>(); // normalized header key -> term
+  let pendingTerms: string[] = [];
+  for (let i = 0; i < headerKeys.length; i++) {
+    const key = headerKeys[i];
+    const failedMatch = RE.failed.exec(key);
+    if (failedMatch) {
+      const nextKey = headerKeys[i + 1];
+      const nextDetail = nextKey ? RE.failedDetail.exec(nextKey) : null;
+      if (nextDetail && nextDetail[1] === failedMatch[1]) pendingTerms.push(failedMatch[1]);
+    } else if (ESTADO_FINAL_PATTERN.test(key)) {
+      if (pendingTerms.length === 1) resolved.set(key, pendingTerms[0]);
+      pendingTerms = []; // clear at every boundary — resolved, ambiguous, or orphaned
+    }
+  }
+  return resolved;
+}
 
 /** A general-info header row has an ID column and at least one `GPA <term>` column. */
 function looksLikeGeneralInfoHeader(keys: string[]): boolean {
@@ -169,6 +192,12 @@ export function generalInfoRows(
   const scholars: CanonicalRow[] = [];
   const terms: CanonicalRow[] = [];
 
+  // Header shape is invariant across rows — resolve ESTADO FINAL -> term pairings once, from the
+  // first record's key order (matches source column order; see findAcademicStatusColumns).
+  const academicStatusColumns = records[0]
+    ? findAcademicStatusColumns(Object.keys(records[0]).map(normKey))
+    : new Map<string, string>();
+
   records.forEach((rec, i) => {
     const rowNumber = rowNumberOffset + i + 2;
     const idx = indexRecord(rec);
@@ -194,6 +223,9 @@ export function generalInfoRows(
       else if ((m = RE.enrollment.exec(key))) ensure(m[1]).enrollmentStatus = coerceValue(value, "string");
       else if ((m = RE.failed.exec(key))) ensure(m[1]).failedSubjectsCount = coerceValue(value, "int");
       else if ((m = RE.failedDetail.exec(key))) ensure(m[1]).failedSubjectsDetail = coerceValue(value, "string");
+    }
+    for (const [headerKey, term] of academicStatusColumns) {
+      ensure(term).academicStatus = coerceValue(idx.get(headerKey), "string");
     }
 
     // "Cumulative GPA" and "Overdue Courses" are single columns per scholar, not per-term like the

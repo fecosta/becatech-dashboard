@@ -105,4 +105,20 @@ describe("mentorReportsAdapter (fixture)", () => {
     expect(report.missingRequired).toEqual([]);
     expect(report.unknown).toEqual([]);
   });
+
+  it("reports both required groups missing when SUBMISSION ID is absent (sheet becomes undetectable)", () => {
+    // Unlike SCHOLAR GENERAL INFO's "país" case, this adapter's header detection itself requires
+    // BOTH the identity signal AND "submission id" to be present (findHeaderRowIndex) — so a sheet
+    // missing "submission id" can't be isolated as "just one field missing": it's not recognized as
+    // a MENTOR REPORTS sheet at all, and inspectSchema (which re-derives the header the same way)
+    // correctly reports missingRequired non-empty rather than silently empty, never producing a
+    // MentorReport from an unrecognized sheet.
+    const header = ["ID OF THE SCHOLAR", "SCHOLAR'S NAME", "GLOBAL STATUS"];
+    const row = ["BT-CO-951", "No Submission Id Fictional Scholar", "Riesgo bajo"];
+    const sheet = buildSheet([header, row]);
+    expect(mentorReportsAdapter.canHandle(sheet)).toBe(false);
+    expect(mentorReportsAdapter.adapt(sheet).MENTOR_REPORT ?? []).toHaveLength(0);
+    const report = mentorReportsAdapter.inspectSchema!(sheet);
+    expect(report.missingRequired.length).toBeGreaterThan(0);
+  });
 });

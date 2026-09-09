@@ -182,7 +182,9 @@ export default function NewImportPage() {
                 <tbody className="divide-y divide-slate-100">
                   {preview.errors.map((e, i) => (
                     <tr key={i}>
-                      <td className="px-3 py-1.5">{e.rowNumber}</td>
+                      {/* rowNumber 0 is a SOURCE-stage (column-level, not row-specific) error — a
+                          missing required column, not a real row. */}
+                      <td className="px-3 py-1.5">{e.rowNumber === 0 ? "—" : e.rowNumber}</td>
                       <td className="px-3 py-1.5">{IMPORT_ENTITY_LABEL[e.entity] ?? e.entity}</td>
                       <td className="px-3 py-1.5">{e.field}</td>
                       <td className="px-3 py-1.5 text-red-700">{e.message}</td>

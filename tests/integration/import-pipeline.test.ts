@@ -2,6 +2,7 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import {
   commitImportBatch,
   createImportBatch,
+  ingestAndCommit,
   rollbackImportBatch,
 } from "@/lib/data-import/service";
 import { prisma } from "@/lib/db";
@@ -141,6 +142,23 @@ describe("import pipeline (integration)", () => {
     await commitImportBatch(batchId);
     expect(await prisma.mentorReport.count({ where: { scholarId: "BT-CO-001" } })).toBe(1); // report kept
     expect(await prisma.riskAssessment.count()).toBe(0); // but no risk classification
+  });
+
+  it("a mentor report with an unrecognized GLOBAL STATUS writes no risk row (never guessed)", async () => {
+    const data = csvBuffer(
+      "scholarId,reportingMonth,submissionId,mentorReportedGlobalStatus\n" +
+        "BT-CO-001,MES 1,sub-unrecognized-1,No se puede determinar\n",
+    );
+    const { batchId } = await createImportBatch({
+      data,
+      filename: "mentor.csv",
+      sourceType: "TEMPLATE",
+      entity: "MENTOR_REPORT",
+      uploadedById: uploaderId,
+    });
+    await commitImportBatch(batchId);
+    expect(await prisma.mentorReport.count({ where: { scholarId: "BT-CO-001" } })).toBe(1); // report kept
+    expect(await prisma.riskAssessment.count()).toBe(0); // unrecognized status never guessed into a risk level
   });
 
   it("keys risk by the session-date month when the reporting-month label is blank", async () => {
@@ -320,6 +338,39 @@ describe("import pipeline (integration)", () => {
     await commitImportBatch(batchId);
     expect(await prisma.scholar.count({ where: { scholarId: "BT-CO-050" } })).toBe(1);
     expect(await prisma.academicTerm.count({ where: { scholarId: "BT-CO-050" } })).toBe(2);
+  });
+
+  it("legacy wide .xlsx: a genuinely new column surfaces in the preview's schema-drift report", async () => {
+    const data = xlsxBuffer([
+      ["ID", "PAÍS", "COHORTE", "UNIVERSIDAD", "PROGRAMA ACADÉMICO", "NOMBRE COMPLETO", "GÉNERO", "GPA 2024-1", "FAVORITE COLOR"],
+      ["BT-CO-051", "Colombia", "2024", "UNAL", "CS", "Legacy Drift One", "Female", "4.0", "Blue"],
+    ]);
+    const { schemaReports } = await createImportBatch({
+      data,
+      filename: "legacy-drift.xlsx",
+      sourceType: "LEGACY_WIDE_EXCEL",
+      uploadedById: uploaderId,
+    });
+    const scholarReport = schemaReports.find((r) => r.source === "SCHOLAR_GENERAL_INFO");
+    expect(scholarReport?.unknown).toContain("favorite color");
+  });
+
+  it("legacy wide .xlsx: a missing required column produces an explicit SOURCE-stage error, not a guess", async () => {
+    // No PAÍS/COUNTRY column at all — the sheet is still recognized (ID + a GPA column are enough
+    // for detection), so this exercises the schema-drift path, not "sheet unrecognized".
+    const data = xlsxBuffer([
+      ["ID", "COHORTE", "UNIVERSIDAD", "PROGRAMA ACADÉMICO", "NOMBRE COMPLETO", "GÉNERO", "GPA 2024-1"],
+      ["BT-CO-052", "2024", "UNAL", "CS", "Legacy Missing Col One", "Female", "4.0"],
+    ]);
+    const { result } = await createImportBatch({
+      data,
+      filename: "legacy-missing-col.xlsx",
+      sourceType: "LEGACY_WIDE_EXCEL",
+      uploadedById: uploaderId,
+    });
+    const sourceError = result.errors.find((e) => e.stage === "SOURCE");
+    expect(sourceError?.field).toBe("pais");
+    expect(sourceError?.rowNumber).toBe(0); // column-level, not tied to one row
   });
 
   it("partial failure: commits valid rows, reports invalid", async () => {
@@ -508,6 +559,50 @@ describe("import pipeline (integration)", () => {
     expect(scholar?.operatorId).toBeNull();
     // Still never auto-creates an operator from the unknown label.
     expect(await prisma.operator.count({ where: { name: "Some Unknown Operator" } })).toBe(0);
+  });
+
+  it("tags a genuine commit-time failure with the PERSISTENCE stage", async () => {
+    // Constructed directly (bypassing createImportBatch/validateBatch, which would already reject
+    // an unknown scholarId at the VALIDATION stage) so the failure is a real foreign-key violation
+    // at commit time — exercising commitImportBatch's catch block, not a simulated error.
+    const batch = await prisma.dataImportBatch.create({
+      data: {
+        sourceType: "TEMPLATE",
+        entities: ["ACADEMIC_TERM"],
+        filename: "bad-fk.csv",
+        uploadedById: uploaderId,
+        status: "VALIDATED",
+        totalRows: 1,
+        successRows: 1,
+        errorRows: 0,
+        parsedRows: { ACADEMIC_TERM: [{ scholarId: "BT-DOES-NOT-EXIST", term: "2025-1", source: "import" }] },
+        errorReport: [],
+      },
+      select: { id: true },
+    });
+
+    await expect(commitImportBatch(batch.id)).rejects.toThrow();
+
+    const failed = await prisma.dataImportBatch.findUnique({ where: { id: batch.id } });
+    expect(failed?.status).toBe("FAILED");
+    const errors = (failed?.errorReport ?? []) as { stage?: string }[];
+    expect(errors.some((e) => e.stage === "PERSISTENCE")).toBe(true);
+  });
+
+  it("ingestAndCommit: parses, validates, and commits in one call (what the automated sync uses)", async () => {
+    const data = csvBuffer("scholarId,term,gpa\nBT-CO-001,2025-1,3.5\n");
+    const { batchId, result, commit } = await ingestAndCommit({
+      data,
+      filename: "ingest-and-commit.csv",
+      sourceType: "TEMPLATE",
+      entity: "ACADEMIC_TERM",
+      uploadedById: uploaderId,
+    });
+    expect(result.successRows).toBe(1);
+    expect(commit.commit.successRows).toBe(1);
+    expect(await prisma.academicTerm.count({ where: { scholarId: "BT-CO-001", term: "2025-1" } })).toBe(1);
+    const stored = await prisma.dataImportBatch.findUnique({ where: { id: batchId } });
+    expect(stored?.status).toBe("COMMITTED");
   });
 
   it("rollback deletes the rows the batch created", async () => {

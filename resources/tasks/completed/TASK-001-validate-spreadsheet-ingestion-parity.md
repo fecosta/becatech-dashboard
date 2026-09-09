@@ -1,11 +1,11 @@
 # TASK-001 — Validate Spreadsheet Ingestion Parity
 
-Status: Active
+Status: Completed
 Owner: Engineering
 Related spec: SPEC-002 — Spreadsheet Ingestion Refactor
 Related ADRs: ADR-006, ADR-007, ADR-008
 Created: 2026-09-09
-Completed: —
+Completed: 2026-09-09
 
 ## Objective
 
@@ -927,3 +927,215 @@ rewrite
 ```
 
 If representative source evidence is insufficient to prove a mapping, report the uncertainty explicitly rather than inventing behavior.
+
+---
+
+# Final Report
+
+## Audit findings
+
+**Entry points**: manual upload (`/dashboard/admin/imports/new` → `POST /api/admin/imports` →
+`createImportBatch`, preview-then-commit) and the automated Google Sheets sync
+(`apps-script/Sync.gs` → `POST /api/sync/import` with `x-entity` → `ingestAndCommit`, no human
+step). No CLI/script ingestion entry point exists.
+
+**Adapters**: `legacyAdapter` (`src/lib/data-import/adapters/legacy.ts`) dispatches a raw
+`LEGACY_WIDE_EXCEL` upload across `scholarGeneralInfoAdapter`, `mentorReportsAdapter`, and the
+deprecated support-activity adapter by `canHandle`. `templateAdapter` handles single-entity
+TEMPLATE uploads (Prisma-field-named headers) — this is what the live automated sync always uses,
+since Sync.gs's `x-entity` header forces `sourceType: "TEMPLATE"` in the sync route. **The two
+"new" raw-source adapters formalized under SPEC-002/ADR-007 are not on the live sync path today**
+— only reachable via manual `LEGACY_WIDE_EXCEL` upload. This is expected, not a bug: SPEC-002's own
+Context/Deferred sections explicitly scope "switching the live sync" as a separate future change.
+
+**Entity writers / upsert keys** (`src/lib/data-import/commit.ts` + `bulk-upsert.ts`): `Scholar` by
+`scholarId`; `AcademicTerm` by `[scholarId, term]`; `MentorReport` by `submissionId`;
+`RiskAssessment` by `[scholarId, semester, period]` (both the mentor-report-derived and
+MONTHLY_STATUS paths). `SupportActivity` by `[scholarId, period, activityType, source]`.
+
+**Risk path**: `mentorReportToRisk()` (`src/lib/risk/from-mentor-report.ts`) maps `GLOBAL STATUS`
+verbatim; unrecognized/missing → `null` → row skipped, never guessed. `src/lib/risk/derive.ts` and
+`recompute.ts` have **zero ingestion callers** (confirmed by repo-wide grep) — `commitImportBatch`
+hardcodes `recomputed = 0` with an explicit comment that the derive engine is retained but
+intentionally unwired. ADR-006 holds.
+
+**RiskAssessment identity**: confirmed `[scholarId, semester, period]` per `prisma/schema.prisma`
+(the `@@unique` on `RiskAssessment`) and ADR-008 (Accepted, 2026-09-05), matching `commit.ts`'s own
+upsert conflict key. SPEC-002's original text (`(scholarId, period)`) was stale — corrected below.
+
+**Discrepancies found and their disposition**:
+- `academicStatus`/"ESTADO FINAL" never mapped by `scholar-general-info.ts` — **fixed** (Gap 1,
+  below), directly required by SPEC-002's own Acceptance Criteria.
+- `RowError.stage` (`SOURCE`/`VALIDATION`/`PERSISTENCE`) declared but never populated — **fixed**
+  (Gap 2, below), also directly required by SPEC-002's Acceptance Criteria.
+- `docs/adr/README.md` lists ADR-008 as "Proposed" though the ADR itself says "Accepted"; ADR-007
+  still asserts the pre-ADR-008 `RiskAssessment` key and isn't marked Superseded — both are stale,
+  **not fixed** (out of this task's SPEC-002-only documentation-correction scope; see Deferred).
+- The working tree had an uncommitted `.gitignore` change adding `/resources`, an uncommitted
+  deletion of the old `specs/` directory, and a broken/partial `AGENTS.md` (its real governance
+  content replaced by a stray fragment) — pre-existing, **not created by this task**. Resolved
+  separately as a governance-only commit before this task's implementation commit, per explicit
+  user instruction.
+
+## Validation performed
+
+**SCHOLAR GENERAL INFO**: decorative title/category rows above the real header; multi-row header;
+reordered and fully mixed-language-reordered columns; bilingual header aliases; repeating
+per-term GPA/credits/enrollment/failed-subjects blocks; blank future semester (no fabricated
+`AcademicTerm`); Colombia (0–5) and Peru (0–20) GPA scales preserved unconverted; comma-decimal GPA
+parsing; ordinal Spanish semester words; extended profile fields; known-ignored vs unknown-column
+drift classification; a genuinely missing required column (`país`/`country`) via `inspectSchema()`
+against the real contract; and — newly — the positional `academicStatus`/"ESTADO FINAL" resolution,
+confirmed against the real anonymized sample's actual header shape (5 literal "ESTADO FINAL"
+occurrences for 6 term periods, with 2025-1/2025-2 genuinely ambiguous).
+
+**MENTOR REPORTS**: decorative summary rows above the dynamic header; reordered columns; real
+mistyped live-sheet headers (`SCHOLAR'NAME`, `MENTOR' S NAME`); `GLOBAL STATUS` passed verbatim for
+all 5 risk levels; blank and — newly, at the pipeline level — unrecognized `GLOBAL STATUS` (both
+produce a `MentorReport` with no fabricated `RiskAssessment`); semester and program-month mapping;
+same `MES n` label across two different semesters staying isolated (no cross-semester collision);
+a genuinely undetectable sheet (missing `SUBMISSION ID`, which the adapter's own header-detection
+requires alongside identity) reporting non-empty `missingRequired` rather than silently producing
+nothing.
+
+**Pipeline**: partial success (`successRows`/`errorRows`); idempotent re-import for scholars,
+academic terms, mentor reports, and risk assessments; schema drift surfaced in the
+`createImportBatch` preview response (`schemaReports`); a real missing-required-column upload now
+producing an explicit `SOURCE`-stage error; a genuine commit-time failure (real FK violation, not
+simulated) tagged `PERSISTENCE`; and a direct call to `ingestAndCommit` (previously exercised only
+indirectly via the sync route).
+
+## Implementation changes
+
+- `src/lib/data-import/adapters/scholar-general-info.ts` — added `findAcademicStatusColumns`
+  (positional pairing of bare "ESTADO FINAL" columns to their preceding
+  MATERIAS-REPROBADAS/MENCIONAR term block, a faithful port of `apps-script/Normalize.gs`'s
+  `findAcademicStatusColumns_`); wired into `generalInfoRows` to populate `academicStatus` per
+  term; replaced a factually-inaccurate in-code comment about why the field was unmapped.
+- `src/lib/data-import/source-contracts/scholar-general-info.ts` — added `ESTADO_FINAL_PATTERN`
+  (matches the `xlsx`-parser's auto-suffixed duplicate headers); changed the `ignored` list's
+  `"estado final"` entry to `"estado final*"`.
+- `src/lib/data-import/validation/drift.ts` — the `ignored`-column check now reuses the existing
+  `aliasMatches` helper (already used for `required`/`optional`, already supports a trailing `*`
+  prefix) instead of an exact `Set.has()`, so a source contract's ignored entries can use the same
+  alias syntax as everywhere else.
+- `src/lib/data-import/service.ts` — `createImportBatch` now emits an explicit `SOURCE`-stage
+  `RowError` (non-blocking, informational, same as the existing console.warn) for each missing
+  required column reported by a sheet's schema report; `commitImportBatch`'s catch block now tags
+  its error entry `stage: "PERSISTENCE"`.
+- `src/app/dashboard/admin/imports/new/page.tsx` — the preview error table now renders the new
+  `rowNumber: 0` (column-level, not row-specific) SOURCE-stage sentinel as "—" instead of a
+  confusing literal "0", a small display fix made necessary by the SOURCE-stage change above.
+- `tests/fixtures/scholar-general-info-academic-status.csv` (new) — synthetic/fictional fixture
+  modeling two resolvable ESTADO FINAL term blocks and the genuinely ambiguous stacked
+  2025-1/2025-2 case.
+- `tests/data-import/scholar-general-info-adapter.test.ts` — new tests for positional
+  `academicStatus` resolution (resolved and ambiguous cases, plus drift classification) and a
+  missing-required-column test against the real contract.
+- `tests/data-import/mentor-reports-adapter.test.ts` — new missing-required-column test.
+- `tests/integration/import-pipeline.test.ts` — new tests: unrecognized `GLOBAL STATUS`; schema
+  drift surfaced in the preview response; a real missing-required-column SOURCE-stage error; a
+  genuine commit-time PERSISTENCE-stage failure; a direct `ingestAndCommit` call.
+- `resources/specs/active/002-spreadsheet-ingestion-refactor.md` → moved and edited to
+  `resources/specs/completed/002-spreadsheet-ingestion-refactor.md` (idempotency-key correction,
+  Documentation Impact correction, Status updated).
+
+No Prisma schema changes. No changes to `apps-script/`, dashboard visuals/metrics, or
+authorization code.
+
+## Bugs/gaps fixed
+
+**Gap 1 — `academicStatus` ("ESTADO FINAL") never mapped in `scholar-general-info.ts`.**
+- *Root cause*: the source contract had no pattern for the bare, repeating "ESTADO FINAL" column,
+  and the adapter's in-code comment blaming an object-key collision was itself factually wrong
+  (verified: `xlsx@0.18.5` auto-suffixes duplicate headers rather than dropping them) — the real
+  cause was simply that no code claimed the (suffixed) keys.
+- *Fix*: ported `Normalize.gs`'s existing, live `findAcademicStatusColumns_` positional-pairing
+  algorithm into the TypeScript adapter, preserving its "leave ambiguous/orphaned columns
+  unresolved rather than guess" policy exactly.
+- *Regression tests*: `tests/data-import/scholar-general-info-adapter.test.ts`'s three new
+  "academicStatus (ESTADO FINAL) positional resolution" cases.
+
+**Gap 2 — `RowError.stage` (`SOURCE`/`VALIDATION`/`PERSISTENCE`) never populated.**
+- *Root cause*: the field was declared in `types.ts` with a documented "absent = VALIDATION"
+  default, but no code path ever set `SOURCE` or `PERSISTENCE` explicitly — a spec-mandated
+  distinction (SPEC-002 Acceptance Criteria, lines 116/135-136) that was simply never wired up.
+- *Fix*: two small, additive touch points in `service.ts` — `createImportBatch` now tags
+  missing-required-column errors `SOURCE`; `commitImportBatch`'s catch block now tags commit
+  failures `PERSISTENCE`. `validate.ts` was intentionally left untouched (its errors already read
+  as `VALIDATION` by documented default).
+- *Regression tests*: `tests/integration/import-pipeline.test.ts`'s new SOURCE-stage
+  (missing-required-column) and PERSISTENCE-stage (genuine FK-violation) tests.
+
+## Parity report
+
+| Mapping | Classification |
+|---|---|
+| Scholar identity (`scholarId`) | PARITY CONFIRMED |
+| Scholar profile fields | PARITY CONFIRMED |
+| AcademicTerm identity (`scholarId`, `term`) | PARITY CONFIRMED |
+| Semester mapping (from header suffix) | PARITY CONFIRMED |
+| `academicStatus`/"ESTADO FINAL" resolution | PARITY CONFIRMED (after Gap 1 fix — same policy, same left-unresolved-when-ambiguous behavior) |
+| `"current operator - support services"` → `Scholar.operatorId` | PARITY DIFFERENCE — Normalize.gs maps it; the manual-upload adapter still doesn't (pre-existing, documented gap, not part of this refactor's contract) |
+| MentorReport identity (`submissionId`) | PARITY CONFIRMED |
+| MentorReport fields | PARITY CONFIRMED |
+| Risk/status (`GLOBAL STATUS` → `RiskAssessment`) | PARITY CONFIRMED — both paths ingest verbatim, never derive |
+| Reporting/program month | PARITY CONFIRMED |
+| Null handling (blank optional fields) | PARITY CONFIRMED |
+| Known-ignored columns | PARITY CONFIRMED |
+| Validation behavior (partial success, schema drift) | PARITY CONFIRMED |
+| **Is the raw-adapter path the live production path?** | **NOT ENOUGH TO CLAIM — and in fact NO**: the automated sync always uses `templateAdapter`, not these adapters. This is the key input to "could a future PR safely simplify Apps Script" and is not itself a field-mapping question. |
+
+## Behavior explicitly preserved
+
+- Canonical scholar identity (`scholarId`) unchanged.
+- Authoritative risk semantics unchanged: `GLOBAL STATUS` still ingested verbatim, never derived;
+  `derive.ts`/`recompute.ts` remain unreachable from any ingestion path.
+- Live Apps Script flow (`Normalize.gs`, `Sync.gs`, sync auth/locking/Preview-mutation guard)
+  untouched.
+- Dashboard behavior, visuals, and metrics untouched.
+- Authorization/roles/scoping untouched.
+
+## SPEC-002 status: READY TO CLOSE
+
+Every stated Acceptance Criterion is now demonstrably met, including the two that were previously
+unmet (positional ESTADO FINAL resolution; explicit `SOURCE`/`VALIDATION`/`PERSISTENCE` error
+staging). None of SPEC-002's criteria require switching the live sync to the new adapters — that is
+explicitly scoped out in its own Context/Deferred sections as a separate future change. SPEC-002
+has been updated (idempotency key, Documentation Impact correction, Status) and moved to
+`resources/specs/completed/002-spreadsheet-ingestion-refactor.md`.
+
+## Deferred follow-ups
+
+- Switching `apps-script/Sync.gs` to POST raw tabs through the TS source adapters, and
+  retiring/reducing `Normalize.gs`'s mapping role — both require the parity evidence produced here,
+  but remain separate, manually-verified changes per SPEC-002's own Deferred section and ADR-007.
+- `docs/adr/README.md` lists ADR-008 as "Proposed" though the ADR itself is "Accepted"; ADR-007
+  still asserts the pre-ADR-008 `RiskAssessment` key and isn't marked Superseded — stale, not
+  touched here (out of this task's SPEC-002-only documentation-correction scope).
+- The `"current operator - support services"` parity gap (documented in-code, not fixed) and the
+  `MONTHLY_STATUS` reachability gap (documented in ADR-007's Consequences) remain known-and-
+  accepted, unchanged by this task.
+- `resources/context/`, `resources/design-reference/`, and `resources/sample-data/` remain
+  untracked by git — the governance commit that established `resources/specs/` and
+  `resources/tasks/` deliberately scoped only those two directories; whether/how to bring the rest
+  of `resources/` under version control (particularly `sample-data/`, which holds anonymized real
+  program exports) is a separate decision for the team.
+
+## Validation results
+
+- `npx vitest run tests/data-import` (focused unit): **10 files, 89 tests passed** (baseline was 84
+  before this change; +5 new tests).
+- `npx vitest run` (full unit suite): **41 files, 279 tests passed**.
+- `npm run test:integration -- tests/integration/import-pipeline.test.ts` (focused, DB-backed):
+  **1 file, 29 tests passed** (baseline was 22; +7 new tests, migrations applied cleanly against
+  local Docker Postgres).
+- `npm run test:integration` (full integration suite): **8 files, 66 tests passed**.
+- `npm run lint`: clean, no output.
+- `npx tsc --noEmit` (no dedicated `typecheck` script exists in `package.json`): clean, no output.
+- `npm run build`: succeeded (Next.js production build, all routes compiled).
+
+Not performed, and not claimed: browser/UI QA of the admin imports screens beyond static code
+reading; production spreadsheet validation (only the repository's anonymized sample export and
+synthetic fixtures were used, per the task's PII rules); Apps Script runtime testing (read-only
+code inspection only, no execution).

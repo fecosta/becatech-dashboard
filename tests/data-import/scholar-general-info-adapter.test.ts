@@ -17,6 +17,11 @@ function loadFixtureSheet(): ParsedSheet {
   return parseWorkbook(buf)[0];
 }
 
+function loadAcademicStatusFixtureSheet(): ParsedSheet {
+  const buf = readFileSync(path.join(__dirname, "../fixtures/scholar-general-info-academic-status.csv"));
+  return parseWorkbook(buf)[0];
+}
+
 describe("scholarGeneralInfoAdapter (fixture)", () => {
   it("detects the sheet past the decorative title/category rows above the real header", () => {
     expect(scholarGeneralInfoAdapter.canHandle(loadFixtureSheet())).toBe(true);
@@ -296,5 +301,56 @@ describe("scholarGeneralInfoAdapter (fixture)", () => {
     // Every scholar has a row for both tracked terms (2025-2, 2026-1) — a blank GPA cell validates
     // fine (no fabricated/guessed value, no range-check error) since it stays null, not a number.
     expect(result.validated.ACADEMIC_TERM).toHaveLength(8);
+  });
+
+  describe("academicStatus (ESTADO FINAL) positional resolution", () => {
+    // The real sheet repeats the bare "ESTADO FINAL" header once per term block, with no term in
+    // the text itself — `xlsx` auto-suffixes the duplicates (ESTADO FINAL, ESTADO FINAL_1, ...).
+    // The fixture models 2024-1 and 2024-2 as clean, resolvable MATERIAS -> MENCIONAR -> ESTADO
+    // FINAL blocks, and stacks 2025-1/2025-2 back-to-back sharing one trailing ESTADO FINAL column
+    // (the real sheet's own genuinely ambiguous case).
+
+    it("maps each resolvable ESTADO FINAL occurrence to its own preceding term", () => {
+      const batch = scholarGeneralInfoAdapter.adapt(loadAcademicStatusFixtureSheet());
+      const terms = (batch.ACADEMIC_TERM ?? []).filter((r) => r.data.scholarId === "BT-CO-950");
+      expect(terms.find((r) => r.data.term === "2024-1")?.data.academicStatus).toBe("Aprobado");
+      expect(terms.find((r) => r.data.term === "2024-2")?.data.academicStatus).toBe("Aprobado con mencion");
+    });
+
+    it("leaves academicStatus unset for both terms sharing one ambiguous ESTADO FINAL column, rather than guessing", () => {
+      const batch = scholarGeneralInfoAdapter.adapt(loadAcademicStatusFixtureSheet());
+      const terms = (batch.ACADEMIC_TERM ?? []).filter((r) => r.data.scholarId === "BT-CO-950");
+      expect(terms.find((r) => r.data.term === "2025-1")?.data.academicStatus).toBeUndefined();
+      expect(terms.find((r) => r.data.term === "2025-2")?.data.academicStatus).toBeUndefined();
+    });
+
+    it("does not flag the resolved-or-ambiguous ESTADO FINAL columns as unknown drift", () => {
+      const report = scholarGeneralInfoAdapter.inspectSchema!(loadAcademicStatusFixtureSheet());
+      expect(report.unknown).toEqual([]);
+      expect(report.ignored).toEqual(expect.arrayContaining(["estado final", "estado final_1", "estado final_2"]));
+    });
+  });
+
+  it("reports a missing required column (no PAÍS/COUNTRY at all) as an explicit schema-drift entry", () => {
+    // ID + a GPA column are still present, so the sheet is still detected (canHandle) — this
+    // exercises the schema-drift path for one genuinely absent required column, not "sheet
+    // unrecognized".
+    const sheet: ParsedSheet = {
+      sheetName: "SCHOLAR GENERAL INFO",
+      records: [
+        {
+          ID: "BT-CO-940",
+          COHORTE: "2025",
+          UNIVERSIDAD: "Universidad Nacional de Colombia",
+          "PROGRAMA ACADÉMICO": "Computer Science",
+          "NOMBRE COMPLETO": "Missing Column Fictional Scholar",
+          GÉNERO: "Female",
+          "GPA 2026-1": "4.0",
+        },
+      ],
+    };
+    expect(scholarGeneralInfoAdapter.canHandle(sheet)).toBe(true);
+    const report = scholarGeneralInfoAdapter.inspectSchema!(sheet);
+    expect(report.missingRequired).toContain("pais");
   });
 });

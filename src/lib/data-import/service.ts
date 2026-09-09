@@ -15,6 +15,7 @@ import {
   type CanonicalBatch,
   emptyValidatedBatch,
   type ImportEntity,
+  type RowError,
   type SourceSchemaReport,
   type ValidatedBatch,
   type ValidationResult,
@@ -27,6 +28,30 @@ export interface NamedSchemaReport extends SourceSchemaReport {
    *  just enough for the admin preview UI / sync-route logs to say which sheet a warning is about. */
   sheetName: string;
   source: string;
+}
+
+/** Which canonical entity a schema report's missing-required columns belong to, for tagging the
+ *  SOURCE-stage errors below with the right `entity`. Mirrors each adapter's own `source` id. */
+const SCHEMA_REPORT_ENTITY: Record<string, ImportEntity> = {
+  SCHOLAR_GENERAL_INFO: "SCHOLAR",
+  MENTOR_REPORTS: "MENTOR_REPORT",
+};
+
+/** One SOURCE-stage `RowError` per missing-required column group, across all schema reports for
+ *  this upload — the column-level counterpart to validate.ts's row-level errors. `rowNumber: 0` is
+ *  an explicit sentinel for "not a specific row" (real row numbers start at 2). Informational only,
+ *  same as the schema reports themselves (see inspectLegacySheets) — never blocks the batch or
+ *  changes successRows/errorRows, which stay purely row-level. */
+function sourceStageErrors(schemaReports: NamedSchemaReport[]): RowError[] {
+  return schemaReports.flatMap((report) =>
+    report.missingRequired.map((field) => ({
+      entity: SCHEMA_REPORT_ENTITY[report.source] ?? "SCHOLAR",
+      rowNumber: 0,
+      field,
+      message: `Required column not found in ${report.sheetName}: ${field}`,
+      stage: "SOURCE" as const,
+    })),
+  );
 }
 
 /** Schema-drift report per recognized sheet, for a raw (LEGACY_WIDE_EXCEL) upload — one of the two
@@ -92,6 +117,10 @@ export async function createImportBatch(
 
   const ctx = await loadValidationContext();
   const result = validateBatch(canonical, ctx);
+  // Prepend explicit SOURCE-stage errors for missing required columns — same information the
+  // console.warn above already logs, now also visible in the persisted errorReport (admin preview,
+  // sync-route response). Doesn't affect totalRows/successRows/errorRows, which stay row-level.
+  result.errors = [...sourceStageErrors(schemaReports), ...result.errors];
 
   const batch = await prisma.dataImportBatch.create({
     data: {
@@ -157,7 +186,7 @@ export async function commitImportBatch(batchId: string): Promise<CommitOutcome>
       where: { id: batchId },
       data: {
         status: "FAILED",
-        errorReport: [...existing, { message }] as unknown as Prisma.InputJsonValue,
+        errorReport: [...existing, { stage: "PERSISTENCE" as const, message }] as unknown as Prisma.InputJsonValue,
       },
     });
     throw error;

@@ -27,6 +27,12 @@ export const TERM_PATTERNS = {
  *  reads whichever one exists rather than pivoting it into AcademicTerm rows. */
 export const ENGLISH_LEVEL_PATTERN = new RegExp(`^english level - ${TERM_SUFFIX}$`);
 
+/** Bare "ESTADO FINAL" (no term in the header text — it repeats identically once per term block,
+ *  see adapters/scholar-general-info.ts's `findAcademicStatusColumns`) — the `xlsx` parser
+ *  auto-suffixes duplicate headers (`estado final`, `estado final_1`, `estado final_2`, ...), so
+ *  this matches any of them. Resolved positionally, not by this pattern alone. */
+export const ESTADO_FINAL_PATTERN = /^estado final(?:_\d+)?$/;
+
 export const scholarGeneralInfoContract: SourceContract = {
   required: [
     ["id", "id_becario"],
@@ -83,7 +89,11 @@ export const scholarGeneralInfoContract: SourceContract = {
     "lb: academico", "icfes col", "notas (puntaje ib - peru)", "lb: socioeconomico", "sisben col",
     "nivel economico (peru)", "nivel de priorizacion", "monto", "observacion", "puntaje seleccion",
     "puntaje", "total de creditos", "gpa acumulado",
-    "estado avance (act semestral)", "estado final", "edad", "age",
+    // Resolved positionally by the adapter (see ESTADO_FINAL_PATTERN/findAcademicStatusColumns)
+    // when unambiguous; the `*` matches the `xlsx`-parser's auto-suffixed duplicates
+    // (estado final_1, _2, ...) too, so a resolved-or-genuinely-ambiguous occurrence never shows
+    // up as unknown drift.
+    "estado avance (act semestral)", "estado final*", "edad", "age",
     "talleres", "sesiones individuales", "tutorias", "psicosocial", "total", "total alertas",
     "resumen alertas", "confident english", "makers",
     "acompanamiento actual",

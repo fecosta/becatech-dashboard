@@ -1,6 +1,8 @@
 # SPEC-002 — Spreadsheet Ingestion Refactor
 
-Status: Active
+Status: Completed (validated and closed via TASK-001, 2026-09-09 — see
+`resources/tasks/completed/TASK-001-validate-spreadsheet-ingestion-parity.md` for the audit,
+parity assessment, and fixes that closed the remaining acceptance criteria)
 
 ## Goal
 
@@ -141,7 +143,8 @@ clearer boundaries, without changing that convergence.
 
 - Reprocessing the same source snapshot does not create duplicate canonical records: `Scholar` by
   `scholarId`, `AcademicTerm` by `(scholarId, term)`, `MentorReport` by `submissionId`,
-  `RiskAssessment` by `(scholarId, period)` — all pre-existing unique constraints, unchanged.
+  `RiskAssessment` by `(scholarId, semester, period)` (ADR-008 — updated from this spec's original
+  `(scholarId, period)` statement once the semester-aware identity shipped).
 
 ### Provenance
 
@@ -191,6 +194,7 @@ No dashboard behavior changes are part of this spec.
 
 ## Documentation Impact
 
-`docs/adr/007-spreadsheet-source-adapters.md` (new), this spec, and corrections to
-`docs/sync-contract.md` and `docs/reference-data-audit.md` (both predate ADR-006 and still
-describe mentor-report risk fields as feeding a "derived risk engine").
+`docs/adr/007-spreadsheet-source-adapters.md` (new) and this spec. `docs/sync-contract.md` and
+`docs/reference-data-audit.md` were re-checked during TASK-001's validation pass and already
+correctly describe risk as ingested verbatim, never derived, citing ADR-006 — no further
+correction needed there.
