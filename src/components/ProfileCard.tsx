@@ -7,11 +7,16 @@
 import type { Country, ProgramStatus, RiskLevel } from "@/generated/prisma/enums";
 import { COUNTRY_LABEL, PROGRAM_STATUS_LABEL, RISK_LEVEL_LABEL } from "@/lib/labels";
 import { ActivityChip, Card, ProxyBadge, StatusBadge } from "@/components/ui";
+import { ScholarAvatar } from "@/components/ScholarAvatar";
 import { programYearFromSemester } from "@/lib/academic/program-year";
 import { formatSemesterLabel } from "@/lib/dashboard/semester";
 
 export interface ProfileCardProps {
   fullName: string;
+  /** Signed Supabase Storage URL for the scholar's photo, or null when unavailable
+   *  (unsupported country, no uploaded photo, or an unexpected Storage/config
+   *  failure) — see src/lib/scholars/photos.ts::getScholarPhotoUrl. */
+  photoUrl: string | null;
   country: Country;
   university: string;
   cohort: string;
@@ -75,6 +80,7 @@ function Field({ label, children, span }: { label: string; children: React.React
 export function ProfileCard(props: ProfileCardProps) {
   const {
     fullName,
+    photoUrl,
     country,
     university,
     cohort,
@@ -104,7 +110,7 @@ export function ProfileCard(props: ProfileCardProps) {
   return (
     <Card className="p-6">
       <div className="mb-[18px] flex flex-wrap items-center gap-5 border-b border-border pb-[18px]">
-        <div className="h-[104px] w-[104px] shrink-0 rounded-[22px] bg-linear-to-br from-purple to-green" />
+        <ScholarAvatar src={photoUrl} name={fullName} size="profile" />
         <div className="min-w-[220px] flex-1">
           <div className="font-display text-2xl font-bold text-surface-dark">{fullName}</div>
           <div className="mt-1 text-[12.5px] text-muted">

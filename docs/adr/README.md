@@ -56,3 +56,4 @@ than fabricate one.
 | [006](006-authoritative-monthly-risk.md) | Authoritative Monthly Risk Source | Accepted |
 | [007](007-spreadsheet-source-adapters.md) | Spreadsheet Source Adapters and Canonical Ingestion | Proposed |
 | [008](008-risk-period-identity.md) | Risk Period Identity Across Semesters | Proposed |
+| [009](009-supabase-storage-scholar-photos.md) | Supabase Storage for Scholar Photos | Accepted |

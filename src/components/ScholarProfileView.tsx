@@ -28,6 +28,7 @@ import {
   REVIEW_STATUS_LABEL,
   RISK_CHANGE_LABEL,
 } from "@/lib/labels";
+import { getScholarPhotoUrl } from "@/lib/scholars/photos";
 
 const money = (amount: unknown, currency: string) =>
   new Intl.NumberFormat("en-US", { style: "currency", currency, maximumFractionDigits: 0 }).format(
@@ -45,6 +46,16 @@ export async function ScholarProfileView({
   // scholar even by direct id) — not just UI-gated by the caller.
   const p = await getScholarProfile(scholarId, user ?? null);
   if (!p) notFound();
+
+  // Resolved here — not inside getScholarProfile()/queries.ts — so the Prisma query
+  // layer stays free of an external Storage network call, and so
+  // tests/integration/mentor-scoping.test.ts (which calls getScholarProfile() directly
+  // against a real seeded Postgres DB with no Storage mocking) is unaffected. By this
+  // point `p` is non-null, so both the page-level canAccessScholar() gate
+  // (src/app/dashboard/scholars/[scholarId]/page.tsx) and getScholarProfile()'s own
+  // mentor-scoping recheck have already passed for this exact scholarId — the signed
+  // URL is generated only for an already-authorized request, never from an arbitrary id.
+  const photoUrl = await getScholarPhotoUrl({ scholarId: p.scholarId, country: p.country });
 
   const latestTerm = p.academicTerms.at(-1) ?? null;
   const latestRisk = p.riskAssessments.at(-1) ?? null;
@@ -156,6 +167,7 @@ export async function ScholarProfileView({
       <SectionTitle>Identity &amp; Program</SectionTitle>
       <ProfileCard
         fullName={p.fullName}
+        photoUrl={photoUrl}
         country={p.country}
         university={p.university.name}
         cohort={p.cohort}

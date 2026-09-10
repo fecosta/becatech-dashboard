@@ -33,6 +33,11 @@ See `.env.example` for the full, commented list. Categories:
   `DATABASE_URL` is the pooled connection and `DIRECT_URL` is the direct one, used by `prisma
   migrate`).
 - **Supabase Auth** — `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
+- **Supabase Storage (server-only)** — `SUPABASE_SERVICE_ROLE_KEY`, used to generate
+  short-lived signed URLs for the private `scholar-photos` bucket on the Scholar Profile
+  page; see `src/lib/scholars/photos.ts` and `docs/adr/009-supabase-storage-scholar-photos.md`.
+  Reuses `NEXT_PUBLIC_SUPABASE_URL` for the endpoint unless a separate `SUPABASE_URL` is
+  set. Never prefix with `NEXT_PUBLIC_`.
 - **Local demo auth** — `DEMO_USER_EMAIL` (see `docs/SECURITY.md` — inert once `NODE_ENV` is
   `production`, which every real build sets).
 - **JotForm (placeholder)** — `JOTFORM_API_KEY`, `JOTFORM_WEBHOOK_SECRET`. The MVP does not call
