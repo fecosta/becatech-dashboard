@@ -83,6 +83,12 @@ export function Sidebar({
                   <Link
                     key={item.href}
                     href={item.href}
+                    // Every dashboard page is a `force-dynamic`, auth-gated server render — Next's
+                    // default viewport prefetch was firing a full expensive RSC render (350-900ms
+                    // per the production HAR) for every visible sidebar link, before the user ever
+                    // clicked. Disabling it trades that speculative cost for a fetch that starts on
+                    // click instead of on scroll-into-view; normal client-side navigation is unaffected.
+                    prefetch={false}
                     aria-current={active ? "page" : undefined}
                     onClick={onNavigate}
                     className={`mb-[3px] flex items-center gap-2.5 rounded-[10px] border-l-[3px] px-3 py-2.5 transition-colors ${
