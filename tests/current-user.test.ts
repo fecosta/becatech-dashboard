@@ -106,4 +106,30 @@ describe("getCurrentUserResult", () => {
 
     expect(await getCurrentUserResult()).toEqual({ status: "unprovisioned" });
   });
+
+  // getCurrentUserResult is wrapped in React's cache() so one dashboard render only
+  // resolves identity once (see tests/request-dedup.test.ts for that behavior). That
+  // memo is scoped to a single RSC render and is NOT a module-level/process-global cache:
+  // outside a React render (here, and in every route handler / script) cache() is a
+  // documented pass-through, so plain repeated calls must still re-validate the session
+  // every time. If this ever starts asserting 1 instead of 2, someone replaced the
+  // request-scoped memo with a process-global one — the exact cross-user leak the
+  // authorization model must never allow.
+  it("re-resolves identity on every call outside a React render", async () => {
+    mockSupabaseUser("pm@becatech.test");
+    vi.mocked(prisma.appUser.findUnique).mockResolvedValue({
+      id: "u2",
+      email: "pm@becatech.test",
+      role: "PROGRAM_MANAGER",
+      fullName: "PM",
+      isActive: true,
+      scholarAccess: [],
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
+
+    await getCurrentUserResult();
+    await getCurrentUserResult();
+
+    expect(prisma.appUser.findUnique).toHaveBeenCalledTimes(2);
+  });
 });

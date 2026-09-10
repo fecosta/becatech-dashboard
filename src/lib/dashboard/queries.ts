@@ -1,6 +1,7 @@
 // Dashboard query layer — reusable, typed server-side reads for every dashboard view.
 // Aggregation is done in JS over Prisma results: the dataset is small (~100 scholars) and
 // this keeps the logic readable and testable. Optimize with SQL only if data volume grows.
+import { cache } from "react";
 import { bucketGpa, GPA_SCALE_MAX } from "../academic/gpa-bucket";
 import { parseScholarProgress } from "../academic/academic-progress-label";
 import { ENGLISH_LEVELS, type EnglishLevel, parseEnglishLevel } from "../academic/english-level";
@@ -167,15 +168,20 @@ function financialWhere(filters: DashboardFilters): Prisma.FinancialInputWhereIn
 // Program months ("MES n") order by number, not lexically; if the sheet reports calendar months
 // instead ("2026-03"), those sort chronologically as strings. Prefer the latest MES, else the
 // latest value.
-async function getCurrentPeriod(): Promise<string> {
+// cache(): zero-argument and primitive-returning, so this is a safe request-scoped dedup —
+// loadScope() calls this on every invocation that doesn't pin an explicit filters.period
+// (the common case, since neither /dashboard nor /dashboard/early-support exposes a period
+// filter pill), so a single render can otherwise repeat this same read a dozen-plus times.
+const getCurrentPeriod = cache(async (): Promise<string> => {
   const rows = await prisma.riskAssessment.findMany({ select: { period: true }, distinct: ["period"] });
   const periods = rows.map((r) => r.period);
   return latestProgramMonth(periods) ?? [...periods].sort().at(-1) ?? "MES 1";
-}
+});
 
 /** The latest semester with any RiskAssessment data — the default for semester-scoped views (e.g.
- *  getMonthlyParticipationRiskTrend) when `filters.semester` isn't set. See ADR-008. */
-async function getCurrentSemester(): Promise<string> {
+ *  getMonthlyParticipationRiskTrend) when `filters.semester` isn't set. See ADR-008.
+ *  cache(): same zero-argument/primitive-return rationale as getCurrentPeriod() above. */
+const getCurrentSemester = cache(async (): Promise<string> => {
   const rows = await prisma.riskAssessment.findMany({
     where: { semester: { not: null } },
     select: { semester: true },
@@ -183,7 +189,7 @@ async function getCurrentSemester(): Promise<string> {
   });
   const semesters = rows.map((r) => r.semester).filter((s): s is string => !!s);
   return latestSemester(semesters) ?? "2026-1";
-}
+});
 
 /**
  * Whether a scholar counts toward the program's official risk/retention denominators: ACTIVE and
@@ -208,8 +214,16 @@ export async function getDataFreshness(now: Date): Promise<Freshness> {
   return describeFreshness(batch?.uploadedAt ?? null, now, { automationPaused: syncAutomationPaused() });
 }
 
-/** Distinct values that populate the dashboard filter dropdowns. */
-export async function getFilterOptions(): Promise<FilterOptions> {
+/**
+ * Distinct values that populate the dashboard filter dropdowns.
+ *
+ * Request-scoped memoization only (React cache()): the dashboard layout needs these for
+ * the shell and the page needs them again for its own filter rows, so one render used to
+ * run these four queries twice. Deliberately NOT unstable_cache/"use cache" — imports can
+ * add cohorts, universities, periods and semesters, so this must re-read on every new
+ * request; it just must not read twice within one.
+ */
+export const getFilterOptions = cache(async (): Promise<FilterOptions> => {
   const [scholars, universities, periods, semesters] = await Promise.all([
     prisma.scholar.findMany({ select: { cohort: true, currentDepartment: true } }),
     prisma.university.findMany({ select: { name: true }, orderBy: { name: "asc" } }),
@@ -231,7 +245,7 @@ export async function getFilterOptions(): Promise<FilterOptions> {
     departments: [...new Set(scholars.map((s) => s.currentDepartment).filter((d): d is string => !!d))].sort(),
     semesters: sortSemesters(semesters.map((s) => s.semester).filter((s): s is string => !!s)),
   };
-}
+});
 
 function sortSemesters(semesters: string[]): string[] {
   return [...semesters].sort(compareSemesters);

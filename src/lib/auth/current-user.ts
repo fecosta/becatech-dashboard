@@ -1,6 +1,7 @@
 // Real auth: the "current user" is whoever is signed in via Supabase Auth (Google),
 // matched to a seeded AppUser by email. DEMO_USER_EMAIL remains as a local-dev-only
 // fallback (see demo-mode.ts) for working without Google OAuth configured.
+import { cache } from "react";
 import type { CurrentUser } from "./authorization";
 import { isDemoModeActive } from "./demo-mode";
 import { prisma } from "../db";
@@ -28,7 +29,17 @@ async function loadAppUser(email: string): Promise<CurrentUser | null> {
   };
 }
 
-export async function getCurrentUserResult(): Promise<CurrentUserResult> {
+// Request-scoped memoization (React cache()): the dashboard layout resolves identity
+// directly while every page's requirePermission() resolves it again through
+// getCurrentUser(), so one /dashboard render used to do two supabase.auth.getUser()
+// round trips and two AppUser lookups. cache() collapses them to one.
+//
+// This is NOT a process-global cache. The memo lives in a Map created fresh per RSC
+// render and is unreachable outside it, so a new HTTP request always re-validates the
+// session — one user's identity can never be served to another. Outside an RSC render
+// (route handlers, scripts, Vitest) cache() is a documented pass-through, so behavior
+// there — and supabase.auth.getUser() itself — is unchanged.
+export const getCurrentUserResult = cache(async (): Promise<CurrentUserResult> => {
   let email: string | undefined;
 
   if (isSupabaseConfigured()) {
@@ -46,7 +57,7 @@ export async function getCurrentUserResult(): Promise<CurrentUserResult> {
 
   const user = await loadAppUser(email!);
   return user ? { status: "ok", user } : { status: "unprovisioned" };
-}
+});
 
 // Back-compat surface for guard.ts and every existing call site — none of them need to
 // distinguish "no session" from "session, no matching AppUser row"; both mean "no user."
