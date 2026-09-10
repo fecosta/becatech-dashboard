@@ -327,53 +327,6 @@ export function HeroStat({
   );
 }
 
-type ChipTone = "black" | "green" | "purple" | "yellow" | "ghost";
-const CHIP_TONE_CLASS: Record<ChipTone, string> = {
-  black: "bg-surface-dark text-white border-black",
-  green: "bg-green text-white border-green-dark",
-  purple: "bg-purple text-white border-purple-dark",
-  yellow: "bg-yellow text-surface-dark border-yellow-dark",
-  ghost: "bg-card text-ink border-border shadow-none",
-};
-
-export interface FilterChip {
-  label: ReactNode;
-  tone?: ChipTone;
-  /** Present once chips become real filter links; until then they render as text. */
-  href?: string;
-}
-
-/**
- * The per-section scope chips ("Cohort: all", "Semester: 2026-1").
- *
- * These report the filters already applied from the top bar rather than holding
- * their own state — a chip that looked interactive but did nothing, or that
- * disagreed with the top bar about scope, would be worse than a plain label.
- */
-export function FilterChipRow({
-  chips,
-  className = "",
-}: {
-  chips: FilterChip[];
-  className?: string;
-}) {
-  if (chips.length === 0) return null;
-  return (
-    <div className={`mb-4 flex flex-wrap gap-2.5 ${className}`}>
-      {chips.map((c, i) => (
-        <span
-          key={i}
-          className={`inline-flex items-center rounded-[10px] border-2 px-4 py-2 text-xs font-extrabold tracking-[0.2px] shadow-sm ${
-            CHIP_TONE_CLASS[c.tone ?? "ghost"]
-          }`}
-        >
-          {c.label}
-        </span>
-      ))}
-    </div>
-  );
-}
-
 /** Country heading with a colored rule, used to group the ecosystem cards. */
 export function CountryGroupTitle({
   children,

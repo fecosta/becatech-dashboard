@@ -73,7 +73,7 @@ export function visiblePillsForPath(pathname: string): FilterKey[] {
   return ["country", "cohort", "university", "status", "risk", "period"];
 }
 
-/** The colour each filter reads as in the per-section scope chips. Pinned so a given
+/** The colour each filter reads as in the per-section filter controls. Pinned so a given
  *  filter looks the same on every view — the design file is inconsistent about this and
  *  the app should not inherit that. */
 export const FILTER_CHIP_TONE: Record<
@@ -90,7 +90,7 @@ export const FILTER_CHIP_TONE: Record<
   semester: "yellow",
 };
 
-const FILTER_CHIP_LABEL: Record<FilterKey, string> = {
+export const FILTER_CHIP_LABEL: Record<FilterKey, string> = {
   cohort: "Cohort",
   country: "Country",
   university: "University",
@@ -102,17 +102,98 @@ const FILTER_CHIP_LABEL: Record<FilterKey, string> = {
 };
 
 /**
- * Scope chips for a section: what the top-bar filters are currently set to.
+ * Block-level filters (SPEC-004). Each dashboard section that renders its own filter row owns a
+ * namespace here; the listed keys are the dimensions that section exposes. A block value overrides
+ * the page's global filter for that block only — an unset one inherits the global value, so the
+ * default state means "whatever the page is scoped to".
  *
- * These report scope rather than setting it. The design draws them as if they were
- * per-section controls, but a chip that owns its own state would let a card disagree
- * with the top bar about what it is showing — and a chip that looks clickable and is
- * not is worse than a label.
+ * Adding a section's filter row to the dashboard means adding it here: the reset rule, the URL
+ * param names and the per-block Clear all derive from this registry.
  */
-export function filterChipsFor(
+export const BLOCK_FILTERS = {
+  ourScholars: ["cohort", "country", "university"],
+  dropOuts: ["cohort", "country", "university"],
+  programRetention: ["cohort", "country", "university"],
+  earlySupportStatus: ["cohort", "country", "university"],
+} as const satisfies Record<string, readonly FilterKey[]>;
+
+export type BlockId = keyof typeof BLOCK_FILTERS;
+
+/** URL param for one block dimension, e.g. ("ourScholars", "country") -> "ourScholarsCountry".
+ *  Namespacing by block is what keeps two sections filtering the same dimension independent. */
+export function blockParamName(block: BlockId, key: FilterKey): string {
+  return `${block}${key.charAt(0).toUpperCase()}${key.slice(1)}`;
+}
+
+/** Every block param across every page. Stripped from the URL whenever a global filter changes
+ *  (see TopFilters.setParam), so a page-level scope change always resets block-level state rather
+ *  than leaving it stale against the new scope. Params for other pages simply aren't present. */
+export const ALL_BLOCK_FILTER_PARAMS: string[] = Object.entries(BLOCK_FILTERS).flatMap(
+  ([block, keys]) => keys.map((key) => blockParamName(block as BlockId, key)),
+);
+
+/** Read one block's overrides off the URL. Only the dimensions that block exposes are read, so a
+ *  stray param belonging to another block can never bleed into this one. */
+export function parseBlockFilters(sp: SearchParams, block: BlockId): Partial<DashboardFilters> {
+  const keys: readonly FilterKey[] = BLOCK_FILTERS[block];
+  const overrides: Partial<DashboardFilters> = {};
+  for (const key of keys) {
+    const raw = first(sp[blockParamName(block, key)]);
+    if (!raw) continue;
+    if (key === "country") overrides.country = asEnum(Country, raw);
+    else if (key === "cohort") overrides.cohort = raw;
+    else if (key === "university") overrides.university = raw;
+  }
+  return overrides;
+}
+
+/**
+ * Layer a block's overrides over the page's global filters. Defined block values win; undefined
+ * ones fall through to the global value, so an unset block control never blanks an inherited
+ * global scope. Feed the result to that block's queries so every card in it reads one population.
+ */
+export function applyBlockFilters(
   filters: DashboardFilters,
-  keys: FilterKey[],
-): { label: string; tone: "black" | "green" | "purple" | "yellow" | "ghost" }[] {
+  overrides: Partial<DashboardFilters>,
+): DashboardFilters {
+  const defined = Object.fromEntries(
+    Object.entries(overrides).filter(([, value]) => value !== undefined),
+  );
+  return { ...filters, ...defined };
+}
+
+/** Clear one block's params, leaving global filters and every sibling block untouched. */
+export function clearBlockFilters(currentQuery: string, block: BlockId): URLSearchParams {
+  const params = new URLSearchParams(currentQuery);
+  for (const key of BLOCK_FILTERS[block]) params.delete(blockParamName(block, key));
+  return params;
+}
+
+/**
+ * Apply a single filter-param change to a query string. Pass `resetBlockFilters: true` for a
+ * GLOBAL filter change (TopFilters) so every block-level filter on the page resets with it;
+ * omit it for a block filter's own change, which must never touch global or sibling state.
+ * Pure and DOM-free so the reset rule is unit-testable without a component/router harness.
+ */
+export function applyFilterParamChange(
+  currentQuery: string,
+  key: string,
+  value: string,
+  options: { resetBlockFilters?: boolean } = {},
+): URLSearchParams {
+  const params = new URLSearchParams(currentQuery);
+  if (value) params.set(key, value);
+  else params.delete(key);
+  if (options.resetBlockFilters) {
+    for (const blockParam of ALL_BLOCK_FILTER_PARAMS) params.delete(blockParam);
+  }
+  return params;
+}
+
+/** The value a filter key currently resolves to, or undefined when unset. Block filter controls
+ *  read this off the GLOBAL filters to label their inherit option, so an unset block control
+ *  reports the scope its block is actually on rather than claiming "all". */
+export function filterValueOf(filters: DashboardFilters, key: FilterKey): string | undefined {
   const valueOf: Record<FilterKey, string | undefined> = {
     cohort: filters.cohort,
     country: filters.country,
@@ -123,8 +204,5 @@ export function filterChipsFor(
     department: filters.department,
     semester: filters.semester,
   };
-  return keys.map((key) => ({
-    label: `${FILTER_CHIP_LABEL[key]}: ${valueOf[key] ?? "all"}`,
-    tone: FILTER_CHIP_TONE[key],
-  }));
+  return valueOf[key];
 }

@@ -50,3 +50,4 @@ next-env.d.ts
 /resources/sample-data/raw/
 /resources/sample-data/*.xlsx
 /resources/sample-data/*.xls
+/resources/temp-scripts/

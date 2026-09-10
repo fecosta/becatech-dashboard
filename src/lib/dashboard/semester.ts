@@ -26,3 +26,16 @@ export function latestSemester(semesters: string[]): string | null {
   if (semesters.length === 0) return null;
   return [...semesters].sort(compareSemesters).at(-1) ?? null;
 }
+
+/** Human-readable label for a "YYYY-N" semester value: "2026-1" -> "First semester". The year is
+ *  parsed but deliberately not shown — the field names the semester, not the term code. Only term
+ *  1/2 get a spelled-out ordinal; any other shape (non-standard, or a parseable-but-unrecognized
+ *  term digit) falls back to the original value untranslated, per the no-invented-meaning rule.
+ *  Missing values use the app's "—" convention. */
+export function formatSemesterLabel(term: string | null | undefined): string {
+  if (term == null || term === "") return "—";
+  const parsed = parseSemester(term);
+  if (parsed?.term === 1) return "First semester";
+  if (parsed?.term === 2) return "Second semester";
+  return term;
+}

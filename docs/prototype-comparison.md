@@ -93,9 +93,12 @@ plausible-looking placeholder in a goal row is worse than a visible gap.
 
 - **English UI** — Implemented. `DataTable`'s Spanish default empty state was the last holdout.
 - **Design tokens, responsive layout** — Implemented; new UI reuses `ExecTable`, `HeroStat`,
-  `FilterChipRow`, `SectionNav`, `TypeBadge`, `CountryGroupTitle` plus the existing primitives.
-- **Per-section filter chips** — **Adapt**. The design draws them as controls; they render the
-  applied top-bar scope instead, so a card can never disagree with the top bar about what it shows.
+  `FilterSelect`, `SectionNav`, `TypeBadge`, `CountryGroupTitle` plus the existing primitives.
+- **Per-section filter chips** — Implemented as controls (SPEC-004), which is what the design
+  draws. They were read-only scope labels until then, to stop a card disagreeing with the top bar;
+  they now set block-scoped URL params instead, which keeps that guarantee a different way — the
+  whole section reads one population, and any global filter change resets every block filter on
+  the page. `BlockFilters` renders them with the same tone per filter key they had as chips.
 - **Authentication / server-side authorization** — Preserved. `SectionNav` is permission-aware and
   skips views a role cannot open, rather than linking them to Access denied.
 - **No embedded HTML / second dashboard** — the reference is not served; only its interface ideas

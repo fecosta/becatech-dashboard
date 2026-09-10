@@ -8,6 +8,7 @@ import type { Country, ProgramStatus, RiskLevel } from "@/generated/prisma/enums
 import { COUNTRY_LABEL, PROGRAM_STATUS_LABEL, RISK_LEVEL_LABEL } from "@/lib/labels";
 import { ActivityChip, Card, ProxyBadge, StatusBadge } from "@/components/ui";
 import { programYearFromSemester } from "@/lib/academic/program-year";
+import { formatSemesterLabel } from "@/lib/dashboard/semester";
 
 export interface ProfileCardProps {
   fullName: string;
@@ -131,7 +132,7 @@ export function ProfileCard(props: ProfileCardProps) {
           <Field label="Cohort">{cohort || DASH}</Field>
           <Field label="Program">{academicProgram || DASH}</Field>
           <Field label="Year">{year ? YEAR_LABEL[year] : DASH}</Field>
-          <Field label="Current Semester">{latestTerm ?? DASH}</Field>
+          <Field label="Current Semester">{formatSemesterLabel(latestTerm)}</Field>
           <Field label="Est. Year of Finalization">
             {estimatedGraduationYear ??
               (expectedEndDate ? new Date(expectedEndDate).getFullYear() : DASH)}

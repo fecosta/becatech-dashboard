@@ -1,7 +1,8 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { visiblePillsForPath } from "@/lib/dashboard/filters";
+import { FilterSelect } from "@/components/FilterSelect";
+import { applyFilterParamChange, visiblePillsForPath } from "@/lib/dashboard/filters";
 import {
   COUNTRY_LABEL,
   PROGRAM_STATUS_LABEL,
@@ -27,19 +28,21 @@ export function TopFilters({ options }: { options: FilterOptions }) {
   const anyActive = visible.some((k) => searchParams.get(k));
 
   function setParam(key: string, value: string) {
-    const params = new URLSearchParams(searchParams.toString());
-    if (value) params.set(key, value);
-    else params.delete(key);
+    // A global filter changing resets every block-level filter on the page (SPEC-004) — a
+    // no-op on pages with no block filter keys in the URL to begin with.
+    const params = applyFilterParamChange(searchParams.toString(), key, value, {
+      resetBlockFilters: true,
+    });
     router.push(params.toString() ? `${pathname}?${params.toString()}` : pathname);
   }
 
   return (
     <div className="flex flex-wrap items-center gap-2">
       {visible.includes("country") ? (
-        <Select
+        <FilterSelect
           value={val("country")}
           onChange={(v) => setParam("country", v)}
-          placeholder="Country"
+          emptyLabel="Country: all"
           options={[
             { value: "COLOMBIA", label: COUNTRY_LABEL.COLOMBIA },
             { value: "PERU", label: COUNTRY_LABEL.PERU },
@@ -47,58 +50,58 @@ export function TopFilters({ options }: { options: FilterOptions }) {
         />
       ) : null}
       {visible.includes("cohort") ? (
-        <Select
+        <FilterSelect
           value={val("cohort")}
           onChange={(v) => setParam("cohort", v)}
-          placeholder="Cohort"
+          emptyLabel="Cohort: all"
           options={options.cohorts.map((c) => ({ value: c, label: c }))}
         />
       ) : null}
       {visible.includes("university") ? (
-        <Select
+        <FilterSelect
           value={val("university")}
           onChange={(v) => setParam("university", v)}
-          placeholder="University"
+          emptyLabel="University: all"
           options={options.universities.map((u) => ({ value: u, label: u }))}
         />
       ) : null}
       {visible.includes("department") ? (
-        <Select
+        <FilterSelect
           value={val("department")}
           onChange={(v) => setParam("department", v)}
-          placeholder="Department"
+          emptyLabel="Department: all"
           options={options.departments.map((d) => ({ value: d, label: d }))}
         />
       ) : null}
       {visible.includes("status") ? (
-        <Select
+        <FilterSelect
           value={val("status")}
           onChange={(v) => setParam("status", v)}
-          placeholder="Status"
+          emptyLabel="Status: all"
           options={Object.entries(PROGRAM_STATUS_LABEL).map(([value, label]) => ({ value, label }))}
         />
       ) : null}
       {visible.includes("risk") ? (
-        <Select
+        <FilterSelect
           value={val("risk")}
           onChange={(v) => setParam("risk", v)}
-          placeholder="Risk"
+          emptyLabel="Risk: all"
           options={RISK_LEVEL_ORDER.map((r) => ({ value: r, label: RISK_LEVEL_LABEL[r] }))}
         />
       ) : null}
       {visible.includes("period") ? (
-        <Select
+        <FilterSelect
           value={val("period")}
           onChange={(v) => setParam("period", v)}
-          placeholder="Period"
+          emptyLabel="Period: all"
           options={options.periods.map((p) => ({ value: p, label: p }))}
         />
       ) : null}
       {visible.includes("semester") ? (
-        <Select
+        <FilterSelect
           value={val("semester")}
           onChange={(v) => setParam("semester", v)}
-          placeholder="Semester"
+          emptyLabel="Semester: all"
           options={options.semesters.map((s) => ({ value: s, label: s }))}
         />
       ) : null}
@@ -111,32 +114,5 @@ export function TopFilters({ options }: { options: FilterOptions }) {
         </button>
       ) : null}
     </div>
-  );
-}
-
-function Select({
-  value,
-  onChange,
-  placeholder,
-  options,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  placeholder: string;
-  options: { value: string; label: string }[];
-}) {
-  return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className="max-w-[12rem] rounded-md border border-border bg-card px-2 py-1 text-xs text-ink shadow-sm focus:border-purple focus:outline-none"
-    >
-      <option value="">{placeholder}: all</option>
-      {options.map((o) => (
-        <option key={o.value} value={o.value}>
-          {o.label}
-        </option>
-      ))}
-    </select>
   );
 }

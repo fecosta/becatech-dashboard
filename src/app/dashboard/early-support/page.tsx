@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import type { AlertType, RiskLevel } from "@/generated/prisma/enums";
+import { BlockFilters } from "@/components/BlockFilters";
 import { ComboBarLineCard, Donut, LineCard } from "@/components/charts";
 import { PaceBarChart } from "@/components/PaceBarChart";
 import { ExecTable, type ExecRow } from "@/components/ExecTable";
@@ -10,7 +11,6 @@ import {
   AccessDenied,
   Card,
   DarkCallout,
-  FilterChipRow,
   KpiCard,
   PageHeader,
   SectionTitle,
@@ -20,10 +20,16 @@ import { SectionNav } from "@/components/SectionNav";
 import { gpaSummaryKpi } from "@/lib/academic/gpa-summary";
 import { Permission } from "@/lib/auth/authorization";
 import { requirePermission } from "@/lib/auth/guard";
-import { filterChipsFor, parseFilters, type SearchParams } from "@/lib/dashboard/filters";
+import {
+  applyBlockFilters,
+  parseBlockFilters,
+  parseFilters,
+  type SearchParams,
+} from "@/lib/dashboard/filters";
 import {
   getAcademicProgress,
   getExecutiveOverview,
+  getFilterOptions,
   getHomeOverview,
   getMonthlyParticipationRiskTrend,
   getMonthlyRiskTrend,
@@ -117,8 +123,13 @@ export default async function EarlySupportPage({
   const sp = await searchParams;
   const filters = parseFilters(sp);
   const stageFilters = { ...filters, programStage: "YEARS_1_2" as const };
+  // "2 · Scholar Status" owns a filter row (SPEC-004), so everything under that heading — 2.1
+  // through 2.6 and the participation cards — reads this scope instead of the page's. Section 1
+  // and 3 expose no filter and stay on the plain stage scope.
+  const statusScope = applyBlockFilters(stageFilters, parseBlockFilters(sp, "earlySupportStatus"));
   const [
     risk,
+    statusRisk,
     support,
     pace,
     stageOverview,
@@ -132,30 +143,33 @@ export default async function EarlySupportPage({
     participation,
     byGender,
     monthlyTrend,
+    filterOptions,
   ] = await Promise.all([
     getRiskStageSummary(stageFilters),
-    getSupportParticipation(stageFilters),
+    // Section 1's callout and KPIs read `risk`; section 2.1 reads `statusRisk`. Two calls, so the
+    // block filter cannot leak into a section that exposes no filter of its own.
+    getRiskStageSummary(statusScope),
+    getSupportParticipation(statusScope),
     getAcademicProgress(stageFilters, user),
     getExecutiveOverview(stageFilters),
     getExecutiveOverview(filters),
     getHomeOverview(stageFilters),
-    getUniversityRiskBreakdown(stageFilters),
-    getMonthlyRiskTrend(stageFilters),
-    getRiskBreakdowns(stageFilters),
+    getUniversityRiskBreakdown(statusScope),
+    getMonthlyRiskTrend(statusScope),
+    getRiskBreakdowns(statusScope),
     getRiskAlerts(stageFilters, user),
-    getRiskReasonBreakdown(stageFilters),
-    getParticipationByActivityAndRisk(stageFilters),
-    getRiskByGender(stageFilters),
-    getMonthlyParticipationRiskTrend(stageFilters),
+    getRiskReasonBreakdown(statusScope),
+    getParticipationByActivityAndRisk(statusScope),
+    getRiskByGender(statusScope),
+    getMonthlyParticipationRiskTrend(statusScope),
+    getFilterOptions(),
   ]);
-
-  const scopeChips = filterChipsFor(filters, ["cohort", "country", "university"]);
 
   const missingReportsCount = alerts.attentionList.filter(
     (r) => r.missingCheckin || r.missingMentorReport,
   ).length;
 
-  const atRisk = ALERT_SPLIT_ORDER.reduce((sum, t) => sum + risk.alertTypeCounts[t], 0);
+  const atRisk = ALERT_SPLIT_ORDER.reduce((sum, t) => sum + statusRisk.alertTypeCounts[t], 0);
   const onTrack = pace.progressStatusDistribution.ON_TRACK;
   const behind = pace.progressStatusDistribution.SLIGHTLY_BEHIND + pace.progressStatusDistribution.BEHIND;
   const critical = pace.progressStatusDistribution.CRITICAL_DELAY;
@@ -168,11 +182,11 @@ export default async function EarlySupportPage({
   // Denominator for the level percentages = active, ≠Cohorte-2024 scholars (the program's official
   // denominator), so "No risk" reads e.g. 63% of all eligible scholars — not 63% of only the
   // classified ones. `riskClassified` (levels sum) just gates whether there's a donut to show.
-  const riskTotal = risk.assessedScholarCount;
-  const riskClassified = RISK_ORDER.reduce((sum, l) => sum + risk.distribution[l], 0);
+  const riskTotal = statusRisk.assessedScholarCount;
+  const riskClassified = RISK_ORDER.reduce((sum, l) => sum + statusRisk.distribution[l], 0);
   const donutData = RISK_ORDER.map((l) => ({
     name: RISK_LEVEL_LABEL[l],
-    value: risk.distribution[l],
+    value: statusRisk.distribution[l],
     color: RISK_LEVEL_HEX_SEGMENTED[l],
   }));
 
@@ -275,7 +289,7 @@ export default async function EarlySupportPage({
       <SectionTitle size="lg" id="early-sec-2">
         2 · Scholar Status
       </SectionTitle>
-      <FilterChipRow chips={scopeChips} />
+      <BlockFilters block="earlySupportStatus" options={filterOptions} globals={filters} />
       <div>
         <Card>
           <div className="mb-3.5 text-[13.5px] font-bold text-surface-dark">2.1 Overall Status</div>
@@ -293,7 +307,7 @@ export default async function EarlySupportPage({
                         style={{ background: RISK_LEVEL_HEX_SEGMENTED[l] }}
                       />
                       {RISK_LEVEL_LABEL[l]} ·{" "}
-                      {Math.round((risk.distribution[l] / riskTotal) * 100)}%
+                      {Math.round((statusRisk.distribution[l] / riskTotal) * 100)}%
                     </b>
                     <span className="text-muted">{RISK_LEVEL_NOTE[l]}</span>
                   </div>
@@ -310,8 +324,8 @@ export default async function EarlySupportPage({
                     key: l,
                     label: RISK_LEVEL_LABEL[l],
                     cells: [
-                      `${Math.round((risk.distribution[l] / riskTotal) * 100)}%`,
-                      fmtInt(risk.distribution[l]),
+                      `${Math.round((statusRisk.distribution[l] / riskTotal) * 100)}%`,
+                      fmtInt(statusRisk.distribution[l]),
                       <span key="n" className="text-muted">
                         {RISK_LEVEL_NOTE[l]}
                       </span>,
@@ -348,10 +362,10 @@ export default async function EarlySupportPage({
             <p className="text-sm text-muted">No scholars at medium risk or above in this group.</p>
           ) : (
             <div className="flex flex-wrap gap-4">
-              {ALERT_SPLIT_ORDER.filter((t) => risk.alertTypeCounts[t] > 0).map((t) => (
+              {ALERT_SPLIT_ORDER.filter((t) => statusRisk.alertTypeCounts[t] > 0).map((t) => (
                 <StatChip
                   key={t}
-                  value={fmtPct(risk.alertTypeCounts[t] / atRisk)}
+                  value={fmtPct(statusRisk.alertTypeCounts[t] / atRisk)}
                   label={`${ALERT_TYPE_LABEL[t]} alerts`}
                 />
               ))}

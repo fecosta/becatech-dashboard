@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BlockFilters } from "@/components/BlockFilters";
 import { ExecTable, type ExecRow } from "@/components/ExecTable";
 import { FreshnessBadge } from "@/components/FreshnessBadge";
 import { SectionNav } from "@/components/SectionNav";
@@ -6,7 +7,6 @@ import { UniversityRetentionList } from "@/components/UniversityRetentionList";
 import {
   AccessDenied,
   Card,
-  FilterChipRow,
   HeroStat,
   PageHeader,
   ProxyBadge,
@@ -17,7 +17,12 @@ import { PROGRESS_LABEL } from "@/lib/academic/academic-progress-label";
 import { ENGLISH_LEVELS } from "@/lib/academic/english-level";
 import { Permission } from "@/lib/auth/authorization";
 import { requirePermission } from "@/lib/auth/guard";
-import { filterChipsFor, parseFilters, type SearchParams } from "@/lib/dashboard/filters";
+import {
+  applyBlockFilters,
+  parseBlockFilters,
+  parseFilters,
+  type SearchParams,
+} from "@/lib/dashboard/filters";
 import {
   getAcademicProgressByCountry,
   getCohortRetention,
@@ -25,6 +30,7 @@ import {
   getDropoutOverview,
   getEnglishLevelByCountry,
   getExecutiveOverview,
+  getFilterOptions,
   getGpaByCohort,
   getOriginBreakdown,
   getScholarBaseCounts,
@@ -92,6 +98,12 @@ export default async function HomePage({
 
   const sp = await searchParams;
   const filters = parseFilters(sp);
+  // Sections 1-3 each own a filter row (SPEC-004). A block's scope is the page's global filters
+  // with that block's own overrides layered on top, so every card in a section reads one
+  // population and neither section can move the others.
+  const ourScholarsScope = applyBlockFilters(filters, parseBlockFilters(sp, "ourScholars"));
+  const dropOutsScope = applyBlockFilters(filters, parseBlockFilters(sp, "dropOuts"));
+  const retentionScope = applyBlockFilters(filters, parseBlockFilters(sp, "programRetention"));
   const [
     o,
     base,
@@ -104,11 +116,12 @@ export default async function HomePage({
     english,
     gpa,
     freshness,
+    filterOptions,
   ] = await Promise.all([
     getExecutiveOverview(filters),
-    getScholarBaseCounts(filters),
-    getDropoutOverview(filters),
-    getCohortRetention(filters),
+    getScholarBaseCounts(ourScholarsScope),
+    getDropoutOverview(dropOutsScope),
+    getCohortRetention(retentionScope),
     getVulnerabilityTiers(filters),
     getOriginBreakdown(filters),
     getUniversityRetention(filters),
@@ -116,9 +129,8 @@ export default async function HomePage({
     getEnglishLevelByCountry(filters),
     getGpaByCohort(filters),
     getDataFreshness(new Date()),
+    getFilterOptions(),
   ]);
-
-  const scopeChips = filterChipsFor(filters, ["cohort", "country", "university"]);
 
   const retentionRows: ExecRow[] = [
     ...retention.rows.map<ExecRow>((r) => ({
@@ -193,7 +205,7 @@ export default async function HomePage({
       <SectionTitle size="lg" id="home-sec-1">
         1 · Our Scholars
       </SectionTitle>
-      <FilterChipRow chips={scopeChips} />
+      <BlockFilters block="ourScholars" options={filterOptions} globals={filters} />
       <div className="grid gap-4 lg:grid-cols-2">
         <Card className="border-l-4 border-l-purple">
           <div className="mb-3.5 flex flex-wrap items-baseline justify-between gap-1.5">
@@ -251,7 +263,7 @@ export default async function HomePage({
       <SectionTitle size="lg" id="home-sec-2">
         2 · Drop Outs
       </SectionTitle>
-      <FilterChipRow chips={scopeChips} />
+      <BlockFilters block="dropOuts" options={filterOptions} globals={filters} />
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <div className="mb-3.5 flex flex-wrap items-baseline justify-between gap-1.5">
@@ -298,7 +310,7 @@ export default async function HomePage({
       <SectionTitle size="lg" id="home-sec-3" note="— share of settled scholars still active">
         3 · Program Retention
       </SectionTitle>
-      <FilterChipRow chips={scopeChips} />
+      <BlockFilters block="programRetention" options={filterOptions} globals={filters} />
       <div className="mb-3.5 grid gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
         <HeroStat
           size="mini"

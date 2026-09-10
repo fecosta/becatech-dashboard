@@ -57,7 +57,10 @@ than enforced by a linter — treat it as a hard rule when reviewing or writing 
 
 `src/components/ui.tsx` — `PageHeader`, `SectionTitle`, `Card`, `KpiCard`, `DarkCallout`,
 `StatChip`, `ActivityChip`, `StatusBadge`, `ProxyBadge`, `RiskBadge`, `AccessDenied`, `Badge`,
-`HeroStat`, `FilterChipRow`, `CountryGroupTitle`, `TypeBadge`. Table primitives:
+`HeroStat`, `CountryGroupTitle`, `TypeBadge`. Filter controls: `src/components/FilterSelect.tsx`
+is the only select in the dashboard — `variant="bar"` for the global top bar, `variant="chip"` for
+the per-section block filters, which take their tone from `FILTER_CHIP_TONE` and the shared
+`src/components/chip-tone.ts` classes. Table primitives:
 `src/components/DataTable.tsx` (generic `Column<T>[]` rows) and `src/components/ExecTable.tsx`
 (the design's black-header, right-aligned, colored-summary-row matrix) — kept deliberately
 separate; each file's own header comment explains why forcing one shape into the other would
