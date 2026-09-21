@@ -189,11 +189,24 @@ export interface BehindRow {
   failedSubjectsCount: number | null;
 }
 
-/** GPA-distribution buckets (see lib/academic/gpa-bucket.ts) — scholar counts, not %. */
+/**
+ * GPA-distribution buckets (see lib/academic/gpa-bucket.ts) — scholar counts, not %.
+ *
+ * The buckets are labeled on Colombia's absolute 0–5 scale, so they describe a subset of
+ * the scholars in scope. The two `excluded*` counts carry the rest, so a caller can always
+ * say how many scholars the three percentages actually represent (SPEC-004 §10.5):
+ *
+ *   below3_5 + from3_5To3_9 + from4_0To5_0 + excludedNoGradedGpa + excludedOtherScale
+ *     === scholars in scope
+ */
 export interface GpaDistribution {
   below3_5: number;
   from3_5To3_9: number;
   from4_0To5_0: number;
+  /** In scope and on Colombia's scale, but with no valid graded GPA (ungraded, 0, invalid). */
+  excludedNoGradedGpa: number;
+  /** In scope but not on Colombia's 0–5 scale — Peru scholars have no meaningful "3.5". */
+  excludedOtherScale: number;
 }
 
 export interface AcademicProgressResult {

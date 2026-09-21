@@ -3,6 +3,7 @@
 // this keeps the logic readable and testable. Optimize with SQL only if data volume grows.
 import { cache } from "react";
 import { bucketGpa, GPA_SCALE_MAX } from "../academic/gpa-bucket";
+import { type LatestGpaSelection, selectLatestGradedGpa } from "../academic/latest-gpa";
 import { parseScholarProgress } from "../academic/academic-progress-label";
 import { ENGLISH_LEVELS, type EnglishLevel, parseEnglishLevel } from "../academic/english-level";
 import { parseSocioeconomicTier, type SocioeconomicTier, TIER_MAPPING_APPROVED } from "../scholars/socioeconomic-tier";
@@ -50,6 +51,7 @@ import type {
   DropoutOverview,
   EnglishLevelByCountryRow,
   GpaByCohort,
+  GpaDistribution,
   OriginBreakdown,
   OriginMatrix,
   ContactPriorityRow,
@@ -309,6 +311,24 @@ async function latestTermByScholar(scholarIds: string[]) {
 }
 
 /**
+ * Each scholar's latest valid graded GPA, on their own country's native scale.
+ *
+ * Reads AcademicTerm.gpa — the column the production sheet sync actually emits — and skips
+ * ungraded/out-of-scale rows, so a blank future term can't mask a real grade. See
+ * lib/academic/latest-gpa.ts for why `accumulatedGpa` is the wrong column for "GPA now".
+ */
+async function latestGradedGpaByScholar(
+  scholars: readonly { scholarId: string; country: Country }[],
+): Promise<LatestGpaSelection> {
+  if (scholars.length === 0) return { byScholar: new Map(), excludedZeroGpaCount: 0 };
+  const terms = await prisma.academicTerm.findMany({
+    where: { scholarId: { in: scholars.map((s) => s.scholarId) } },
+    select: { scholarId: true, term: true, gpa: true },
+  });
+  return selectLatestGradedGpa(terms, new Map(scholars.map((s) => [s.scholarId, s.country])));
+}
+
+/**
  * Shared scope: filtered scholars (incl. riskLevel), their current risk, and report sets.
  * `access` is a server-side visibility fragment (e.g. a mentor's assigned-scholars restriction);
  * it is ANDed into the scholar query so scholar-level views can never return out-of-scope rows.
@@ -343,7 +363,6 @@ export async function getExecutiveOverview(
   filters: DashboardFilters = {},
 ): Promise<ExecutiveOverview> {
   const { currentPeriod, scholars, riskMap, checkinSet, mentorSet } = await loadScope(filters);
-  const ids = scholars.map((s) => s.scholarId);
 
   const counts = { ACTIVE: 0, WITHDRAWN: 0, GRADUATED: 0, PAUSED: 0 };
   for (const s of scholars) counts[s.programStatus] += 1;
@@ -358,11 +377,11 @@ export async function getExecutiveOverview(
     (s) => s.programStatus === ProgramStatus.ACTIVE,
   ).length;
 
-  // GPA summary from each scholar's latest accumulated GPA, kept country-aware (Colombia 0–5 vs
+  // GPA summary from each scholar's latest valid graded GPA, kept country-aware (Colombia 0–5 vs
   // Peru 0–20 are never blended into one raw mean — see lib/academic/gpa-summary.ts).
-  const latestTerms = await latestTermByScholar(ids);
+  const latestGpa = await latestGradedGpaByScholar(scholars);
   const gpaSummary = summarizeGpa(
-    scholars.map((s) => ({ gpa: latestTerms.get(s.scholarId)?.accumulatedGpa, country: s.country })),
+    scholars.map((s) => ({ gpa: latestGpa.byScholar.get(s.scholarId), country: s.country })),
   );
 
   // Risk distribution (over active, ≠Cohorte-2024 scholars — the sheet's denominator) + scholars
@@ -980,7 +999,7 @@ export async function getScholarDirectory(
           s.university.name.toLowerCase().includes(q),
       )
     : scholars;
-  const gpaMap = await latestTermByScholar(list.map((s) => s.scholarId));
+  const latestGpa = await latestGradedGpaByScholar(list);
   return list.map((s) => ({
     scholarId: s.scholarId,
     fullName: s.fullName,
@@ -991,7 +1010,7 @@ export async function getScholarDirectory(
     programStatus: s.programStatus,
     currentMentor: s.currentMentor,
     currentRiskLevel: riskMap.get(s.scholarId)?.globalRiskLevel ?? null,
-    latestGpa: gpaMap.get(s.scholarId)?.accumulatedGpa ?? null,
+    latestGpa: latestGpa.byScholar.get(s.scholarId) ?? null,
   }));
 }
 
@@ -1038,7 +1057,11 @@ export async function getAcademicProgress(
 ): Promise<AcademicProgressResult> {
   const { currentPeriod, scholars, riskMap } = await loadScope(filters, scholarAccessWhere(user));
   const ids = scholars.map((s) => s.scholarId);
+  // Two different reads on purpose: `latestTerms` is the latest row whatever its state (it
+  // carries progress status and the term label), while `latestGpa` is the latest row that
+  // was actually graded. The GPA distribution and the GPA KPI must use the latter.
   const latestTerms = await latestTermByScholar(ids);
+  const latestGpa = await latestGradedGpaByScholar(scholars);
 
   // "Failed subjects" comes from the MENTOR REPORTS "# at-risk courses" for the current program
   // month (the sheet's academic-progress source), not the academic-term failed-subjects column.
@@ -1063,20 +1086,30 @@ export async function getAcademicProgress(
   const scholarsBehind: AcademicProgressResult["scholarsBehind"] = [];
   // Country-aware GPA rows for the summary (Colombia 0–5 vs Peru 0–20, never blended).
   const gpaRows: { gpa: number | null | undefined; country: (typeof scholars)[number]["country"] }[] = [];
-  const gpaDistribution = { below3_5: 0, from3_5To3_9: 0, from4_0To5_0: 0 };
+  const gpaDistribution: GpaDistribution = {
+    below3_5: 0,
+    from3_5To3_9: 0,
+    from4_0To5_0: 0,
+    excludedNoGradedGpa: 0,
+    excludedOtherScale: 0,
+  };
   let scholarsWithFailedSubjects = 0;
 
   for (const s of scholars) {
     const term = latestTerms.get(s.scholarId);
-    gpaRows.push({ gpa: term?.accumulatedGpa, country: s.country });
-    if (term?.accumulatedGpa != null) {
-      const g = term.accumulatedGpa;
-      pushTo(gpaByCountry, s.country, g);
-      const bucket = bucketGpa(g, s.country);
-      if (bucket === "BELOW_3_5") gpaDistribution.below3_5 += 1;
-      else if (bucket === "GPA_3_5_TO_3_9") gpaDistribution.from3_5To3_9 += 1;
-      else if (bucket === "GPA_4_0_TO_5_0") gpaDistribution.from4_0To5_0 += 1;
-    }
+    const gpa = latestGpa.byScholar.get(s.scholarId) ?? null;
+    gpaRows.push({ gpa, country: s.country });
+    if (gpa != null) pushTo(gpaByCountry, s.country, gpa);
+    // The three buckets are labeled on Colombia's absolute 0–5 scale, so only Colombia
+    // scholars can land in one. Everyone else in scope is counted out loud instead of
+    // quietly leaving the denominator (SPEC-004 §10.5), which is what made three
+    // percentages look like they described the whole population.
+    const bucket = bucketGpa(gpa, s.country);
+    if (bucket === "BELOW_3_5") gpaDistribution.below3_5 += 1;
+    else if (bucket === "GPA_3_5_TO_3_9") gpaDistribution.from3_5To3_9 += 1;
+    else if (bucket === "GPA_4_0_TO_5_0") gpaDistribution.from4_0To5_0 += 1;
+    else if (s.country !== Country.COLOMBIA) gpaDistribution.excludedOtherScale += 1;
+    else gpaDistribution.excludedNoGradedGpa += 1;
 
     const status =
       term?.expectedProgressStatus ??
@@ -1836,35 +1869,15 @@ export async function getEnglishLevelByCountry(
 /**
  * §8.3/8.4 Average GPA by cohort, per country, never blended across scales.
  *
- * Reads AcademicTerm.gpa, which the sheet sync does emit — not accumulatedGpa, which it
- * does not. Terms a scholar was not enrolled in are stored as a literal 0, and
- * summarizeGpa treats 0 as a valid GPA, so those are excluded explicitly and counted.
+ * One GPA per scholar: their latest term with a real, in-scale, non-zero grade, via the
+ * shared selector in lib/academic/latest-gpa.ts.
  */
 export async function getGpaByCohort(filters: DashboardFilters = {}): Promise<GpaByCohort> {
   const scholars = await prisma.scholar.findMany({
     where: { AND: [geoScholarWhere(filters), { programStatus: ProgramStatus.ACTIVE }] },
     select: { scholarId: true, cohort: true, country: true },
   });
-  const terms = await prisma.academicTerm.findMany({
-    where: { scholarId: { in: scholars.map((s) => s.scholarId) } },
-    select: { scholarId: true, term: true, gpa: true },
-    orderBy: { term: "asc" },
-  });
-
-  // One GPA per scholar: their latest term with a real, in-scale, non-zero grade.
-  const byCountry = new Map(scholars.map((s) => [s.scholarId, s]));
-  const latest = new Map<string, number>();
-  let excludedZeroGpaCount = 0;
-  for (const t of terms) {
-    const scholar = byCountry.get(t.scholarId);
-    if (!scholar || t.gpa == null || !Number.isFinite(t.gpa)) continue;
-    if (t.gpa === 0) {
-      excludedZeroGpaCount += 1;
-      continue;
-    }
-    if (t.gpa < 0 || t.gpa > GPA_SCALE_MAX[scholar.country]) continue;
-    latest.set(t.scholarId, t.gpa); // terms are ascending, so the last write wins
-  }
+  const { byScholar: latest, excludedZeroGpaCount } = await latestGradedGpaByScholar(scholars);
 
   const side = (country: Country) => {
     const subset = scholars.filter((s) => s.country === country);

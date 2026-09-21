@@ -205,6 +205,8 @@ export default async function EarlySupportPage({
 
   const gpaDist = pace.gpaDistribution;
   // Country-aware GPA header (Colombia /5, Peru /20, or a scale-agnostic index for a mixed scope).
+  // Note this KPI and the buckets below it do NOT share a denominator: the KPI covers every
+  // scholar with a graded GPA, the buckets only the Colombia ones. Hence the caption.
   const gpaKpi = gpaSummaryKpi(pace.gpaSummary);
   const gpaTotal = gpaDist.below3_5 + gpaDist.from3_5To3_9 + gpaDist.from4_0To5_0;
   const gpaPct = (n: number) => (gpaTotal ? Math.round((n / gpaTotal) * 100) : 0);
@@ -650,11 +652,30 @@ export default async function EarlySupportPage({
                 {gpaKpi.label} <b className="text-sm text-surface-dark">{gpaKpi.value}</b>
               </div>
             </div>
-            <div className="flex flex-wrap gap-4">
-              <StatChip value={`${gpaPct(gpaDist.below3_5)}%`} label="Below 3.5" />
-              <StatChip value={`${gpaPct(gpaDist.from3_5To3_9)}%`} label="GPA 3.5 – 3.9" />
-              <StatChip value={`${gpaPct(gpaDist.from4_0To5_0)}%`} label="GPA 4.0 – 5.0" />
-            </div>
+            {gpaTotal === 0 ? (
+              <p className="text-sm text-muted">
+                No scholar on Colombia&rsquo;s 0&ndash;5 scale has a graded GPA in this selection.
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-4">
+                <StatChip value={`${gpaPct(gpaDist.below3_5)}%`} label="Below 3.5" />
+                <StatChip value={`${gpaPct(gpaDist.from3_5To3_9)}%`} label="GPA 3.5 – 3.9" />
+                <StatChip value={`${gpaPct(gpaDist.from4_0To5_0)}%`} label="GPA 4.0 – 5.0" />
+              </div>
+            )}
+            {/* The three percentages describe Colombia scholars with a graded GPA, not the whole
+                selection. Saying so — and saying who is left out — is the point of SPEC-004 §10.5. */}
+            <p className="mt-3 text-xs text-muted">
+              {gpaTotal > 0
+                ? `Out of ${fmtInt(gpaTotal)} scholar${gpaTotal === 1 ? "" : "s"} on Colombia's 0–5 scale with a graded GPA.`
+                : null}
+              {gpaDist.excludedNoGradedGpa > 0
+                ? ` ${fmtInt(gpaDist.excludedNoGradedGpa)} not reported — no graded term yet.`
+                : null}
+              {gpaDist.excludedOtherScale > 0
+                ? ` ${fmtInt(gpaDist.excludedOtherScale)} Peru scholar${gpaDist.excludedOtherScale === 1 ? " is" : "s are"} on the 0–20 scale and not bucketed here.`
+                : null}
+            </p>
           </Card>
         </div>
       </div>
