@@ -45,10 +45,6 @@ export const dynamic = "force-dynamic";
 
 const pctText = (n: number, d: number) => (d ? `${Math.round((n / d) * 100)}%` : "—");
 
-/** Every program target in AUGUST 4 renders as pending: no approved figures exist, and a
- *  plausible-looking placeholder in a goal row is worse than an visible gap. */
-const TARGET_PENDING = <ProxyBadge>PENDING</ProxyBadge>;
-
 function OriginTable({ matrix, country }: { matrix: OriginMatrix; country: string }) {
   if (matrix.rows.length === 0) {
     return <p className="text-sm text-muted">No origin data for {country} in this selection.</p>;
@@ -149,12 +145,6 @@ export default async function HomePage({
               fmtInt(retention.overall.active),
               `${retention.overall.retentionPct}%`,
             ],
-          },
-          {
-            key: "target",
-            label: "OVERALL · TARGET",
-            summary: "goal" as const,
-            cells: ["", "", TARGET_PENDING],
           },
         ]
       : []),

@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import type { AlertType, RiskLevel } from "@/generated/prisma/enums";
 import { BlockFilters } from "@/components/BlockFilters";
-import { ComboBarLineCard, Donut, LineCard } from "@/components/charts";
+import { ComboBarLineCard, Donut, GroupedBarCard, LineCard } from "@/components/charts";
 import { PaceBarChart } from "@/components/PaceBarChart";
 import { ExecTable, type ExecRow } from "@/components/ExecTable";
 import { FactStrip } from "@/components/FactStrip";
@@ -190,8 +190,12 @@ export default async function EarlySupportPage({
     color: RISK_LEVEL_HEX_SEGMENTED[l],
   }));
 
-  const year1 = home.retentionByYear.find((r) => r.year === 1);
-  const year2 = home.retentionByYear.find((r) => r.year === 2);
+  const year1Retention = home.retentionByYear.find((r) => r.year === 1);
+  const year2Retention = home.retentionByYear.find((r) => r.year === 2);
+  // Head-count per program year, from the canonical currentSemester-derived helper (see
+  // lib/academic/program-year.ts) — not recomputed here. The YEARS_1_2 scope excludes null
+  // semesters, so within this page year1 + year2 == stageOverview.activeScholars.
+  const { year1: year1Count, year2: year2Count } = home.scholarsByYear;
   // activeScholars (not totalScholars) so this is a proper subset of overallOverview's
   // active count — otherwise withdrawn/paused/graduated Years-1-2 scholars could push
   // the ratio above 100%.
@@ -244,8 +248,10 @@ export default async function EarlySupportPage({
             ),
             tone: "purple",
           },
-          { value: fmtPct(year1?.rate ?? 0), label: "Year 1 retention", tone: "green" },
-          { value: fmtPct(year2?.rate ?? 0), label: "Year 2 retention", tone: "green" },
+          { value: fmtInt(year1Count), label: "Year 1 scholars", tone: "purple" },
+          { value: fmtInt(year2Count), label: "Year 2 scholars", tone: "purple" },
+          { value: fmtPct(year1Retention?.rate ?? 0), label: "Year 1 retention", tone: "green" },
+          { value: fmtPct(year2Retention?.rate ?? 0), label: "Year 2 retention", tone: "green" },
         ]}
       />
 
@@ -463,7 +469,10 @@ export default async function EarlySupportPage({
             </p>
           ) : (
             <>
-              <LineCard
+              {/* Grouped bars, not lines (SPEC-004 §9): a line implies a continuous reading
+                  between months, and a month with no report has none. toWholePct keeps those
+                  months null so the bar is simply absent. Same 0–100 scale for both series. */}
+              <GroupedBarCard
                 title="Participation vs. Medium+ Risk"
                 data={monthlyTrend.points.map((p) => ({
                   month: `M${p.programMonth}`,
@@ -471,10 +480,12 @@ export default async function EarlySupportPage({
                   mediumPlusRisk: toWholePct(p.mediumPlusRiskPct),
                 }))}
                 xKey="month"
-                lines={[
+                bars={[
                   { key: "participation", name: "% Participation (≥1 activity)", color: "#a62bff" },
                   { key: "mediumPlusRisk", name: "% Medium+ risk", color: "#dc2626" },
                 ]}
+                domain={[0, 100]}
+                unit="%"
               />
               <ExecTable
                 headers={["Metric", ...monthlyTrend.points.map((p) => `M${p.programMonth}`)]}

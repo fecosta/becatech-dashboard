@@ -107,7 +107,8 @@ export function PieCard({
   );
 }
 
-export interface LineSeries {
+/** One named, colored series in a multi-series chart (lines or grouped bars). */
+export interface ChartSeries {
   key: string;
   name: string;
   color: string;
@@ -122,7 +123,7 @@ export function LineCard({
   title: string;
   data: Record<string, unknown>[];
   xKey: string;
-  lines: LineSeries[];
+  lines: ChartSeries[];
 }) {
   return (
     <ChartCard title={title}>
@@ -136,6 +137,46 @@ export function LineCard({
           <Line key={l.key} type="monotone" dataKey={l.key} name={l.name} stroke={l.color} dot={{ r: 2 }} strokeWidth={2} />
         ))}
       </LineChart>
+    </ChartCard>
+  );
+}
+
+/**
+ * Grouped vertical bars — one bar per series at each x tick, for comparing same-scale
+ * series across an ordered sequence (Early Support 2.3's M1 → M6 trend).
+ *
+ * Months a series has no data for must arrive as `null`, not `0`: recharts draws nothing
+ * for null, which is the honest rendering. A zero would read as "nobody participated".
+ */
+export function GroupedBarCard({
+  title,
+  data,
+  xKey,
+  bars,
+  domain,
+  unit,
+}: {
+  title: string;
+  data: Record<string, unknown>[];
+  xKey: string;
+  bars: ChartSeries[];
+  /** Pin both series to one scale (e.g. [0, 100]) so their heights are comparable. */
+  domain?: [number, number];
+  unit?: string;
+}) {
+  return (
+    <ChartCard title={title}>
+      <BarChart data={data} margin={{ top: 8, right: 12, bottom: 8, left: -12 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke={GRID} vertical={false} />
+        {/* interval=0 keeps every month label on the axis rather than thinning them out. */}
+        <XAxis dataKey={xKey} tick={AXIS_TICK} interval={0} />
+        <YAxis tick={AXIS_TICK} domain={domain} unit={unit} allowDecimals={false} />
+        <Tooltip />
+        <Legend />
+        {bars.map((b) => (
+          <Bar key={b.key} dataKey={b.key} name={b.name} fill={b.color} radius={[4, 4, 0, 0]} />
+        ))}
+      </BarChart>
     </ChartCard>
   );
 }
