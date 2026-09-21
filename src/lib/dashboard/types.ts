@@ -3,7 +3,7 @@ import type { RiskBand } from "./bands";
 import type { ActivityGroup, RiskTier } from "./risk-tier";
 import type { RiskReasonCategory } from "../risk/reason-taxonomy";
 import type { EnglishLevel } from "../academic/english-level";
-import type { SocioeconomicTier } from "../scholars/socioeconomic-tier";
+import type { VulnerabilityLevel } from "../scholars/vulnerability-level";
 import type {
   AcademicProgressStatus,
   ActivityType,
@@ -432,6 +432,13 @@ export interface ProgramEcosystemResult {
   /** Full fixed partner roster, not scope-dependent — counts default to 0 when out of scope. */
   universities: ProgramEcosystemUniversityRow[];
   operators: ProgramEcosystemOperatorRow[];
+  /**
+   * In-scope scholars with no `operatorId`. Operator assignment is never inferred from
+   * country, cohort, university or stage (SPEC-004 §11.4), so the operator counts are
+   * expected to reconcile with assigned scholars, not with everyone in scope. This is the
+   * difference, reported rather than distributed.
+   */
+  scholarsWithoutOperator: number;
 }
 
 // ------------------------------------------------------------------
@@ -480,24 +487,27 @@ export interface CohortRetention {
   target: null;
 }
 
-/** §4 Vulnerability. Percentages are always over `classified`, with `unclassified`
- *  reported beside them. */
-export interface VulnerabilityTiers {
-  mappingApproved: boolean;
-  rows: {
-    cohort: string;
-    country: Country;
-    counts: Record<SocioeconomicTier, number>;
-    pct: Record<SocioeconomicTier, number>;
-    classified: number;
-    unclassified: number;
-  }[];
-  overall: {
-    counts: Record<SocioeconomicTier, number>;
-    pct: Record<SocioeconomicTier, number>;
-    classified: number;
-    unclassified: number;
-  } | null;
+/**
+ * §4 Vulnerability. Percentages are always over `classified`, never over the whole
+ * population, with the unclassified scholars reported beside them.
+ *
+ * `pending` and `unrecognized` are kept apart (SPEC-004 §7.3): one is a scholar the
+ * program has not classified yet, the other a source value nobody has mapped. Summing
+ * them would hide a data-mapping problem inside a normal operational backlog.
+ */
+export interface VulnerabilityTally {
+  counts: Record<VulnerabilityLevel, number>;
+  pct: Record<VulnerabilityLevel, number>;
+  classified: number;
+  /** Source says "Pending", or is blank. */
+  pending: number;
+  /** Source carries a value the parser does not recognise. */
+  unrecognized: number;
+}
+
+export interface VulnerabilityLevels {
+  rows: ({ cohort: string; country: Country } & VulnerabilityTally)[];
+  overall: VulnerabilityTally | null;
 }
 
 /** §5 Where Our Scholars Are From. One matrix per country, origin x cohort year. */

@@ -97,9 +97,10 @@ Socioeconomic — the raw `SISBEN COL` / `Nivel económico (Perú)` columns rema
 must not be merged into one numeric scale. **Correction (AUGUST 4 pass):** the separate
 `Socioeconomic Level` column already carries a single harmonised scale for both countries
 (`Vulnerabilidad alta / moderada / baja`), so the cross-country reconciliation is done upstream and
-is not an open decision. What is still open is the *tier naming* the design proposes — see
-`lib/scholars/socioeconomic-tier.ts`. Roughly a fifth of scholars are marked `Pending` there and
-never receive a tier.
+is not an open decision. The naming question the design raised is settled by SPEC-004 D4: the
+dashboard restates the source values directly (High / Moderate / Low vulnerability) — see
+`lib/scholars/vulnerability-level.ts`. Roughly a fifth of scholars are marked `Pending` there and
+never receive a level.
 
 ## 3. `MENTOR REPORTS` — flat, one row per mentor session
 

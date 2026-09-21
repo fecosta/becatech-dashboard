@@ -1,5 +1,4 @@
 import type { Country } from "@/generated/prisma/enums";
-import { DeliveryPartnerGroup } from "@/components/DeliveryPartnerGroup";
 import { UniversityCard } from "@/components/UniversityCard";
 import {
   AccessDenied,
@@ -15,6 +14,7 @@ import { requirePermission } from "@/lib/auth/guard";
 import { parseFilters, type SearchParams } from "@/lib/dashboard/filters";
 import { getProgramEcosystem } from "@/lib/dashboard/queries";
 import { COUNTRY_LABEL, COUNTRY_TONE } from "@/lib/labels";
+import { fmtInt } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -45,7 +45,6 @@ export default async function ProgramEcosystemPage({
       .filter((g) => g.rows.length > 0);
 
   const universityGroups = byCountry(eco.universities);
-  const operatorGroups = byCountry(eco.operators);
 
   const countrySplit = (groups: { country: Country; rows: unknown[] }[], noun: string) =>
     groups.map((g) => `${g.rows.length} ${COUNTRY_LABEL[g.country]}`).join(", ") || `No ${noun}`;
@@ -94,25 +93,42 @@ export default async function ProgramEcosystemPage({
         </div>
       ))}
 
+      {/* One question, answered plainly: who are the operators, and how many scholars is
+          each supporting right now (SPEC-004 §11)? The whole operator catalog is listed —
+          country grouping, the operator-count hero and the track badges are gone — so a
+          filtered count of 0 still shows its row instead of the operator disappearing. */}
       <SectionTitle size="lg" id="ecosystem-sec-2">
         2 · Operating Partners
       </SectionTitle>
-      <HeroStat
-        value={eco.operators.length}
-        label={`Operating partners · ${countrySplit(operatorGroups, "operators")}`}
-        tone="green"
-      />
-      {operatorGroups.map((g) => (
-        <div key={g.country}>
-          <CountryGroupTitle tone={COUNTRY_TONE[g.country]}>
-            {COUNTRY_LABEL[g.country]} · {g.rows.length}{" "}
-            {g.rows.length === 1 ? "operator" : "operators"}
-          </CountryGroupTitle>
-          <Card padded={false} className="py-1.5">
-            <DeliveryPartnerGroup operators={g.rows} />
-          </Card>
-        </div>
-      ))}
+      <Card padded={false}>
+        {eco.operators.length === 0 ? (
+          <p className="p-4 text-sm text-muted">No operating partners on record.</p>
+        ) : (
+          <ul className="divide-y divide-border">
+            {eco.operators.map((o) => (
+              <li
+                key={o.operatorId}
+                className="flex flex-wrap items-baseline justify-between gap-2 px-4 py-3"
+              >
+                <span className="text-sm font-bold text-surface-dark">{o.name}</span>
+                <span className="text-sm text-muted">
+                  <b className="text-surface-dark">{fmtInt(o.scholarCount)}</b>{" "}
+                  {o.scholarCount === 1 ? "scholar" : "scholars"}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+      {eco.scholarsWithoutOperator > 0 ? (
+        <p className="mt-2.5 text-[12.5px] text-muted">
+          {fmtInt(eco.scholarsWithoutOperator)} scholar
+          {eco.scholarsWithoutOperator === 1 ? " in" : "s in"} this selection{" "}
+          {eco.scholarsWithoutOperator === 1 ? "has" : "have"} no operator recorded, so these
+          counts cover assigned scholars rather than everyone in scope. Assignment is never
+          inferred from country, cohort, university, or program stage.
+        </p>
+      ) : null}
       <p className="mt-2.5 text-[12.5px] text-muted">
         Years 1–2 (Early Support) and Year 3 onward (Growth &amp; Development) are delivered by
         different operating partners in each country.

@@ -35,9 +35,13 @@ import {
   getOriginBreakdown,
   getScholarBaseCounts,
   getUniversityRetention,
-  getVulnerabilityTiers,
+  getVulnerabilityLevels,
 } from "@/lib/dashboard/queries";
 import type { OriginMatrix } from "@/lib/dashboard/types";
+import {
+  VULNERABILITY_LEVEL_LABEL,
+  VULNERABILITY_LEVEL_ORDER,
+} from "@/lib/scholars/vulnerability-level";
 import { COUNTRY_LABEL } from "@/lib/labels";
 import { fmtInt } from "@/lib/format";
 
@@ -105,7 +109,7 @@ export default async function HomePage({
     base,
     dropouts,
     retention,
-    tiers,
+    vulnerability,
     origins,
     universities,
     progress,
@@ -118,7 +122,7 @@ export default async function HomePage({
     getScholarBaseCounts(ourScholarsScope),
     getDropoutOverview(dropOutsScope),
     getCohortRetention(retentionScope),
-    getVulnerabilityTiers(filters),
+    getVulnerabilityLevels(filters),
     getOriginBreakdown(filters),
     getUniversityRetention(filters),
     getAcademicProgressByCountry(filters),
@@ -337,23 +341,45 @@ export default async function HomePage({
       <SectionTitle size="lg" id="home-sec-4" note="— income classification, both countries">
         4 · Vulnerability Level
       </SectionTitle>
-      <Card className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <p className="max-w-[720px] text-sm text-muted">
-            The source already carries one harmonised scale for both countries, so the numbers are
-            available. What is not settled is the naming: the design relabels the lowest band
-            &ldquo;Vulnerable&rdquo;, which reverses what that row says about the scholars in it.
-            Publishing tier percentages under unapproved labels would put words in the
-            program&rsquo;s mouth.
+      <Card>
+        {vulnerability.overall === null || vulnerability.overall.classified === 0 ? (
+          <p className="text-sm text-muted">
+            No scholar in this selection carries a vulnerability level at source.
           </p>
-          {tiers.overall ? (
-            <p className="mt-2 text-xs text-muted">
-              {fmtInt(tiers.overall.classified)} scholars classified,{" "}
-              {fmtInt(tiers.overall.unclassified)} still marked pending at source.
-            </p>
-          ) : null}
-        </div>
-        <ProxyBadge>PENDING</ProxyBadge>
+        ) : (
+          <div className="flex flex-wrap gap-4">
+            {VULNERABILITY_LEVEL_ORDER.map((level) => (
+              <StatChip
+                key={level}
+                value={`${vulnerability.overall?.pct[level]}%`}
+                label={
+                  <>
+                    {VULNERABILITY_LEVEL_LABEL[level]}{" "}
+                    <span className="opacity-70">
+                      ({fmtInt(vulnerability.overall?.counts[level] ?? 0)})
+                    </span>
+                  </>
+                }
+              />
+            ))}
+          </div>
+        )}
+        {/* The percentages are over classified scholars only, so the scholars without a
+            level have to be visible — otherwise three numbers adding to 100% would read as
+            though they covered everyone (SPEC-004 §7.3). Pending and unrecognized stay
+            apart: one is a normal backlog, the other an unmapped source value. */}
+        {vulnerability.overall ? (
+          <p className="mt-3 text-xs text-muted">
+            Percentages are of the {fmtInt(vulnerability.overall.classified)} scholar
+            {vulnerability.overall.classified === 1 ? "" : "s"} with a level at source.
+            {vulnerability.overall.pending > 0
+              ? ` ${fmtInt(vulnerability.overall.pending)} pending / not reported.`
+              : null}
+            {vulnerability.overall.unrecognized > 0
+              ? ` ${fmtInt(vulnerability.overall.unrecognized)} carry a value the dashboard does not recognise.`
+              : null}
+          </p>
+        ) : null}
       </Card>
 
       {/* ---------- 5 · Where Our Scholars Are From ---------- */}

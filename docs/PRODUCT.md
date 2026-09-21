@@ -123,8 +123,10 @@ rationale per item.
 
 - **Main reasons for drop-out** and **retention term by term** — no exit-reason or exit-term
   field exists on `Scholar` yet; needs a source-sheet change first.
-- **Vulnerability tiers** — the tier mapping exists but is behind an unapproved flag
-  (`TIER_MAPPING_APPROVED` in `src/lib/scholars/socioeconomic-tier.ts`) pending a naming decision.
+- **Vulnerability level** — published (Home, section 4) using the source's own wording, High /
+  Moderate / Low vulnerability (SPEC-004 D4, `src/lib/scholars/vulnerability-level.ts`).
+  Percentages are over classified scholars; pending and unrecognized values are reported
+  separately rather than folded in.
 - **Program Satisfaction** — no approved formula or data source; shown as `PROXY`.
 - **M1→M6 risk trend** — implemented (Early Support, section 2.3), scoped to one semester via
   `RiskAssessment.semester` (ADR-008). Only "MES n"-labeled scholar-months plot on the M1→M6 axis;

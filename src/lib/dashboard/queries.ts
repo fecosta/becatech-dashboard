@@ -6,7 +6,7 @@ import { bucketGpa, GPA_SCALE_MAX } from "../academic/gpa-bucket";
 import { type LatestGpaSelection, selectLatestGradedGpa } from "../academic/latest-gpa";
 import { parseScholarProgress } from "../academic/academic-progress-label";
 import { ENGLISH_LEVELS, type EnglishLevel, parseEnglishLevel } from "../academic/english-level";
-import { parseSocioeconomicTier, type SocioeconomicTier, TIER_MAPPING_APPROVED } from "../scholars/socioeconomic-tier";
+import { parseVulnerabilityLevel, type VulnerabilityLevel } from "../scholars/vulnerability-level";
 import { dropoutBand } from "./bands";
 import {
   ACTIVITY_GROUP_COLUMNS,
@@ -61,7 +61,8 @@ import type {
   RiskReasonBreakdown,
   ScholarBaseCounts,
   UniversityRetentionRow,
-  VulnerabilityTiers,
+  VulnerabilityLevels,
+  VulnerabilityTally,
   CostGroup,
   DashboardFilters,
   ExecutiveOverview,
@@ -1435,6 +1436,7 @@ export async function getProgramEcosystem(
     }
   >();
   const operatorScholarCounts = new Map<string, number>();
+  let scholarsWithoutOperator = 0;
 
   for (const s of scholars) {
     let uStat = universityStats.get(s.universityId);
@@ -1457,6 +1459,10 @@ export async function getProgramEcosystem(
 
     if (s.operatorId) {
       operatorScholarCounts.set(s.operatorId, (operatorScholarCounts.get(s.operatorId) ?? 0) + 1);
+    } else {
+      // Left unresolved on purpose: guessing an operator from geography or stage would
+      // invent a delivery relationship the program never recorded.
+      scholarsWithoutOperator += 1;
     }
   }
 
@@ -1496,7 +1502,7 @@ export async function getProgramEcosystem(
     surveyResults: null,
   }));
 
-  return { universities, operators };
+  return { universities, operators, scholarsWithoutOperator };
 }
 
 // ------------------------------------------------------------------
@@ -1646,38 +1652,50 @@ export async function getCohortRetention(
   };
 }
 
-const emptyTierCounts = (): Record<SocioeconomicTier, number> => ({ TIER_1: 0, TIER_2: 0, TIER_3: 0 });
+const emptyVulnerabilityCounts = (): Record<VulnerabilityLevel, number> => ({
+  HIGH: 0,
+  MODERATE: 0,
+  LOW: 0,
+});
 
-/** §4 Vulnerability tiers. Renders as pending while the tier wording is unapproved. */
-export async function getVulnerabilityTiers(
+/**
+ * §4 Vulnerability level, straight from the source's own three values.
+ *
+ * Percentages are over classified scholars only. Pending and unrecognized values are
+ * reported separately rather than folded into the levels or into each other — see
+ * lib/scholars/vulnerability-level.ts.
+ */
+export async function getVulnerabilityLevels(
   filters: DashboardFilters = {},
-): Promise<VulnerabilityTiers> {
+): Promise<VulnerabilityLevels> {
   const scholars = await loadAllStatuses(filters);
 
-  const tally = (subset: typeof scholars) => {
-    const counts = emptyTierCounts();
-    let unclassified = 0;
+  const tally = (subset: typeof scholars): VulnerabilityTally => {
+    const counts = emptyVulnerabilityCounts();
+    let pending = 0;
+    let unrecognized = 0;
     for (const s of subset) {
-      const { tier } = parseSocioeconomicTier(s.socioeconomicLevel);
-      if (tier) counts[tier] += 1;
-      else unclassified += 1;
+      const { level, status } = parseVulnerabilityLevel(s.socioeconomicLevel);
+      if (level) counts[level] += 1;
+      else if (status === "PENDING") pending += 1;
+      else unrecognized += 1;
     }
-    const classified = counts.TIER_1 + counts.TIER_2 + counts.TIER_3;
+    const classified = counts.HIGH + counts.MODERATE + counts.LOW;
     return {
       counts,
       classified,
-      unclassified,
+      pending,
+      unrecognized,
       pct: {
-        TIER_1: pct(counts.TIER_1, classified),
-        TIER_2: pct(counts.TIER_2, classified),
-        TIER_3: pct(counts.TIER_3, classified),
+        HIGH: pct(counts.HIGH, classified),
+        MODERATE: pct(counts.MODERATE, classified),
+        LOW: pct(counts.LOW, classified),
       },
     };
   };
 
   const keys = [...new Set(scholars.map((s) => `${s.cohort}::${s.country}`))].sort();
   return {
-    mappingApproved: TIER_MAPPING_APPROVED,
     rows: keys.map((key) => {
       const [cohort, country] = key.split("::");
       return {

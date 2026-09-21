@@ -60,7 +60,7 @@ src/lib/dashboard/     the query layer + filter/routing helpers every dashboard 
 src/lib/risk/          risk classification (ingestion, not derivation — see ADR-006)
 src/lib/academic/      GPA, English level, academic-progress-label, program-stage/year parsing
 src/lib/selection/     selection-pipeline stage transitions
-src/lib/scholars/      scholar-facing parsers not owned by academic/ or risk/ (e.g. socioeconomic tier)
+src/lib/scholars/      scholar-facing parsers not owned by academic/ or risk/ (e.g. vulnerability level)
 src/lib/jotform/       placeholder JotForm webhook ingestion (not live — see ARCHITECTURE.md)
 src/lib/data-import/   import batch lifecycle: parse → validate → commit → rollback
 src/lib/data-quality/  data-quality scan checks

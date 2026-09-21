@@ -1,7 +1,7 @@
 # SPEC-004 — Dashboard Data & Visualization Corrections
 
 **Status:** ACTIVE  
-**Methodology state:** PARTIALLY IMPLEMENTATION READY  
+**Methodology state:** PHASES 1–3 IMPLEMENTED · PHASE 3 ACCEPTANCE PENDING PRODUCTION VERIFICATION  
 **Repository baseline:** `main @ 9ed23e9ea16fde3f9c20dc70c6291d14295e02cb`  
 **Depends on:** Completed dashboard foundation, spreadsheet ingestion, and UX/UI work  
 **Relevant prior specs:**
@@ -1221,13 +1221,13 @@ The following remain explicitly blocked and must not be fabricated:
 ## Phase readiness
 
 ### Phase 1
-`IMPLEMENTATION READY`
+`IMPLEMENTED`
 
 ### Phase 2
-`IMPLEMENTATION READY`
+`IMPLEMENTED`
 
 ### Phase 3
-`IMPLEMENTATION READY`, subject to read-only production verification of the Operator catalog before final acceptance.
+`IMPLEMENTED`, **not accepted** — read-only production verification of the Operator catalog is still outstanding (see §24).
 
 ### Phase 4 — Drop-out Reasons
 `BLOCKED — SOURCE DATA REQUIRED`
@@ -1239,10 +1239,98 @@ The following remain explicitly blocked and must not be fabricated:
 
 # 23. Overall SPEC State
 
-`PARTIALLY IMPLEMENTATION READY`
+`PARTIALLY IMPLEMENTED — PHASE 3 ACCEPTANCE PENDING PRODUCTION VERIFICATION`
 
-Implementation may begin for Phases 1–3.
+Phases 1–3 are implemented. Phase 3 is **not accepted**: its production Operator-catalog
+gate (§11.6) has not been satisfied.
 
-Phases 4–5 must remain deferred until their explicit source-data gates are satisfied.
+Phases 4–5 remain deferred until their explicit source-data gates are satisfied.
 
 Implementation must not use assumptions or placeholder data to bypass those gates.
+
+---
+
+# 24. Implementation Record
+
+## Phase 1 — Low-risk UI corrections · `IMPLEMENTED`
+
+- `OVERALL · TARGET | PENDING` removed from Program Retention; the `ACTUAL` and
+  per-country rows and every retention percentage are unchanged.
+- Year 1 / Year 2 head counts published in Early Support §1, read from the existing
+  `getHomeOverview().scholarsByYear`, which derives them from `programYearFromSemester`.
+  No new year logic was introduced.
+- Monthly Trend M1→M6 converted from lines to grouped vertical bars via a new
+  `GroupedBarCard` primitive. The query is untouched; months with no data remain `null`
+  rather than being plotted as zero; the equivalent table is unchanged.
+
+## Phase 2 — GPA distribution correctness · `IMPLEMENTED`
+
+- Added `src/lib/academic/latest-gpa.ts` as the single "latest valid graded GPA" selector,
+  reading `AcademicTerm.gpa`.
+- Four consumers now share it: the Early Support GPA distribution, the Early Support GPA
+  header KPI, `getExecutiveOverview`'s GPA summary, and the scholar directory's
+  `latestGpa`. `getGpaByCohort`'s inline implementation of the same rule was replaced by
+  the shared helper rather than left as a second copy.
+- `GpaDistribution` now carries `excludedNoGradedGpa` and `excludedOtherScale`; the UI
+  states the bucket denominator and both excluded populations.
+- Colombia/Peru native scales and the mixed-country Academic Performance Index are
+  unchanged.
+- Regression coverage is production-shaped (`gpa` set, `accumulatedGpa` null) —
+  `tests/academic/latest-gpa.test.ts` and `tests/integration/gpa-distribution.test.ts`.
+
+### Behavior found outside the stated SPEC scope
+
+§10 describes the defect as affecting the GPA **distribution**. The Early Support GPA
+**header KPI** read the same unpopulated column and was equally empty against production
+data, as did `getExecutiveOverview` and the scholar directory. All were migrated under
+§10.3 ("do not maintain separate implementations of latest valid GPA").
+
+`accumulatedGpa` remains in use where the semantics really are cumulative: the scholar
+profile's "Cumulative GPA" chip and GPA trend, the import adapters/templates/validation,
+and the seed. Per D1 these were left unchanged.
+
+## Phase 3 — Vulnerability + Operating Partners · `IMPLEMENTED, NOT ACCEPTED`
+
+- Vulnerability vocabulary renamed from `TIER_1/2/3` to `HIGH/MODERATE/LOW`;
+  `src/lib/scholars/socioeconomic-tier.ts` became
+  `src/lib/scholars/vulnerability-level.ts`. The `TIER_MAPPING_APPROVED` gate and the
+  placeholder tier labels are removed. Source mapping is unchanged.
+- Home §4 publishes High / Moderate / Low vulnerability with percentages over classified
+  scholars only, and reports pending and unrecognized separately — they are kept distinct
+  through the parser, query and type layers.
+- Operating Partners simplified to one row per operator (name — N scholars). Country
+  grouping, the operator-count hero statistic and the track badges are removed; the
+  now-orphaned `DeliveryPartnerGroup` component was deleted.
+- `ProgramEcosystemResult.scholarsWithoutOperator` added for §11.5; operator assignment is
+  still read only from `Scholar.operatorId` and is never inferred.
+- Coverage: `tests/scholars/vulnerability-level.test.ts`,
+  `tests/integration/vulnerability-and-operators.test.ts`.
+
+### Remaining acceptance gate
+
+§11.6 / §21 criterion 10 — **PENDING PRODUCTION VERIFICATION**.
+
+The production Operator catalog has not been checked. Local `.env` points at Docker
+Postgres, and pulling production credentials to disk was explicitly ruled out for this
+work. The UI renders the Operator catalog as it finds it, so an unexpected production
+entity would appear rather than be hidden or renamed.
+
+To close the gate, run read-only against production:
+
+```sql
+SELECT name, country, track FROM "Operator" ORDER BY track, name;
+```
+
+Expected exactly:
+
+1. Fundación Antivirus para la Deserción
+2. ESCALO
+3. MAKERS
+4. Confident English
+
+If the catalog differs, stop and report `BLOCKED / DECISION REQUIRED` rather than
+adjusting the UI to force four rows.
+
+## Phases 4 and 5
+
+Not implemented. Both remain `BLOCKED — SOURCE DATA REQUIRED` per §12 and §13.
