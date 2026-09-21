@@ -51,6 +51,8 @@ export interface OperatorProvisionResult {
   created: string[];
   /** Already present with matching country/track — left untouched. */
   unchanged: string[];
+  /** Missing operators deliberately NOT created because of a conflict. Empty on success. */
+  skipped: string[];
   /** Present under a canonical name but with different country/track. Never overwritten. */
   conflicts: OperatorConflict[];
 }
@@ -63,8 +65,14 @@ export interface OperatorProvisionResult {
  * settle rather than silently overwritten, because an existing row may already have scholars
  * pointing at it. Operator rows outside the catalog are never read, modified, or deleted.
  *
+ * Conflict-atomic: the whole catalog is classified before anything is written, and a single
+ * conflict abandons the entire run. A disagreeing row means this environment's catalog is not
+ * the one this code was written against, so the safe move is to change nothing and let a human
+ * look — inserting the other three would leave the environment half-provisioned, in a state
+ * neither the operator nor a later re-run can distinguish from a completed one.
+ *
  * Safe to run against a live database — it touches nothing but the four rows below, and adds a
- * row only when that name is absent.
+ * row only when that name is absent and no conflict exists.
  */
 export async function provisionOperators(): Promise<OperatorProvisionResult> {
   const existing = await prisma.operator.findMany({
@@ -73,23 +81,32 @@ export async function provisionOperators(): Promise<OperatorProvisionResult> {
   });
   const byName = new Map(existing.map((o) => [o.name, o]));
 
-  const result: OperatorProvisionResult = { created: [], unchanged: [], conflicts: [] };
+  // Pass 1 — classify every canonical operator. No writes yet.
+  const unchanged: string[] = [];
+  const missing: typeof CANONICAL_OPERATORS = [];
+  const conflicts: OperatorConflict[] = [];
   for (const operator of CANONICAL_OPERATORS) {
     const row = byName.get(operator.name);
     if (!row) {
-      await prisma.operator.create({ data: operator });
-      result.created.push(operator.name);
+      missing.push(operator);
     } else if (row.country !== operator.country || row.track !== operator.track) {
-      result.conflicts.push({
+      conflicts.push({
         name: operator.name,
         expected: { country: operator.country, track: operator.track },
         actual: { country: row.country, track: row.track },
       });
     } else {
-      result.unchanged.push(operator.name);
+      unchanged.push(operator.name);
     }
   }
-  return result;
+
+  if (conflicts.length > 0) {
+    return { created: [], unchanged, skipped: missing.map((o) => o.name), conflicts };
+  }
+
+  // Pass 2 — only now, with the catalog agreeing throughout, insert what is missing.
+  for (const operator of missing) await prisma.operator.create({ data: operator });
+  return { created: missing.map((o) => o.name), unchanged, skipped: [], conflicts: [] };
 }
 
 /** Approved operator name aliases (source label → canonical Operator.name). The sheet uses short

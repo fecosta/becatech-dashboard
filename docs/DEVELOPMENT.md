@@ -74,7 +74,10 @@ npm run db:seed:users       # real AppUser accounts, including the sync system u
 npm run db:seed:operators   # the four canonical Operator rows
 ```
 
-Both are idempotent and touch only their own table.
+Both are idempotent and touch only their own table. `db:seed:operators` is additionally
+conflict-atomic: if an existing Operator carries a canonical name with a different country or
+track, it writes nothing at all — no row created, none modified — and exits non-zero for a
+human to settle, rather than leaving the catalog half-provisioned.
 
 `Operator` in particular is a prerequisite for ingestion, not an output of it: the import
 validator resolves the sheet's `Current Operator -  Support Services` column (`FATV`, `ESCALO`,

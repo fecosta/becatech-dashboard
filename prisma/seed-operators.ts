@@ -14,24 +14,33 @@ import { prisma } from "../src/lib/db";
 import { provisionOperators } from "../src/lib/data-import/reference-data";
 
 async function main() {
-  const { created, unchanged, conflicts } = await provisionOperators();
-
-  if (created.length) console.log(`Created ${created.length} operator(s): ${created.join(", ")}`);
-  if (unchanged.length) console.log(`Already present, unchanged: ${unchanged.join(", ")}`);
+  const { created, unchanged, skipped, conflicts } = await provisionOperators();
 
   if (conflicts.length) {
     // A canonical name already exists with different metadata. It may already have scholars
-    // pointing at it, so this script will not rewrite it — a human decides.
-    console.error("\nCONFLICT — existing Operator rows disagree with the canonical catalog:");
+    // pointing at it, so this script rewrites nothing — and, because provisioning is
+    // conflict-atomic, it also creates nothing. A human settles the conflict first.
+    console.error("CONFLICT — existing Operator rows disagree with the canonical catalog:");
     for (const c of conflicts) {
       console.error(
         `  ${c.name}: database has ${c.actual.country}/${c.actual.track}, ` +
           `catalog expects ${c.expected.country}/${c.expected.track}`,
       );
     }
-    console.error("\nNothing was overwritten. Resolve the conflict, then re-run.");
+    console.error("\nNO CHANGES WERE MADE. No operator was created and no existing row was modified.");
+    if (skipped.length) {
+      console.error(`Not created (${skipped.length}): ${skipped.join(", ")}`);
+    }
+    if (unchanged.length) {
+      console.error(`Already correct (${unchanged.length}): ${unchanged.join(", ")}`);
+    }
+    console.error("\nResolve the conflict, then re-run.");
     process.exitCode = 1;
+    return;
   }
+
+  if (created.length) console.log(`Created ${created.length} operator(s): ${created.join(", ")}`);
+  if (unchanged.length) console.log(`Already present, unchanged: ${unchanged.join(", ")}`);
 }
 
 main()

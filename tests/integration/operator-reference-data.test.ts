@@ -76,12 +76,14 @@ describe("canonical Operator reference provisioning", () => {
     expect(await prisma.operator.count()).toBe(4);
   });
 
-  it("reports a conflict instead of overwriting a canonical name with different metadata", async () => {
+  it("writes nothing at all when a canonical name has conflicting metadata", async () => {
     const existing = await prisma.operator.create({
       data: { name: "MAKERS", country: "PERU", track: "EARLY_SUPPORT" },
     });
 
     const result = await provisionOperators();
+
+    // The conflict is reported...
     expect(result.conflicts).toEqual([
       {
         name: "MAKERS",
@@ -89,10 +91,41 @@ describe("canonical Operator reference provisioning", () => {
         actual: { country: "PERU", track: "EARLY_SUPPORT" },
       },
     ]);
-    // The row is left exactly as it was — it may already have scholars pointing at it.
+    // ...the conflicting row is untouched — it may already have scholars pointing at it...
     expect(await prisma.operator.findUnique({ where: { id: existing.id } })).toEqual(existing);
-    // The other three are still provisioned; one conflict doesn't block the rest.
+    // ...and provisioning is atomic: the other three are NOT created, so the environment is
+    // never left half-provisioned in a state a later run can't tell from a completed one.
+    expect(result.created).toEqual([]);
+    expect(result.skipped).toEqual([
+      "Fundación Antivirus para la Deserción",
+      "ESCALO",
+      "Confident English",
+    ]);
+    expect(await prisma.operator.count()).toBe(1);
+    expect(await catalog()).toEqual([{ name: "MAKERS", country: "PERU", track: "EARLY_SUPPORT" }]);
+  });
+
+  it("provisions the full catalog once the conflict is resolved", async () => {
+    await prisma.operator.create({
+      data: { name: "MAKERS", country: "PERU", track: "EARLY_SUPPORT" },
+    });
+    await provisionOperators();
+    expect(await prisma.operator.count()).toBe(1);
+
+    // A human settles the conflict, then re-runs.
+    await prisma.operator.update({
+      where: { name: "MAKERS" },
+      data: { country: "COLOMBIA", track: "GROWTH_DEVELOPMENT" },
+    });
+    const result = await provisionOperators();
+
+    expect(result.conflicts).toEqual([]);
+    expect(result.skipped).toEqual([]);
     expect(result.created).toHaveLength(3);
+    expect(result.unchanged).toEqual(["MAKERS"]);
+    expect(await catalog()).toEqual(
+      [...CANONICAL_OPERATORS].sort((a, b) => a.name.localeCompare(b.name)),
+    );
   });
 
   it("never deletes or modifies operators outside the canonical catalog", async () => {
