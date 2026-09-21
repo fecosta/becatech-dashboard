@@ -254,6 +254,68 @@ describe("scholarGeneralInfoAdapter (fixture)", () => {
     expect(report.missingRequired).toEqual([]);
   });
 
+  // The manual-upload path used to skip this column while apps-script/Normalize.gs read it, so a
+  // raw-tab upload silently cleared every scholar's operator. Header text below is verbatim from
+  // the real export, including its double space — normKey collapses it to the same key Apps
+  // Script matches ("current operator - support services").
+  it("maps the authoritative operator column, matching the automated sync's header key", () => {
+    const sheet: ParsedSheet = {
+      sheetName: "SCHOLAR GENERAL INFO",
+      records: [
+        {
+          ID: "BT-CO-970",
+          COUNTRY: "Colombia",
+          COHORT: "2025",
+          UNIVERSITY: "Universidad Nacional de Colombia",
+          "ACADEMIC PROGRAM": "Computer Science",
+          "SCHOLARS NAME": "Operator Fictional Scholar",
+          GENDER: "Female",
+          "Current Operator -  Support Services": "FATV",
+          "GPA 2026-1": "4.0",
+        },
+      ],
+    };
+    const batch = scholarGeneralInfoAdapter.adapt(sheet);
+    const scholar = batch.SCHOLAR?.[0].data;
+    // Raw label passed through untouched — alias/"Not applicable" resolution is validate.ts's job.
+    expect(scholar?.operator).toBe("FATV");
+    // Nothing else on the row regressed.
+    expect(scholar?.scholarId).toBe("BT-CO-970");
+    expect(scholar?.fullName).toBe("Operator Fictional Scholar");
+    expect(scholar?.country).toBe("COLOMBIA");
+    expect(scholar?.university).toBe("Universidad Nacional de Colombia");
+
+    // It is mapped input now, not a column the contract says to ignore.
+    const report = scholarGeneralInfoAdapter.inspectSchema!(sheet);
+    expect(report.unknown).toEqual([]);
+    expect(report.ignored).not.toContain("current operator - support services");
+    expect(report.recognized).toContain("current operator - support services");
+  });
+
+  it("passes every real source operator label through verbatim", () => {
+    // The four values the production export actually contains for this column.
+    for (const label of ["FATV", "ESCALO", "MAKERS", "Not applicable"]) {
+      const sheet: ParsedSheet = {
+        sheetName: "SCHOLAR GENERAL INFO",
+        records: [
+          {
+            ID: "BT-CO-971",
+            COUNTRY: "Colombia",
+            COHORT: "2025",
+            UNIVERSITY: "Universidad Nacional de Colombia",
+            "ACADEMIC PROGRAM": "Computer Science",
+            "SCHOLARS NAME": "Operator Label Scholar",
+            GENDER: "Female",
+            "Current Operator -  Support Services": label,
+            "GPA 2026-1": "4.0",
+          },
+        ],
+      };
+      const scholar = scholarGeneralInfoAdapter.adapt(sheet).SCHOLAR?.[0].data;
+      expect(scholar?.operator).toBe(label);
+    }
+  });
+
   it("tolerates a fully reordered, mixed-language header (identity columns after the term column)", () => {
     const sheet: ParsedSheet = {
       sheetName: "SCHOLAR GENERAL INFO",

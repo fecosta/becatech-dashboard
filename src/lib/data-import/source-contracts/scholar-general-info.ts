@@ -71,6 +71,11 @@ export const scholarGeneralInfoContract: SourceContract = {
     // the ignored list below: the Academic Progress dashboard section reads these.
     ["cumulative gpa"],
     ["overdue courses"],
+    // The authoritative delivery-partner column. Mapped to the canonical `operator` field and
+    // resolved against the Operator catalog in validate.ts — the same column, under the same
+    // normalized key, that apps-script/Normalize.gs reads for the automated sync. Optional:
+    // Scholar.operatorId is nullable, and "Not applicable"/blank resolve to no operator.
+    ["current operator - support services"],
   ],
   ignored: [
     // Single-value-per-scholar academic-summary fields whose target model (AcademicTerm) is keyed
@@ -97,11 +102,6 @@ export const scholarGeneralInfoContract: SourceContract = {
     "talleres", "sesiones individuales", "tutorias", "psicosocial", "total", "total alertas",
     "resumen alertas", "confident english", "makers",
     "acompanamiento actual",
-    // Read by the automated sync's Normalize.gs (which maps this to Scholar.operatorId), but not
-    // by this manual-upload adapter today — a pre-existing gap between the two paths, not
-    // something this refactor fixes (adding it would be new adapter behavior, not a formalization
-    // of existing behavior).
-    "current operator - support services",
   ],
   repeating: [...Object.values(TERM_PATTERNS), ENGLISH_LEVEL_PATTERN],
 };

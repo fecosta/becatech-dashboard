@@ -150,6 +150,13 @@ function scholarRow(idx: Map<string, unknown>, rowNumber: number): CanonicalRow 
       country: mapCountry(getAny(idx, ["pais", "country"])),
       cohort: c(getAny(idx, ["cohorte", "cohort"]), "string"),
       university: c(getAny(idx, ["universidad", "university"]), "string"),
+      // Raw operator LABEL, passed through as-is — resolution and alias handling (FATV →
+      // canonical, "Not applicable" → none) happen in validate.ts, the same division of
+      // responsibility as `university`. Matched on the one authoritative English header, keyed
+      // exactly as apps-script/Normalize.gs matches it (normKey collapses its double space), so
+      // the manual-upload and automated-sync paths read the same column. The Spanish category
+      // label "Acompañamiento Actual" is a different column and stays unmapped.
+      operator: c(idx.get("current operator - support services"), "string"),
       academicProgram: c(getAny(idx, ["programa academico", "academic program"]), "string"),
       gender: c(getByKeyPrefix(idx, "genero") ?? getByKeyPrefix(idx, "gender"), "string"),
       programStatus: mapStatus(getAny(idx, ["estado actual", "current status"])),
