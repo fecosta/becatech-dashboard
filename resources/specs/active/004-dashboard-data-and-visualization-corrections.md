@@ -1,7 +1,7 @@
 # SPEC-004 — Dashboard Data & Visualization Corrections
 
 **Status:** ACTIVE  
-**Methodology state:** PHASES 1–3 IMPLEMENTED · PHASE 3 ACCEPTANCE PENDING PRODUCTION VERIFICATION  
+**Methodology state:** PHASES 1–3 IMPLEMENTED · PHASE 3 PENDING PRODUCTION RECOVERY  
 **Repository baseline:** `main @ 9ed23e9ea16fde3f9c20dc70c6291d14295e02cb`  
 **Depends on:** Completed dashboard foundation, spreadsheet ingestion, and UX/UI work  
 **Relevant prior specs:**
@@ -1227,7 +1227,9 @@ The following remain explicitly blocked and must not be fabricated:
 `IMPLEMENTED`
 
 ### Phase 3
-`IMPLEMENTED`, **not accepted** — read-only production verification of the Operator catalog is still outstanding (see §24).
+`IMPLEMENTED — PRODUCTION RECOVERY PENDING`. Production verification ran and **failed**: the
+Operator catalog is empty and all 236 scholars are unassigned. Reference-data provisioning is
+implemented but not yet deployed or resynced in production (see §24).
 
 ### Phase 4 — Drop-out Reasons
 `BLOCKED — SOURCE DATA REQUIRED`
@@ -1239,10 +1241,12 @@ The following remain explicitly blocked and must not be fabricated:
 
 # 23. Overall SPEC State
 
-`PARTIALLY IMPLEMENTED — PHASE 3 ACCEPTANCE PENDING PRODUCTION VERIFICATION`
+`PARTIALLY IMPLEMENTED — PHASE 3 PENDING PRODUCTION RECOVERY`
 
-Phases 1–3 are implemented. Phase 3 is **not accepted**: its production Operator-catalog
-gate (§11.6) has not been satisfied.
+Phases 1–3 are implemented. Phase 3 is **not accepted**: its production Operator-catalog gate
+(§11.6) was checked and failed — the catalog is empty and all 236 scholars are unassigned. The
+reference-data provisioning that fixes this is implemented on this branch but has not been
+deployed or validated by a source-driven resync in production.
 
 Phases 4–5 remain deferred until their explicit source-data gates are satisfied.
 
@@ -1289,7 +1293,7 @@ data, as did `getExecutiveOverview` and the scholar directory. All were migrated
 profile's "Cumulative GPA" chip and GPA trend, the import adapters/templates/validation,
 and the seed. Per D1 these were left unchanged.
 
-## Phase 3 — Vulnerability + Operating Partners · `IMPLEMENTED, NOT ACCEPTED`
+## Phase 3 — Vulnerability + Operating Partners · `IMPLEMENTED — PRODUCTION RECOVERY PENDING`
 
 - Vulnerability vocabulary renamed from `TIER_1/2/3` to `HIGH/MODERATE/LOW`;
   `src/lib/scholars/socioeconomic-tier.ts` became
@@ -1306,30 +1310,67 @@ and the seed. Per D1 these were left unchanged.
 - Coverage: `tests/scholars/vulnerability-level.test.ts`,
   `tests/integration/vulnerability-and-operators.test.ts`.
 
-### Remaining acceptance gate
+### Production verification result — §11.6 gate FAILED
 
-§11.6 / §21 criterion 10 — **PENDING PRODUCTION VERIFICATION**.
-
-The production Operator catalog has not been checked. Local `.env` points at Docker
-Postgres, and pulling production credentials to disk was explicitly ruled out for this
-work. The UI renders the Operator catalog as it finds it, so an unexpected production
-entity would appear rather than be hidden or renamed.
-
-To close the gate, run read-only against production:
+Production was checked read-only. The Operator catalog does not conflict with the expected
+four entities; it is **empty**:
 
 ```sql
 SELECT name, country, track FROM "Operator" ORDER BY track, name;
+-- 0 rows
 ```
 
-Expected exactly:
+```sql
+SELECT COUNT(*) AS total_scholars,
+       COUNT("operatorId") AS scholars_with_operator,
+       COUNT(*) - COUNT("operatorId") AS scholars_without_operator
+FROM "Scholar";
+-- total_scholars = 236, scholars_with_operator = 0, scholars_without_operator = 236
+```
 
-1. Fundación Antivirus para la Deserción
-2. ESCALO
-3. MAKERS
-4. Confident English
+```sql
+SELECT "operatorId", COUNT(*) FROM "Scholar" WHERE "operatorId" IS NOT NULL GROUP BY 1;
+-- 0 rows
+```
 
-If the catalog differs, stop and report `BLOCKED / DECISION REQUIRED` rather than
-adjusting the UI to force four rows.
+So Operating Partners renders four rows locally (where the demo seed creates the catalog) and
+zero rows in production. This is a data condition, not a defect in the Phase 3 presentation
+work: the section correctly shows the catalog as it finds it.
+
+### Root cause
+
+`Operator` has **no production writer**. The table is only ever populated by `prisma/seed.ts`,
+which is demo data and must not run against production, and by test fixtures. Production
+deployment runs `prisma migrate deploy` and nothing else, and no migration inserts rows.
+
+With the table empty, `loadValidationContext()` builds an empty `operatorsByName`, the
+controlled `FATV` alias registration no-ops (it is guarded on the canonical row existing), and
+`validate.ts` resolves no operator for any scholar. Because an unrecognized operator
+deliberately does not reject the scholar row, every sync has succeeded while leaving all 236
+scholars unassigned — silently.
+
+The authoritative source column is present and populated. The repository sample export of this
+sheet carries `Current Operator -  Support Services` with exactly four values across its 236
+rows: `FATV` (140), `ESCALO` (57), `MAKERS` (27), `Not applicable` (12). `Confident English`
+does not appear in the source column today; it is a real program operator with no current
+traffic, so it is expected to hold zero scholars after recovery.
+
+### Remaining gate
+
+§11.6 / §21 criterion 10 — **PENDING PRODUCTION RECOVERY**.
+
+Reference-data provisioning is implemented (`npm run db:seed:operators`,
+`prisma/seed-operators.ts`), but it has not been deployed or run against production, and no
+source-driven resync has been validated there. The recovery sequence is documented in
+`docs/DEVELOPMENT.md` ("Recovering scholars left with no operator"): deploy → run the operator
+seed → verify the catalog → trigger the normal Google Sheets sync → verify assignment counts.
+
+No scholar may be assigned by hand or by inference from country, cohort, semester or program
+stage; the source column is the only authority.
+
+Re-run all three queries above against production after that sequence to close the gate. The
+catalog must then contain the four canonical rows, and `scholars_without_operator` should fall
+to the number of scholars whose source value is genuinely `Not applicable`.
 
 ## Phases 4 and 5
 

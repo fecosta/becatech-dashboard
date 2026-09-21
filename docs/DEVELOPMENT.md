@@ -59,8 +59,55 @@ Do not duplicate secret values into documentation — this section describes cat
 | `npm run db:migrate` | `prisma migrate dev` — create + apply a dev migration |
 | `npm run db:seed` | `tsx prisma/seed.ts` — mock demo data (scholars, terms, risk, etc.) |
 | `npm run db:seed:users` | `tsx prisma/seed-users.ts` — real `AppUser` accounts only; safe to run against production, never touches scholar data |
+| `npm run db:seed:operators` | `tsx prisma/seed-operators.ts` — the four canonical `Operator` rows only; insert-only and idempotent, safe to run against production, never touches scholar data |
 | `npm run db:reset` | `prisma migrate reset` — drop, re-migrate, re-seed |
 | `npm run db:studio` | `prisma studio` — browse the database |
+
+### Reference data in a new environment
+
+`prisma migrate deploy` creates tables, never rows, and the production deploy runs nothing else —
+so a fresh environment starts with no reference data. `npm run db:seed` is demo data and must
+never be run against production. The two production-safe seeds are the ones to run instead:
+
+```bash
+npm run db:seed:users       # real AppUser accounts, including the sync system user
+npm run db:seed:operators   # the four canonical Operator rows
+```
+
+Both are idempotent and touch only their own table.
+
+`Operator` in particular is a prerequisite for ingestion, not an output of it: the import
+validator resolves the sheet's `Current Operator -  Support Services` column (`FATV`, `ESCALO`,
+`MAKERS`) against this catalog and never auto-creates a row from a spreadsheet value. With the
+catalog missing, every scholar still imports successfully but with `operatorId` null — silently,
+because an unrecognized operator deliberately does not reject the scholar.
+
+### Recovering scholars left with no operator
+
+If scholars are already in the database with `operatorId` null because the catalog was missing,
+do not update them by hand and do not infer an operator from country, cohort, semester or program
+stage. The authoritative source column already holds the answer; let a normal sync apply it:
+
+1. Deploy the reference-data fix.
+2. Run `npm run db:seed:operators` against the environment, and confirm it reports four rows.
+3. Verify the catalog:
+   ```sql
+   SELECT name, country, track FROM "Operator" ORDER BY track, name;
+   ```
+4. Trigger the normal Google Sheets sync (`apps-script/Sync.gs`), which re-POSTs the
+   `NORMALIZED_SCHOLAR` tab to `/api/sync/import`.
+5. Verify the result:
+   ```sql
+   SELECT COUNT(*) AS total_scholars,
+          COUNT("operatorId") AS scholars_with_operator,
+          COUNT(*) - COUNT("operatorId") AS scholars_without_operator
+   FROM "Scholar";
+   ```
+
+Step 4 works without a backfill because the scholar upsert writes `operatorId` from the resolved
+source value on every sync (`bulkUpsert`'s `ON CONFLICT DO UPDATE`), so existing rows move from
+null to the correct FK in place. Scholars whose source value is `Not applicable` correctly stay
+null.
 
 Local Postgres is a single `postgres:16-alpine` container (`docker-compose.yml`), name
 `becatech-db`, mapped to host port **5433** (not 5432, to avoid colliding with a local Postgres
