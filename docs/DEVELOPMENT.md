@@ -3,7 +3,9 @@
 ## Prerequisites
 
 - Node.js 20+ (developed on v22; no `engines` field is set in `package.json`)
-- Docker Desktop (for local PostgreSQL)
+- A Docker-compatible container runtime for local PostgreSQL — **OrbStack** is the
+  recommended one on macOS (Docker Desktop still works); see [Local Container
+  Runtime](#local-container-runtime)
 - npm
 
 ## Local Setup
@@ -24,6 +26,64 @@ npm test
 npm run data-quality:scan
 npm run db:studio
 ```
+
+## Local Container Runtime
+
+Postgres runs in a container; **OrbStack** is the recommended Docker-compatible runtime on
+macOS. Nothing about the project changes with it: Docker Compose is still the orchestration
+interface, `docker-compose.yml` is unmodified, the commands are still `docker compose ...`, and
+Postgres is still reachable at **host port 5433**, so `DATABASE_URL`, `DIRECT_URL` and
+`TEST_DATABASE_URL` keep their existing values.
+
+This is *not* a local Supabase stack — the repository has none. Supabase Auth and Supabase
+Storage remain remote integrations in every environment (see `docs/SECURITY.md` and
+`docs/adr/009-supabase-storage-scholar-photos.md`).
+
+Docker Desktop is not required while OrbStack is running. Run only one Docker-compatible
+runtime at a time: both register their own `docker` context, and a stray context is the usual
+explanation for "the container is running but nothing is on 5433". Check which one the CLI is
+talking to:
+
+```bash
+docker context show     # expect: orbstack
+docker info             # expect: Operating System: OrbStack
+```
+
+### Switching from Docker Desktop
+
+The Compose volume lives inside whichever runtime created it, so OrbStack starts with an empty
+`becatech_pgdata` and a fresh database. That is fine here — the local database is entirely
+reproducible from migrations plus `npm run db:seed`, and it holds only mock demo data.
+
+```bash
+docker compose ps                     # note what is running
+docker compose down                   # stop the project, KEEP the data volume
+# quit Docker Desktop, start OrbStack
+docker context use orbstack
+docker context show                   # orbstack
+docker compose up -d                  # pulls postgres:16-alpine on first run
+docker compose ps                     # wait for (healthy)
+npm run db:migrate                    # establish the schema in the new database
+npm run db:seed                       # mock demo data
+npm run dashboard:check               # verifies connectivity via real dashboard queries
+```
+
+`docker compose down` stops and removes the containers but leaves the named volume intact.
+`docker compose down -v` **deletes the project's data volume** and is not part of this
+migration — never run it just to change runtimes.
+
+If a local database ever does hold something worth keeping, move it with Postgres' own tools
+rather than copying the runtime's internal volume files:
+
+```bash
+docker exec becatech-db pg_dump -U becatech -d beca_tech_dashboard -Fc -f /tmp/beca.dump
+docker cp becatech-db:/tmp/beca.dump ./beca.dump     # before switching runtimes
+# ... switch runtime, docker compose up -d, npm run db:migrate ...
+docker cp ./beca.dump becatech-db:/tmp/beca.dump     # after switching
+docker exec becatech-db pg_restore -U becatech -d beca_tech_dashboard --clean /tmp/beca.dump
+```
+
+To go back to Docker Desktop, `docker context use desktop-linux` — its volume is still there.
 
 ## Environment Variables
 
@@ -114,7 +174,7 @@ null.
 
 Local Postgres is a single `postgres:16-alpine` container (`docker-compose.yml`), name
 `becatech-db`, mapped to host port **5433** (not 5432, to avoid colliding with a local Postgres
-install).
+install). See [Local Container Runtime](#local-container-runtime) for the runtime it runs on.
 
 ## Development Commands
 

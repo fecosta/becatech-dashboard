@@ -33,7 +33,7 @@ Full detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 | Styling | Tailwind CSS 4 (CSS-based config, tokens in `src/app/globals.css`) |
 | Charts | Recharts |
 | Testing | Vitest (unit + integration) |
-| Deploy | Vercel + Supabase; local Postgres via Docker Compose |
+| Deploy | Vercel + Supabase; local Postgres via Docker Compose (OrbStack on macOS) |
 
 ## Quick Start
 
@@ -46,6 +46,10 @@ npm run db:migrate
 npm run db:seed
 npm run dev
 ```
+
+`docker compose` needs a Docker-compatible runtime — on macOS use **OrbStack**
+([docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#local-container-runtime)). It runs Postgres only;
+Supabase Auth and Storage are remote in every environment.
 
 Full setup, environment variables, and every `npm run` script:
 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
