@@ -213,7 +213,8 @@ submission ids. Results are visible in the Admin → Data Quality dashboard page
 
 ## Development Workflow
 
-1. Select or create a spec (`specs/`, see `specs/README.md`) for anything beyond a small fix.
+1. Select or create a spec (`resources/specs/`, see `resources/specs/README.md`) for anything
+   beyond a small fix.
 2. Inspect the existing implementation and its tests.
 3. Plan a focused change — see `AGENTS.md`'s "Development Process."
 4. Implement.
@@ -221,7 +222,7 @@ submission ids. Results are visible in the Admin → Data Quality dashboard page
 6. Review the diff.
 7. Update documentation (this guide, `docs/ARCHITECTURE.md`, `docs/DATA_MODEL.md`, or an ADR, as
    relevant).
-8. Move the spec to `specs/completed/`.
+8. Move the spec to `resources/specs/completed/`.
 
 ## Bug Fixes
 

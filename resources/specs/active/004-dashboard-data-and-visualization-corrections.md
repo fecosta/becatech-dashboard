@@ -1,8 +1,9 @@
 # SPEC-004 — Dashboard Data & Visualization Corrections
 
-**Status:** ACTIVE  
-**Methodology state:** PHASES 1–3 IMPLEMENTED · PHASE 3 PENDING PRODUCTION RECOVERY  
+**Status:** ACTIVE — BLOCKED ON PRODUCTION ACTION  
+**Methodology state:** PHASES 1–3 IMPLEMENTED · PHASE 3 PENDING PRODUCTION RECOVERY · PHASES 4–5 DEFERRED TO SPEC-006 / SPEC-007  
 **Repository baseline:** `main @ 9ed23e9ea16fde3f9c20dc70c6291d14295e02cb`  
+**Closure audit re-verified at:** `main @ 58575cf278898324a46c96d40d730301c05757ed` (2026-09-23, see §25)  
 **Depends on:** Completed dashboard foundation, spreadsheet ingestion, and UX/UI work  
 **Relevant prior specs:**
 - SPEC-001 — Scholar Profile Split
@@ -1232,10 +1233,12 @@ Operator catalog is empty and all 236 scholars are unassigned. Reference-data pr
 implemented but not yet deployed or resynced in production (see §24).
 
 ### Phase 4 — Drop-out Reasons
-`BLOCKED — SOURCE DATA REQUIRED`
+`DEFERRED — MOVED TO SPEC-006`. Still `BLOCKED — SOURCE DATA REQUIRED`; §12 is now governed by
+`resources/specs/planned/006-drop-out-reasons.md` and no longer holds this spec open.
 
 ### Phase 5 — Program Satisfaction
-`BLOCKED — SOURCE DATA REQUIRED`
+`DEFERRED — MOVED TO SPEC-007`. Still `BLOCKED — SOURCE DATA REQUIRED`; §13 is now governed by
+`resources/specs/planned/007-program-satisfaction.md` and no longer holds this spec open.
 
 ---
 
@@ -1243,14 +1246,21 @@ implemented but not yet deployed or resynced in production (see §24).
 
 `PARTIALLY IMPLEMENTED — PHASE 3 PENDING PRODUCTION RECOVERY`
 
-Phases 1–3 are implemented. Phase 3 is **not accepted**: its production Operator-catalog gate
-(§11.6) was checked and failed — the catalog is empty and all 236 scholars are unassigned. The
-reference-data provisioning that fixes this is implemented on this branch but has not been
-deployed or validated by a source-driven resync in production.
+Phases 1–3 are implemented and were re-verified against `main @ 58575cf` on 2026-09-23 (§25).
+Phase 3 is **not accepted**: its production Operator-catalog gate (§11.6) was checked and failed —
+the catalog is empty and all 236 scholars are unassigned. The reference-data provisioning that
+fixes this **is now deployed to production** (§25.2), but the operator seed has not been run there
+and no source-driven resync has been validated there.
 
-Phases 4–5 remain deferred until their explicit source-data gates are satisfied.
+This specification is therefore held open by exactly one thing: the §11.6 production recovery.
+Both remaining actions require credentials and system access that are not available to the
+repository toolchain (§25.3).
 
-Implementation must not use assumptions or placeholder data to bypass those gates.
+Phases 4–5 no longer hold this specification open. Their source-data gates are unchanged and
+unsatisfied, but they now have independent governance as SPEC-006 and SPEC-007 (§25.5). They were
+neither fabricated nor silently dropped.
+
+Implementation must not use assumptions or placeholder data to bypass any of these gates.
 
 ---
 
@@ -1374,4 +1384,145 @@ to the number of scholars whose source value is genuinely `Not applicable`.
 
 ## Phases 4 and 5
 
-Not implemented. Both remain `BLOCKED — SOURCE DATA REQUIRED` per §12 and §13.
+Not implemented. Both remain `BLOCKED — SOURCE DATA REQUIRED` per §12 and §13. As of 2026-09-23
+they are governed by SPEC-006 and SPEC-007 respectively — see §25.5.
+
+---
+
+# 25. Closure Audit — 2026-09-23
+
+A closure pass was run against `main @ 58575cf278898324a46c96d40d730301c05757ed` to determine
+whether this specification could be accepted and moved to `completed/`.
+
+**Outcome: it could not.** The specification remains `ACTIVE`. The §11.6 production gate is still
+open, and the two actions that would close it cannot be performed by the repository toolchain.
+
+## 25.1 Implementation re-verification
+
+Every Phase 1–3 acceptance area was re-read in the current code. All verified; none regressed.
+
+| Area | Evidence |
+|---|---|
+| Retention target row absent | `getProgramRetention()` returns `target: null` (`queries.ts:1651`); Home builds `retentionRows` from `rows` + `overall` + `byCountry` only (`page.tsx:135–160`). No `TARGET` row is emitted. |
+| Year 1 / Year 2 counts | `early-support/page.tsx:198` reads `home.scholarsByYear`, built in `queries.ts:511–517` from `programYearFromSemester`. No new year logic. |
+| Grouped vertical bars | `GroupedBarCard` (`components/charts.tsx:151`) used at `early-support/page.tsx:477`. |
+| Missing months stay missing | `toWholePct` keeps monthless points `null`; the bar is absent rather than plotted as zero (`early-support/page.tsx:474–483`). |
+| GPA reads `AcademicTerm.gpa` | `selectLatestGradedGpa` reads `gpa`; `latest-gpa.ts` documents why `accumulatedGpa` is the wrong column. |
+| Latest-GPA logic shared | One definition in `lib/academic/latest-gpa.ts`; the only caller site is `queries.ts:329`, feeding every consumer. No second copy. |
+| `0` / invalid / out-of-range never become failing GPA | `selectLatestGradedGpa` counts `gpa === 0` into `excludedZeroGpaCount` and skips it; `isGradedGpa` requires `> 0` and `<= GPA_SCALE_MAX[country]`. Invalid rows are never written, so a later ungraded term cannot displace an earlier real grade. |
+| Colombia / Peru native scales distinct | `GPA_SCALE_MAX[country]`; `gpaByCountry` is accumulated per country and never blended (`queries.ts:1089`). |
+| Excluded populations explicit | `excludedNoGradedGpa` / `excludedOtherScale` populated at `queries.ts:1112–1113`, rendered at `early-support/page.tsx:672–676`. |
+| Vulnerability HIGH / MODERATE / LOW | `lib/scholars/vulnerability-level.ts`; no `TIER_*` or `TIER_MAPPING_APPROVED` identifier remains anywhere in `src/` or `tests/`. |
+| Pending vs unrecognized kept separate | `VulnerabilityLevelParse.status` is `OK` / `PENDING` / `UNRECOGNIZED`, distinct through parser, query and type layers. |
+| Operating Partners reads `Scholar.operatorId` | `queries.ts:1460–1461` counts by `s.operatorId` only. |
+| No inference path | `defaultOperatorName()` is referenced **only** by `prisma/seed.ts` and its own unit test — no production import or query path calls it. `validate.ts:497–504` resolves by name against the catalog and never auto-creates an operator. |
+| Country grouping / hero count / track badges removed | `actors/page.tsx:96–121` renders one flat row per operator; `DeliveryPartnerGroup` no longer exists. |
+| `prisma/seed-operators.ts` insert-only / idempotent | `provisionOperators()` classifies before writing, inserts only missing rows, never rewrites an existing row, and is conflict-atomic — one disagreeing row abandons the whole run. |
+| Canonical catalog in one reference-data layer | `CANONICAL_OPERATORS` in `src/lib/data-import/reference-data.ts`, names from `OPERATOR_NAMES`. |
+| `FATV` resolves only after the canonical row exists | `validation-context.ts:36–40` registers the alias under `if (id)` — with no canonical row, the alias registration no-ops. |
+
+No contradiction was found between this specification and the current code.
+
+## 25.2 Production deployment state — RESOLVED
+
+§24 recorded the reference-data fix as "not yet deployed". That is no longer true.
+
+The production alias resolves to deployment `dpl_7mK3MgHKMHCnTyQEitTRezn24nCM`
+(`target: production`, `readyState: READY`, created 2026-09-22 20:01 UTC-3), built from
+`githubCommitSha 58575cf278898324a46c96d40d730301c05757ed` on `main`.
+
+That commit contains `92f2c4a` (canonical operator reference data), `21b6efd` (scholar operator
+mapping in manual import) and `fbea9d0` (conflict-atomic provisioning). **The code side of the
+recovery is live in production.**
+
+## 25.3 Production recovery — BLOCKED
+
+Neither remaining step could be executed.
+
+### Blocker 1 — no production database access
+
+`npm run db:seed:operators` needs the production `DATABASE_URL`. On this Vercel project
+`DATABASE_URL`, `DIRECT_URL`, `POSTGRES_URL`, `POSTGRES_URL_NON_POOLING`, `POSTGRES_PRISMA_URL`
+and `POSTGRES_PASSWORD` are all marked **sensitive**, so `vercel env pull --environment=production`
+returns `[SENSITIVE]` placeholders rather than values. Only the non-secret host is retrievable
+(`db.herfxgdfjsjbvdqpuqsh.supabase.co`).
+
+The Supabase CLI is authenticated and can see the project, but offers no command that runs SQL
+against a remote project without that same database password.
+
+Consequence: the §11.6 pre-recovery read-only snapshot **could not be refreshed**. The production
+numbers in §24 (0 operator rows / 236 scholars / 236 unassigned) remain the last verified reading,
+taken during the original Phase 3 verification — they were **not** re-confirmed on 2026-09-23.
+
+### Blocker 2 — no way to trigger the authoritative sync
+
+Step 4 of the recovery (`docs/DEVELOPMENT.md`, "Recovering scholars left with no operator")
+requires running `apps-script/Sync.gs` inside the program's Google Sheet. That script is not
+deployed from this repository — there is no `clasp` wiring, and a `git push` does not deploy it.
+Triggering it requires access to the Sheet itself.
+
+No substitute is acceptable: per §11.4/§11.5 a direct `operatorId` write, a SQL backfill, or any
+match on country / university / cohort / stage is prohibited. The source column is the only
+authority.
+
+## 25.4 Remaining actions to close this specification
+
+To be performed by a maintainer with production and Google Sheet access:
+
+1. Run `npm run db:seed:operators` with the production `DATABASE_URL`. Expect four rows created.
+   If it reports a conflict it writes nothing — stop and escalate rather than normalizing by hand.
+2. Verify the catalog:
+   ```sql
+   SELECT name, country, track FROM "Operator" ORDER BY track, name;
+   ```
+3. Trigger the normal Google Sheets sync (`apps-script/Sync.gs`), which re-POSTs
+   `NORMALIZED_SCHOLAR` to `/api/sync/import`.
+4. Verify assignment:
+   ```sql
+   SELECT COUNT(*) AS total_scholars,
+          COUNT("operatorId") AS scholars_with_operator,
+          COUNT(*) - COUNT("operatorId") AS scholars_without_operator
+   FROM "Scholar";
+
+   SELECT o.name, COUNT(s."scholarId") AS scholars
+   FROM "Operator" o
+   LEFT JOIN "Scholar" s ON s."operatorId" = o.id
+   GROUP BY o.id, o.name
+   ORDER BY o.name;
+   ```
+
+Acceptance is **not** a fixed `224 / 12`. The rule is: all four canonical rows exist (including
+zero-count ones), source-recognized operators resolve, source `Not applicable` stays null, and no
+assignment is invented. The repository sample split (`FATV` 140, `ESCALO` 57, `MAKERS` 27,
+`Not applicable` 12) is context only — production is authoritative.
+
+## 25.5 Deferred scope — moved out
+
+Phases 4 and 5 were removed from this specification's critical path so its source-ready scope is
+not held open indefinitely by external data that may never arrive on this timeline.
+
+| Was | Now | Status |
+|---|---|---|
+| §12 — Drop-out Reasons | `resources/specs/planned/006-drop-out-reasons.md` | `PLANNED / BLOCKED — SOURCE DATA REQUIRED` |
+| §13 — Program Satisfaction | `resources/specs/planned/007-program-satisfaction.md` | `PLANNED / BLOCKED — SOURCE DATA REQUIRED` |
+
+§12 and §13 are retained above as the record of what was decided. Neither requirement was
+fabricated, implemented, or silently dropped: both carry their full source gates forward, and
+neither may be implemented until those gates are satisfied.
+
+## 25.6 Repository validation at audit time
+
+Run against `main @ 58575cf`, working tree clean:
+
+| Command | Result |
+|---|---|
+| `npm run lint` | PASS — 0 errors, 1 pre-existing `no-img-element` warning (`ScholarAvatar.tsx:45`) |
+| `npm test` | PASS — 47 files, 327 tests |
+| `npm run test:integration` | PASS — 11 files, 98 tests |
+| `npm run build` | PASS |
+| `npm run dashboard:check` | PASS — every dashboard query ran against seeded data |
+| `git diff --check` | PASS |
+| `npx tsc --noEmit` | 2 pre-existing errors in `tests/request-dedup.test.ts` (Prisma mock typing). Present on unmodified `main`; outside SPEC-004 scope and not addressed here. |
+
+No UI verification against production-backed data was performed — §11 UI acceptance depends on
+recovered production data that does not exist yet, and no browser tooling was used in this pass.

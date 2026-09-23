@@ -124,8 +124,9 @@ Full command list: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 ## Development Workflow
 
-Spec (`specs/`, for anything beyond a small fix) → inspect existing implementation → implement →
-test → review the diff → update documentation → move the spec to `specs/completed/`. Full detail
+Spec (`resources/specs/`, for anything beyond a small fix) → inspect existing implementation →
+implement → test → review the diff → update documentation → move the spec to
+`resources/specs/completed/`. Full detail
 in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md); operational rules for AI agents in
 [AGENTS.md](AGENTS.md).
 
