@@ -1,4 +1,4 @@
-# SPEC-006 — Admin User Management
+# SPEC-008 — Admin User Management
 
 **Status:** PLANNED  
 **Methodology state:** PRODUCT DECISIONS DEFINED · IMPLEMENTATION REQUIRES AUTHORIZATION ADR  
