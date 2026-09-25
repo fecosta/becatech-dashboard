@@ -46,7 +46,7 @@ The dashboard needs a secure product workflow for managing these users.
 
 # 3. Goals
 
-SPEC-006 introduces an **Admin → Users** area that allows authorized administrators to:
+SPEC-008 introduces an **Admin → Users** area that allows authorized administrators to:
 
 1. view provisioned dashboard users;
 2. add a new application user;
@@ -497,7 +497,7 @@ The existing role remains unless explicitly changed by the administrator.
 
 However, mentor authorization additionally depends on `UserScholarAccess`.
 
-Scholar assignment management is not part of SPEC-006.
+Scholar assignment management is not part of SPEC-008.
 
 When a new Mentor is created without scholar assignments:
 
@@ -601,7 +601,7 @@ If implementation discovers that the existing schema is insufficient, work must 
 
 `prisma/seed-users.ts` currently provisions known application users.
 
-After SPEC-006, the production Admin Users interface becomes the primary operational mechanism for routine user provisioning.
+After SPEC-008, the production Admin Users interface becomes the primary operational mechanism for routine user provisioning.
 
 The seed script may continue to exist for:
 
@@ -735,13 +735,13 @@ The system must not claim administrator-level change attribution when it does no
 
 A future specification may introduce explicit authorization audit events.
 
-No new audit table is required by SPEC-006.
+No new audit table is required by SPEC-008.
 
 ---
 
 # 24. Acceptance Criteria
 
-SPEC-006 is accepted when all of the following are true.
+SPEC-008 is accepted when all of the following are true.
 
 ## Navigation and access
 
@@ -996,7 +996,7 @@ Send onboarding/invitation messages when a user is provisioned.
 
 # 30. Definition of Done
 
-SPEC-006 is complete when:
+SPEC-008 is complete when:
 
 - the Admin Users workflow is implemented;
 - `MANAGE_USERS` is implemented and server-side enforced;

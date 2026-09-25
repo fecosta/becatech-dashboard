@@ -57,3 +57,4 @@ than fabricate one.
 | [007](007-spreadsheet-source-adapters.md) | Spreadsheet Source Adapters and Canonical Ingestion | Proposed |
 | [008](008-risk-period-identity.md) | Risk Period Identity Across Semesters | Proposed |
 | [009](009-supabase-storage-scholar-photos.md) | Supabase Storage for Scholar Photos | Accepted |
+| [010](010-admin-user-management-authorization.md) | Admin User Management Authorization | Proposed |
